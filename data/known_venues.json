@@ -1,0 +1,16 @@
+{
+  "conferences": [
+    "ICLR", "NeurIPS", "ICML", "EMNLP", "ACL", "NAACL", "EACL", "AACL",
+    "COLM", "AAAI", "IJCAI", "CVPR", "ICCV", "ECCV", "KDD", "WWW",
+    "SIGIR", "CIKM", "WSDM", "RecSys", "UAI", "AISTATS", "CoRL",
+    "ICRA", "RSS", "ICMLA", "COLT", "ALT"
+  ],
+  "journals": [
+    "JMLR", "TMLR", "Nature", "Science", "PNAS",
+    "Nature Machine Intelligence", "Nature Computational Science",
+    "ACM Computing Surveys", "IEEE TPAMI", "Artificial Intelligence"
+  ],
+  "preprint_servers": [
+    "ArXiv", "BiorXiv", "MedRxiv", "SSRN", "OpenReview"
+  ]
+}

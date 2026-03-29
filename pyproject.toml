@@ -1,0 +1,28 @@
+[project]
+name = "ndif-citations"
+version = "0.1.0"
+description = "NDIF Citation Tracking Pipeline — discovers and catalogs papers citing or using NDIF/NNsight"
+requires-python = ">=3.9"
+dependencies = [
+    "semanticscholar>=0.8",
+    "requests>=2.31",
+    "beautifulsoup4>=4.12",
+    "pymupdf>=1.24",
+    "openai>=1.0",
+    "rapidfuzz>=3.0",
+    "pydantic>=2.0",
+    "click>=8.0",
+    "rich>=13.0",
+    "Pillow>=10.0",
+    "python-dotenv>=1.0",
+]
+
+[project.scripts]
+ndif-citations = "ndif_citations.cli:cli"
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
