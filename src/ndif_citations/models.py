@@ -17,8 +17,9 @@ class DetailCategory(str, Enum):
 
 
 class WebsiteCategory(str, Enum):
-    """Two-way category for the website JSON."""
-    USING = "using"
+    """Three-way category for the website JSON."""
+    USED_NNSIGHT = "used-nnsight"
+    USED_NDIF = "used-ndif"
     REFERENCING = "referencing"
 
 
@@ -71,10 +72,12 @@ class DiscoveredPaper(BaseModel):
 
     @property
     def website_category(self) -> WebsiteCategory:
-        """Map three-way category to two-way website category."""
-        if self.detail_category == DetailCategory.REFERENCING:
-            return WebsiteCategory.REFERENCING
-        return WebsiteCategory.USING
+        """Map three-way internal category 1-to-1 to website category."""
+        if self.detail_category == DetailCategory.USES_NNSIGHT:
+            return WebsiteCategory.USED_NNSIGHT
+        if self.detail_category == DetailCategory.USES_NDIF:
+            return WebsiteCategory.USED_NDIF
+        return WebsiteCategory.REFERENCING
 
     def to_website_dict(self) -> dict:
         """Export as website-compatible dict matching ResearchPaper TS interface."""
@@ -107,7 +110,7 @@ class DiscoveredPaper(BaseModel):
 
 
 class ResearchPaper(BaseModel):
-    """Website-facing model matching the TypeScript ResearchPaper interface."""
+    """Website-facing model matching the TypeScript ResearchPaper interface (3 categories)."""
     title: str
     authors: str
     venue: str
@@ -115,7 +118,7 @@ class ResearchPaper(BaseModel):
     url: str
     image: Optional[str] = None
     description: str
-    category: WebsiteCategory
+    category: WebsiteCategory  # used-nnsight, used-ndif, or referencing
 
 
 class PipelineRun(BaseModel):
