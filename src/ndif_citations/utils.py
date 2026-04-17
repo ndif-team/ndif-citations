@@ -1,4 +1,4 @@
-"""Utility functions: slugify, PDF download, text extraction, deduplication."""
+"""Utility functions for PDF processing, text extraction, deduplication, and figure detection."""
 
 from __future__ import annotations
 
@@ -164,6 +164,128 @@ def rate_limit_sleep(seconds: float, label: str = "") -> None:
         if label:
             logger.debug(f"Rate limiting ({label}): sleeping {seconds}s")
         time.sleep(seconds)
+
+
+# ---------------------------------------------------------------------------
+# Figure detection helpers
+# ---------------------------------------------------------------------------
+
+FIGURE_QUALITY_KEYWORDS = [
+    "overview", "architecture", "pipeline", "framework", "model",
+    "method", "approach", "structure", "diagram", "schematic",
+    "workflow", "system", "network", "design", "illustration"
+]
+
+FIGURE_REJECT_KEYWORDS = [
+    "logo", "header", "banner", "icon", "avatar", "institution",
+    "university", "conference", "sponsor", "qr", "barcode"
+]
+
+CAPTION_PATTERN = re.compile(
+    r'(Figure\s+(\d+)[:.]?\s*([^\n]{0,150})|Fig\.?\s+(\d+)[:.]?\s*([^\n]{0,150}))',
+    re.IGNORECASE
+)
+
+
+def score_caption_quality(caption_text: str) -> int:
+    """Score a caption based on presence of quality keywords."""
+    caption_lower = caption_text.lower()
+    score = 0
+    for kw in FIGURE_QUALITY_KEYWORDS:
+        if kw in caption_lower:
+            score += 10
+    for kw in FIGURE_REJECT_KEYWORDS:
+        if kw in caption_lower:
+            score -= 20
+    return max(score, 0)
+
+
+def extract_captions_from_page(page_text: str) -> list[tuple[int, str, int]]:
+    """Extract figure captions from page text."""
+    captions = []
+    for match in CAPTION_PATTERN.finditer(page_text):
+        num_str = match.group(2) or match.group(4)
+        if num_str:
+            try:
+                figure_num = int(num_str)
+                full_caption = match.group(0)
+                score = score_caption_quality(full_caption)
+                captions.append((figure_num, full_caption.strip(), score))
+            except ValueError:
+                continue
+    return captions
+
+
+def get_section_for_page(page_text: str) -> str:
+    """Detect what section a page belongs to based on text content."""
+    text_lower = page_text[:2000].lower()
+
+    # Section detection patterns
+    if re.search(r'\b(abstract)\b', text_lower):
+        return "abstract"
+    if re.search(r'\b(introduction)\b', text_lower):
+        return "introduction"
+    if re.search(r'\b(related work|background|prior work)\b', text_lower):
+        return "related"
+    if re.search(r'\b(method|methodology|approach|model|architecture)\b', text_lower):
+        return "method"
+    if re.search(r'\b(experiment|evaluation|result)\b', text_lower):
+        return "results"
+
+    return "unknown"
+
+
+def calculate_image_score(
+    width: int,
+    height: int,
+    has_caption: bool,
+    caption_score: int,
+    section: str,
+    page_num: int
+) -> float:
+    """Calculate a score for an image candidate.
+
+    Higher scores = better candidate for a representative figure.
+    """
+    score = 0.0
+
+    # Base: size matters but avoid extremes
+    area = width * height
+    if area < 15000:  # Too small (like icons)
+        return 0
+    if area > 500000:  # Too large (likely full-page banner)
+        score -= 20
+
+    # Prefer moderate sizes (likely actual figures)
+    if 50000 < area < 300000:
+        score += 10
+
+    # Aspect ratio: prefer reasonable ratios
+    ratio = max(width, height) / max(min(width, height), 1)
+    if ratio > 5:  # Extremely wide/tall
+        score -= 15
+    elif ratio > 3:
+        score -= 5
+    else:
+        score += 5
+
+    # Caption quality
+    if has_caption:
+        score += 20 + caption_score
+
+    # Section preference: method/architecture sections are best
+    if section == "method":
+        score += 25
+    elif section == "results":
+        score += 15
+    elif section == "introduction":
+        score += 5
+
+    # Page preference: early pages often have overview figures
+    if page_num <= 2:
+        score += 5
+
+    return score
 
 
 # ---------------------------------------------------------------------------

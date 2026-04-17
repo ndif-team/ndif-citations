@@ -154,7 +154,7 @@ For each paper:
    - `uses_nnsight` — uses the nnsight Python library
    - `referencing` — mentions without active use
 4. **LLM summary** — abstract summarized into 1–3 sentences for the website.
-5. **Thumbnail extraction** — largest figure from the first 4 PDF pages saved as PNG.
+5. **Thumbnail extraction** — smart figure detection across all pages, scoring candidates by caption quality (keywords like "architecture", "pipeline", "overview"), size/aspect ratio, and section context (method sections preferred). Extracts the best representative figure as PNG.
 
 If the LLM is unavailable, rule-based fallbacks handle classification (keyword matching) and summarization (first 2 sentences of abstract).
 

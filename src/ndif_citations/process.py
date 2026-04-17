@@ -190,81 +190,126 @@ def _fallback_classification(context: str) -> DetailCategory:
 
 
 # ---------------------------------------------------------------------------
-# 3c. Thumbnail extraction
+# 3c. Thumbnail extraction (smart figure detection - no LLM)
 # ---------------------------------------------------------------------------
 
 def extract_thumbnail(paper: DiscoveredPaper, output_dir: Path,
-                      pdf_path: Path | None = None) -> Optional[str]:
-    """Extract the best thumbnail image from a paper's PDF.
+                    pdf_path: Path | None = None) -> Optional[str]:
+    """Extract the best thumbnail image from a paper's PDF using smart figure detection.
 
-    Args:
-        paper: The paper to extract a thumbnail for.
-        output_dir: Where to save the thumbnail image.
-        pdf_path: Pre-downloaded PDF path (avoids re-downloading).
-
-    Returns the saved image path (relative, like /images/Slug.png) or None.
+    Scans all pages, detects captions, scores candidates based on quality keywords,
+    section context, and size. Returns the saved image path or None.
     """
     if not pdf_path or not pdf_path.exists():
         logger.info(f"No PDF available for '{paper.title}' — skipping thumbnail")
         return None
 
     try:
-        import fitz  # pymupdf
+        import fitz
+        from ndif_citations import utils
 
         doc = fitz.open(str(pdf_path))
-        best_image = None
-        best_area = 0
+        candidates = []
 
-        for page_num in range(min(4, len(doc))):
+        for page_num in range(len(doc)):
             page = doc[page_num]
+
+            # Get page text and detect section
+            page_text = page.get_text()
+            section = utils.get_section_for_page(page_text)
+
+            # Extract captions from this page
+            captions = utils.extract_captions_from_page(page_text)
+
+            # Get images on this page
             images = page.get_images(full=True)
+            if not images:
+                continue
+
+            # Heuristic: if captions with quality keywords exist
+            has_quality_caption = any(score >= 10 for _, _, score in captions)
+            best_caption_score = max((score for _, _, score in captions), default=0)
+
             for img_info in images:
                 xref = img_info[0]
                 try:
                     base_image = doc.extract_image(xref)
                     width = base_image["width"]
                     height = base_image["height"]
-                    area = width * height
 
                     # Skip tiny images (logos, icons)
-                    if width < 100 or height < 100:
+                    if width < 80 or height < 80:
                         continue
 
-                    if area > best_area:
-                        best_area = area
-                        best_image = base_image
+                    # Skip extremely large images (likely full-page scans)
+                    if width * height > 1000000:
+                        continue
+
+                    # Calculate score
+                    score = utils.calculate_image_score(
+                        width=width,
+                        height=height,
+                        has_caption=has_quality_caption,
+                        caption_score=best_caption_score,
+                        section=section,
+                        page_num=page_num
+                    )
+
+                    if score > 0:
+                        candidates.append({
+                            'image': base_image,
+                            'score': score,
+                            'width': width,
+                            'height': height,
+                            'page_num': page_num,
+                            'section': section,
+                            'has_caption': has_quality_caption,
+                        })
+
                 except Exception:
                     continue
 
         doc.close()
 
-        if best_image:
-            slug = slugify(paper.title)
-            image_filename = f"{slug}.png"
-            image_path = output_dir / "images" / image_filename
-
-            # Convert to PNG if needed
-            img_data = best_image["image"]
-            img_ext = best_image.get("ext", "png")
-
-            if img_ext != "png":
-                try:
-                    from PIL import Image
-                    import io
-                    img = Image.open(io.BytesIO(img_data))
-                    buf = io.BytesIO()
-                    img.save(buf, format="PNG")
-                    img_data = buf.getvalue()
-                except Exception as e:
-                    logger.debug(f"Image conversion failed, saving as-is: {e}")
-
-            with open(image_path, "wb") as f:
-                f.write(img_data)
-
-            return f"/images/{image_filename}"
-        else:
-            logger.info(f"No suitable figure found in '{paper.title}'")
+        if not candidates:
+            logger.info(f"No suitable figure candidates found in '{paper.title}'")
             return None
+
+        # Sort by score (descending) and pick best
+        candidates.sort(key=lambda x: x['score'], reverse=True)
+        best = candidates[0]
+
+        logger.info(f"Selected image from '{paper.title}': page {best['page_num']+1}, "
+                    f"score={best['score']:.1f}, size={best['width']}x{best['height']}")
+
+        # Save the image
+        slug = slugify(paper.title)
+        image_filename = f"{slug}.png"
+        image_path = output_dir / "images" / image_filename
+
+        # Ensure output directory exists
+        image_parent = image_path.parent
+        image_parent.mkdir(parents=True, exist_ok=True)
+
+        # Convert to PNG if needed
+        img_data = best['image']["image"]
+        img_ext = best['image'].get("ext", "png")
+
+        if img_ext != "png":
+            try:
+                from PIL import Image
+                import io
+                img = Image.open(io.BytesIO(img_data))
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                img_data = buf.getvalue()
+            except Exception as e:
+                logger.debug(f"Image conversion failed, saving as-is: {e}")
+
+        with open(image_path, "wb") as f:
+            f.write(img_data)
+
+        return f"/images/{image_filename}"
 
     except Exception as e:
         logger.warning(f"Thumbnail extraction failed for '{paper.title}': {e}")
