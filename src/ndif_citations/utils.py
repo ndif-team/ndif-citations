@@ -41,8 +41,11 @@ def download_pdf(url: str, dest_dir: Path | None = None, timeout: int = 30) -> O
         resp = requests.get(url, headers=headers, timeout=timeout, stream=True)
         resp.raise_for_status()
 
-        content_type = resp.headers.get("Content-Type", "")
-        if "pdf" not in content_type and not url.endswith(".pdf"):
+        content_type = resp.headers.get("Content-Type", "").lower()
+        if "text/html" in content_type:
+            logger.warning(f"Aborting download: URL points to an HTML page (likely a paywall/login): {url}")
+            return None
+        elif "pdf" not in content_type and not url.endswith(".pdf"):
             logger.warning(f"URL may not be a PDF (Content-Type: {content_type}): {url}")
 
         if dest_dir:
@@ -170,47 +173,82 @@ def rate_limit_sleep(seconds: float, label: str = "") -> None:
 # Figure detection helpers
 # ---------------------------------------------------------------------------
 
-FIGURE_QUALITY_KEYWORDS = [
-    "overview", "architecture", "pipeline", "framework", "model",
-    "method", "approach", "structure", "diagram", "schematic",
-    "workflow", "system", "network", "design", "illustration"
+MECH_INTERP_TIER_1 = [
+    "circuit", "crosscoder", "sae", "steering", "patching",
+    "sparse autoencoder", "attribution", "faithfulness",
+    "ablation", "activation patching", "logit lens"
 ]
 
-FIGURE_REJECT_KEYWORDS = [
+MECH_INTERP_TIER_2 = [
+    "attention", "latents", "neurons", "features", "probing",
+    "residual stream", "mlp", "induction", "transformer"
+]
+
+MECH_INTERP_TIER_3 = [
+    "overview", "architecture", "pipeline", "framework",
+    "method", "approach", "structure", "diagram",
+    "workflow", "design", "illustration"
+]
+
+MECH_INTERP_REJECT = [
     "logo", "header", "banner", "icon", "avatar", "institution",
     "university", "conference", "sponsor", "qr", "barcode"
 ]
 
 CAPTION_PATTERN = re.compile(
-    r'(Figure\s+(\d+)[:.]?\s*([^\n]{0,150})|Fig\.?\s+(\d+)[:.]?\s*([^\n]{0,150}))',
+    r'(?:^|\n)(Figure\s+(\d+)[:.]?\s*([^\n]{0,150})|Fig\.?\s+(\d+)[:.]?\s*([^\n]{0,150}))',
     re.IGNORECASE
 )
 
 
-def score_caption_quality(caption_text: str) -> int:
-    """Score a caption based on presence of quality keywords."""
+def score_mech_interp_caption(caption_text: str, page_num: int, figure_num: int) -> float:
+    """Score a caption based on mechanistic interpretability tiers and page decay."""
     caption_lower = caption_text.lower()
-    score = 0
-    for kw in FIGURE_QUALITY_KEYWORDS:
+    score = 0.0
+
+    # Penalize reject keywords heavily
+    for kw in MECH_INTERP_REJECT:
         if kw in caption_lower:
-            score += 10
-    for kw in FIGURE_REJECT_KEYWORDS:
+            score -= 20.0
+
+    # Tiered scoring
+    for kw in MECH_INTERP_TIER_1:
         if kw in caption_lower:
-            score -= 20
-    return max(score, 0)
+            score += 30.0
+    for kw in MECH_INTERP_TIER_2:
+        if kw in caption_lower:
+            score += 20.0
+    for kw in MECH_INTERP_TIER_3:
+        if kw in caption_lower:
+            score += 10.0
+
+    # Standard penalty for deep pages (decay by 2 points per page)
+    # Allows earlier figures to win ties.
+    score -= (page_num * 2.0)
+    
+    # Priority for early figures (architecture/overview diagrams usually Fig 1/2)
+    if figure_num in [1, 2]:
+        score += 35.0
+    elif figure_num == 3:
+        score += 15.0
+        
+    return max(score, 0.0)
 
 
-def extract_captions_from_page(page_text: str) -> list[tuple[int, str, int]]:
-    """Extract figure captions from page text."""
+def extract_captions_from_page(page_text: str, page_num: int = 0) -> list[tuple[int, str, float]]:
+    """Extract figure captions from page text.
+    
+    Returns list of (figure_number, caption_text, score) tuples.
+    """
     captions = []
     for match in CAPTION_PATTERN.finditer(page_text):
         num_str = match.group(2) or match.group(4)
         if num_str:
             try:
                 figure_num = int(num_str)
-                full_caption = match.group(0)
-                score = score_caption_quality(full_caption)
-                captions.append((figure_num, full_caption.strip(), score))
+                full_caption = match.group(1).strip()
+                score = score_mech_interp_caption(full_caption, page_num, figure_num)
+                captions.append((figure_num, full_caption, score))
             except ValueError:
                 continue
     return captions

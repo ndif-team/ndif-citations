@@ -193,12 +193,31 @@ def _fallback_classification(context: str) -> DetailCategory:
 # 3c. Thumbnail extraction (smart figure detection - no LLM)
 # ---------------------------------------------------------------------------
 
+_surya_model = None
+_surya_processor = None
+
+def get_layout_predictor_args():
+    """Lazily load the Surya model and processor to save startup memory."""
+    global _surya_model, _surya_processor
+    if _surya_model is None:
+        from surya.model.detection.model import load_model, load_processor
+        from surya.settings import settings
+        # Load the layout checkpoint instead of the default detector checkpoint
+        _surya_model = load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
+        _surya_processor = load_processor(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
+    return _surya_model, _surya_processor
+
+
 def extract_thumbnail(paper: DiscoveredPaper, output_dir: Path,
                     pdf_path: Path | None = None) -> Optional[str]:
-    """Extract the best thumbnail image from a paper's PDF using smart figure detection.
+    """Extract the best thumbnail image from a paper's PDF using PyMuPDF and Surya.
 
-    Scans all pages, detects captions, scores candidates based on quality keywords,
-    section context, and size. Returns the saved image path or None.
+    Implementation:
+    1. Scan all pages with fast regex text matches to find all captions.
+    2. Score the captions using Mech-Interp keyword tiers + page penalization.
+    3. Rasterize ONLY the winning page.
+    4. Run Surya Layout Predictor on that single page to find the exact Figure bounding box.
+    5. Crop and save.
     """
     if not pdf_path or not pdf_path.exists():
         logger.info(f"No PDF available for '{paper.title}' — skipping thumbnail")
@@ -207,80 +226,146 @@ def extract_thumbnail(paper: DiscoveredPaper, output_dir: Path,
     try:
         import fitz
         from ndif_citations import utils
+        from PIL import Image
 
         doc = fitz.open(str(pdf_path))
-        candidates = []
+        all_captions = []
 
+        # Step 1 & 2: Fast heuristic caption discovery
         for page_num in range(len(doc)):
             page = doc[page_num]
-
-            # Get page text and detect section
-            page_text = page.get_text()
-            section = utils.get_section_for_page(page_text)
-
-            # Extract captions from this page
-            captions = utils.extract_captions_from_page(page_text)
-
-            # Get images on this page
-            images = page.get_images(full=True)
-            if not images:
+            
+            drawings = page.get_drawings()
+            images = page.get_images()
+            # Dense vector networks or raster images required for a figure to exist
+            if len(drawings) < 20 and len(images) == 0:
                 continue
-
-            # Heuristic: if captions with quality keywords exist
-            has_quality_caption = any(score >= 10 for _, _, score in captions)
-            best_caption_score = max((score for _, _, score in captions), default=0)
-
-            for img_info in images:
-                xref = img_info[0]
-                try:
-                    base_image = doc.extract_image(xref)
-                    width = base_image["width"]
-                    height = base_image["height"]
-
-                    # Skip tiny images (logos, icons)
-                    if width < 80 or height < 80:
-                        continue
-
-                    # Skip extremely large images (likely full-page scans)
-                    if width * height > 1000000:
-                        continue
-
-                    # Calculate score
-                    score = utils.calculate_image_score(
-                        width=width,
-                        height=height,
-                        has_caption=has_quality_caption,
-                        caption_score=best_caption_score,
-                        section=section,
-                        page_num=page_num
-                    )
-
-                    if score > 0:
-                        candidates.append({
-                            'image': base_image,
-                            'score': score,
-                            'width': width,
-                            'height': height,
-                            'page_num': page_num,
-                            'section': section,
-                            'has_caption': has_quality_caption,
-                        })
-
-                except Exception:
-                    continue
+                
+            page_text = page.get_text()
+            captions = utils.extract_captions_from_page(page_text, page_num=page_num)
+            for c in captions:
+                # c is (figure_num, text, score)
+                all_captions.append({
+                    "page_num": page_num,
+                    "text": c[1],
+                    "score": c[2]
+                })
 
         doc.close()
 
-        if not candidates:
-            logger.info(f"No suitable figure candidates found in '{paper.title}'")
-            return None
+        # Filter out 0-score or completely rejected captions
+        valid_captions = [c for c in all_captions if c["score"] > 0]
+        if not valid_captions:
+            logger.info(f"No suitable figure candidates found in '{paper.title}'. Capturing title area as fallback.")
+            doc = fitz.open(str(pdf_path))
+            page = doc[0]
+            pix = page.get_pixmap(dpi=150)
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            doc.close()
+            # Fallback to top ~35% of the first page (Title, Author, Abstract area)
+            hero_img = img.crop((0, 0, img.width, min(img.height, int(img.height * 0.35))))
+            
+            slug = slugify(paper.title)
+            image_filename = f"{slug}.png"
+            image_path = output_dir / "images" / image_filename
+            image_path.parent.mkdir(parents=True, exist_ok=True)
+            hero_img.save(image_path, format="PNG")
+            return f"/images/{image_filename}"
 
-        # Sort by score (descending) and pick best
-        candidates.sort(key=lambda x: x['score'], reverse=True)
-        best = candidates[0]
+        # Sort descending by score, pick the best
+        valid_captions.sort(key=lambda x: x["score"], reverse=True)
+        best_candidate = valid_captions[0]
+        target_page_num = best_candidate["page_num"]
+        target_text = best_candidate["text"]
 
-        logger.info(f"Selected image from '{paper.title}': page {best['page_num']+1}, "
-                    f"score={best['score']:.1f}, size={best['width']}x{best['height']}")
+        logger.info(f"Selected candidate from '{paper.title}': page {target_page_num+1}, "
+                    f"score={best_candidate['score']:.1f}")
+
+        # Step 3: Rasterize the winning page
+        doc = fitz.open(str(pdf_path))
+        target_page = doc[target_page_num]
+        
+        # Determine the Y coordinate of the caption in fitz space (dpi=72)
+        target_y_fitz = target_page.rect.height  # default to bottom
+        rects = target_page.search_for(target_text[:40])
+        if rects:
+            target_y_fitz = rects[0].y0
+
+        # Render page to PIL Image at 150 DPI
+        render_dpi = 150
+        scale_factor = render_dpi / 72.0
+        target_y_px = target_y_fitz * scale_factor
+
+        pix = target_page.get_pixmap(dpi=render_dpi)
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        doc.close()
+
+        # Step 4: Run Surya on the single targeted page
+        from surya.layout import batch_layout_detection
+        model, processor = get_layout_predictor_args()
+        
+        # Surya expects a list of images.
+        predictions = batch_layout_detection([img], model, processor)
+        page_pred = predictions[0]
+
+        # Find all Figure/Picture bounding boxes
+        fig_boxes = [b.polygon for b in page_pred.bboxes if b.label in ['Figure', 'Picture']]
+        
+        if not fig_boxes:
+            logger.warning(f"Surya found no Figure/Picture elements on page {target_page_num+1}. Falling back to default crop.")
+            # Fallback: Capture a generous portion above the caption
+            crop_box = [0, max(0, target_y_px - int(img.height * 0.4)), img.width, min(img.height, target_y_px + 50)]
+        else:
+            # Surya polygon is [ [x0, y0], [x1, y1], [x2, y2], [x3, y3] ]. Convert to bbox [x0, y0, x1, y1].
+            # Using [min_x, min_y, max_x, max_y]
+            rect_boxes = []
+            for poly in fig_boxes:
+                xs = [p[0] for p in poly]
+                ys = [p[1] for p in poly]
+                rect_boxes.append([min(xs), min(ys), max(xs), max(ys)])
+
+            # Step 5: Match the Figure box(es) sitting exactly above the caption
+            # Surya sometimes fragments a unified diagram into multiple distinct boxes.
+            # We cluster all boxes that are vertically above the caption and physically close to each other.
+            
+            # Filter boxes to only those above or near the caption's top edge (with small 50px leniency)
+            valid_boxes = [b for b in rect_boxes if b[3] <= target_y_px + 50]
+            valid_boxes.sort(key=lambda b: b[3], reverse=True) # closest to caption first
+            
+            if not valid_boxes:
+                # Capture a generous portion above the caption if no boxes qualify
+                crop_box = [0, max(0, target_y_px - int(img.height * 0.4)), img.width, min(img.height, target_y_px + 50)]
+            else:
+                cluster = [valid_boxes[0]]
+                
+                def bdist(b1, b2):
+                    # Manhattan distance edge-to-edge
+                    dx = max(0, b2[0] - b1[2], b1[0] - b2[2])
+                    dy = max(0, b2[1] - b1[3], b1[1] - b2[3])
+                    return dx + dy
+                
+                added = True
+                while added:
+                    added = False
+                    for b in valid_boxes:
+                        if b in cluster: continue
+                        # Check if box is close to any box already in our cluster (250px threshold handles large column/vertical gaps in diagrams)
+                        for c in cluster:
+                            if bdist(b, c) < 250:
+                                cluster.append(b)
+                                added = True
+                                break
+
+                # Encompassing box with 10px buffer
+                crop_box = [
+                    max(0, min(b[0] for b in cluster) - 10),
+                    max(0, min(b[1] for b in cluster) - 10),
+                    min(img.width, max(b[2] for b in cluster) + 10),
+                    min(img.height, max(b[3] for b in cluster) + 10)
+                ]
+
+        # Crop the image
+        hero_img = img.crop(crop_box)
 
         # Save the image
         slug = slugify(paper.title)
@@ -291,24 +376,7 @@ def extract_thumbnail(paper: DiscoveredPaper, output_dir: Path,
         image_parent = image_path.parent
         image_parent.mkdir(parents=True, exist_ok=True)
 
-        # Convert to PNG if needed
-        img_data = best['image']["image"]
-        img_ext = best['image'].get("ext", "png")
-
-        if img_ext != "png":
-            try:
-                from PIL import Image
-                import io
-                img = Image.open(io.BytesIO(img_data))
-                buf = io.BytesIO()
-                img.save(buf, format="PNG")
-                img_data = buf.getvalue()
-            except Exception as e:
-                logger.debug(f"Image conversion failed, saving as-is: {e}")
-
-        with open(image_path, "wb") as f:
-            f.write(img_data)
-
+        hero_img.save(image_path, format="PNG")
         return f"/images/{image_filename}"
 
     except Exception as e:

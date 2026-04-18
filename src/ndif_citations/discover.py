@@ -430,6 +430,10 @@ def deduplicate_papers(all_papers: list[DiscoveredPaper]) -> list[DiscoveredPape
     all_papers.sort(key=lambda p: source_priority.get(p.source, 3))
 
     for paper in all_papers:
+        # Ignore exactly excluded seed papers
+        if paper.title.lower().strip() in config.EXCLUDED_PAPER_TITLES:
+            continue
+
         # Check arXiv ID
         if paper.arxiv_id and paper.arxiv_id in seen_arxiv:
             idx = seen_arxiv[paper.arxiv_id]

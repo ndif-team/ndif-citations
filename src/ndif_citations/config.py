@@ -19,6 +19,11 @@ SEED_S2_ID = "ARXIV:2407.14561"  # NNsight & NDIF paper
 SEED_ARXIV_ID = "2407.14561"
 SEED_OPENREVIEW_ID = "MxbEiFRf39"  # ICLR 2025
 
+# Exactly match these full lowercase titles to drop them from discovery (the origin papers themselves)
+EXCLUDED_PAPER_TITLES = {
+    "nnsight and ndif: democratizing access to open-weight foundation model internals",
+}
+
 NNSIGHT_GITHUB_REPO = "ndif-team/nnsight"
 GITHUB_DEPENDENTS_URL = f"https://github.com/{NNSIGHT_GITHUB_REPO}/network/dependents"
 
