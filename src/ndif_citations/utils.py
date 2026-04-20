@@ -170,6 +170,79 @@ def rate_limit_sleep(seconds: float, label: str = "") -> None:
 
 
 # ---------------------------------------------------------------------------
+# Unpaywall API for open access PDF lookup
+# ---------------------------------------------------------------------------
+
+def query_unpaywall(doi: str) -> dict:
+    """Query Unpaywall API for open access PDF location.
+
+    Unpaywall API: https://api.unpaywall.org/v2/{doi}?email={email}
+    - Free, no key required
+    - Rate limit: 100,000 calls/day
+    - Returns open access status and PDF URLs
+
+    Args:
+        doi: DOI to look up (e.g., "10.3390/ai7030092")
+
+    Returns:
+        Dict with structure:
+        {
+            "is_oa": bool,
+            "oa_status": "gold|green|bronze|closed",
+            "best_oa_location": {
+                "url_for_pdf": str | None,
+                "url": str  # landing page
+            }
+        }
+        Returns empty dict if API call fails.
+    """
+    from ndif_citations import config
+
+    email = config.UNPAYWALL_EMAIL
+    if not email:
+        logger.debug(f"No UNPAYWALL_EMAIL configured, skipping Unpaywall lookup for {doi}")
+        return {}
+
+    url = f"https://api.unpaywall.org/v2/{doi}"
+    params = {"email": email}
+
+    try:
+        headers = {
+            "User-Agent": "NDIFCitationTracker/0.1 (academic research; https://ndif.us)"
+        }
+        resp = requests.get(url, params=params, headers=headers, timeout=15)
+
+        if resp.status_code == 404:
+            logger.debug(f"DOI not found in Unpaywall: {doi}")
+            return {}
+
+        resp.raise_for_status()
+        data = resp.json()
+
+        result = {
+            "is_oa": data.get("is_oa", False),
+            "oa_status": data.get("oa_status", "closed"),
+            "best_oa_location": data.get("best_oa_location", {}),
+            "first_oa_location": data.get("first_oa_location", {}),
+        }
+
+        logger.debug(f"Unpaywall: {doi} -> OA status: {result['oa_status']}")
+
+        rate_limit_sleep(config.UNPAYWALL_RATE_LIMIT_SLEEP, "Unpaywall")
+        return result
+
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 422:
+            logger.debug(f"Invalid DOI format for Unpaywall: {doi}")
+        else:
+            logger.warning(f"Unpaywall API error for {doi}: {e}")
+        return {}
+    except Exception as e:
+        logger.warning(f"Failed to query Unpaywall for {doi}: {e}")
+        return {}
+
+
+# ---------------------------------------------------------------------------
 # Figure detection helpers
 # ---------------------------------------------------------------------------
 

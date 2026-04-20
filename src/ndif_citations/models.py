@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from datetime import date, datetime
 from enum import Enum
 from typing import Optional
@@ -10,10 +11,11 @@ from pydantic import BaseModel, Field
 
 
 class DetailCategory(str, Enum):
-    """Three-way internal categorization."""
+    """Four-way internal categorization."""
     USES_NDIF = "uses_ndif"
     USES_NNSIGHT = "uses_nnsight"
     REFERENCING = "referencing"
+    UNCLASSIFIED = "unclassified"  # PDF unavailable or insufficient evidence
 
 
 class WebsiteCategory(str, Enum):
@@ -29,6 +31,7 @@ class DiscoverySource(str, Enum):
     OPENALEX_FULLTEXT = "openalex_fulltext"
     GITHUB_DEPENDENT = "github_dependent"
     MANUAL_ADD = "manual_add"
+    # Note: arXiv API is used for enrichment, not discovery
 
 
 class DiscoveredPaper(BaseModel):
@@ -69,6 +72,34 @@ class DiscoveredPaper(BaseModel):
     date_discovered: datetime = Field(default_factory=datetime.now)
     manual_override: bool = False  # If true, preserve description/category on merge
     github_repo_url: Optional[str] = None
+
+    # Change detection 
+    content_hash: str = ""  # SHA256(title + "::" + abstract)[:16]
+
+    # Processing flags 
+    has_summary: bool = False
+    has_classification: bool = False
+    has_thumbnail: bool = False
+
+    # Routing metadata for debugging 
+    processing_bucket: str = "UNKNOWN"  # NEW, REPROCESS, FILL_GAPS, SKIP, PROTECTED
+
+    def compute_hash(self) -> str:
+        """Compute content hash for change detection."""
+        content = f"{self.title}::{self.abstract or ''}"
+        return hashlib.sha256(content.encode()).hexdigest()[:16]
+
+    def model_post_init(self, __context):
+        """Auto-compute hash on creation if not set."""
+        if not self.content_hash:
+            self.content_hash = self.compute_hash()
+        # Set processing flags based on existing data
+        if not hasattr(self, 'has_summary') or self.has_summary is None:
+            self.has_summary = bool(self.description)
+        if not hasattr(self, 'has_classification') or self.has_classification is None:
+            self.has_classification = self.detail_category != DetailCategory.REFERENCING or self.category_confidence > 0
+        if not hasattr(self, 'has_thumbnail') or self.has_thumbnail is None:
+            self.has_thumbnail = bool(self.image)
 
     @property
     def website_category(self) -> WebsiteCategory:
@@ -136,3 +167,11 @@ class PipelineRun(BaseModel):
     errors: list[str] = Field(default_factory=list)
     low_confidence: list[str] = Field(default_factory=list)
     missing_thumbnails: list[str] = Field(default_factory=list)
+
+    # Routing bucket counts 
+    bucket_new: int = 0
+    bucket_reprocess: int = 0
+    bucket_fill_gaps: int = 0
+    bucket_skip: int = 0
+    bucket_protected: int = 0
+    unclassified_count: int = 0  # Papers we couldn't classify (PDF unavailable)

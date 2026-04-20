@@ -55,6 +55,12 @@ OPENALEX_SEARCH_QUERIES = [
 OPENALEX_RATE_LIMIT_SLEEP = 0.15  # ~6-7 req/sec with polite pool
 
 # ---------------------------------------------------------------------------
+# Unpaywall API (free, no key required, just need email)
+# ---------------------------------------------------------------------------
+UNPAYWALL_EMAIL: str | None = os.environ.get("UNPAYWALL_EMAIL") or OPENALEX_EMAIL
+UNPAYWALL_RATE_LIMIT_SLEEP = 0.1  # ~10 req/sec (100K/day limit)
+
+# ---------------------------------------------------------------------------
 # LLM (OpenAI-compatible)
 # ---------------------------------------------------------------------------
 LLM_BASE_URL: str = os.environ.get("LLM_BASE_URL", "https://integrate.api.nvidia.com/v1")

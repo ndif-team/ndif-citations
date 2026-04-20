@@ -8,6 +8,7 @@ from typing import Optional
 
 from ndif_citations import config
 from ndif_citations.models import DetailCategory, DiscoveredPaper
+from ndif_citations.router import ProcessingBucket, RoutingDecision
 from ndif_citations.utils import (
     download_pdf,
     extract_ndif_context,
@@ -88,17 +89,19 @@ def _fallback_summary(abstract: str) -> str:
 # 3b. Category classification
 # ---------------------------------------------------------------------------
 
-CATEGORY_SYSTEM_PROMPT = """Classify how this paper relates to NDIF/NNsight based on the context excerpts.
+CATEGORY_SYSTEM_PROMPT = """Classify how this paper relates to NDIF/NNsight based on the evidence provided.
 
 Reply with ONLY one of these exact strings:
-- "uses_ndif" — if the paper uses NDIF infrastructure (e.g., hosted models on NDIF, ran experiments on NDIF cluster)
-- "uses_nnsight" — if the paper uses the nnsight Python library in their experiments/code (e.g., "import nnsight", nnsight.trace, uses nnsight as backend) but does NOT use NDIF infrastructure
-- "referencing" — if the paper only mentions/cites NDIF or nnsight without actively using either
+- "uses_ndif" — verifiable evidence the paper actively uses NDIF infrastructure (e.g., hosted models on NDIF cluster, experiments run on ndif.us)
+- "uses_nnsight" — verifiable evidence of nnsight library usage (e.g., import nnsight, code using nnsight API) but NOT NDIF infrastructure
+- "referencing" — mentions or cites NDIF/nnsight in related work, but no evidence of active use
+- "unclassified" — insufficient evidence to determine relationship
 
 Evidence guide:
 - "hosted on NDIF", "NDIF cluster", "ndif.us" in methodology → "uses_ndif"
-- "import nnsight", "nnsight.trace", code snippets using nnsight API, "nnsight backend" → "uses_nnsight"
-- Related work mentions, surveys listing NDIF, comparisons without actual usage → "referencing"
+- "import nnsight", "nnsight.trace", code snippets using nnsight API → "uses_nnsight"
+- Related work mentions, surveys listing NDIF → "referencing"
+- No direct mentions found in text → "unclassified"
 
 Reply with ONLY the category string, nothing else."""
 
@@ -117,7 +120,7 @@ def classify_category(paper: DiscoveredPaper, output_dir: Path,
     # Try to extract context from PDF (use pre-downloaded if available)
     context = ""
     if pdf_path and pdf_path.exists():
-        context = extract_ndif_context(pdf_path)
+        context = extract_ndif_context(pdf_path, window=config.CONTEXT_WINDOW)
 
     # If no PDF context, try using abstract
     if not context or "No direct mentions" in context:
@@ -128,11 +131,13 @@ def classify_category(paper: DiscoveredPaper, output_dir: Path,
             if has_mention:
                 context = paper.abstract
             else:
-                # No mentions at all — default to referencing
-                logger.info(f"No NDIF/nnsight mentions found for '{paper.title}' — defaulting to 'referencing'")
-                return DetailCategory.REFERENCING, 0.5
+                # No mentions at all — mark as UNCLASSIFIED (be honest about evidence)
+                logger.info(f"No NDIF/nnsight mentions found for '{paper.title}' — marking as UNCLASSIFIED")
+                return DetailCategory.UNCLASSIFIED, 0.0
         else:
-            return DetailCategory.REFERENCING, 0.3
+            # No PDF and no abstract — cannot verify mentions
+            logger.info(f"No PDF or abstract for '{paper.title}' — cannot verify mentions, marking as UNCLASSIFIED")
+            return DetailCategory.UNCLASSIFIED, 0.0
 
     # Use LLM to classify
     client = _get_llm_client()
@@ -146,7 +151,8 @@ def classify_category(paper: DiscoveredPaper, output_dir: Path,
                 {"role": "system", "content": CATEGORY_SYSTEM_PROMPT},
                 {"role": "user", "content": (
                     f"Paper title: {paper.title}\n\n"
-                    f"Context excerpts mentioning NDIF/nnsight:\n{context}"
+                    f"Evidence of NDIF/nnsight usage:\n"
+                    f"{context if context and 'No direct mentions' not in context else 'No direct mentions found in available text.'}"
                 )},
             ],
             temperature=0.1,
@@ -162,9 +168,11 @@ def classify_category(paper: DiscoveredPaper, output_dir: Path,
             return DetailCategory.USES_NNSIGHT, 0.85
         elif "referencing" in raw:
             return DetailCategory.REFERENCING, 0.85
+        elif "unclassified" in raw:
+            return DetailCategory.UNCLASSIFIED, 0.0
         else:
-            logger.warning(f"Unexpected LLM classification '{raw}' for '{paper.title}' — defaulting to referencing")
-            return DetailCategory.REFERENCING, 0.5
+            logger.warning(f"Unexpected LLM classification '{raw}' for '{paper.title}' — defaulting to unclassified")
+            return DetailCategory.UNCLASSIFIED, 0.0
 
     except Exception as e:
         logger.warning(f"LLM classification failed for '{paper.title}': {e}")
@@ -388,68 +396,108 @@ def extract_thumbnail(paper: DiscoveredPaper, output_dir: Path,
 # Process all papers
 # ---------------------------------------------------------------------------
 
-def process_papers(papers: list[DiscoveredPaper], output_dir: Path,
-                   skip_llm: bool = False) -> list[DiscoveredPaper]:
-    """Run Phase 3 on all papers: summaries, classification, thumbnails.
+def process_papers(
+    decisions: list[RoutingDecision],
+    output_dir: Path,
+    skip_llm: bool = False
+) -> list[DiscoveredPaper]:
+    """Process papers based on routing decisions (selective processing).
 
     Args:
-        papers: List of discovered papers to process.
-        output_dir: Where to save images and temp files.
-        skip_llm: If True, skip LLM calls (for discover-only mode).
+        decisions: Routing decisions from the Early Router.
+        output_dir: Where to save images and PDF cache.
+        skip_llm: If True, skip LLM calls entirely.
+
+    Returns:
+        List of processed DiscoveredPaper objects.
     """
-    logger.info(f"Processing {len(papers)} papers (skip_llm={skip_llm})...")
+    from ndif_citations.pdf_cache import get_cached_pdf
+
+    logger.info(f"Processing {len(decisions)} papers (skip_llm={skip_llm})...")
+
+    # Ensure cache directories exist
     (output_dir / "pdfs").mkdir(parents=True, exist_ok=True)
+    (output_dir / "images").mkdir(parents=True, exist_ok=True)
 
-    for i, paper in enumerate(papers):
-        logger.info(f"[{i+1}/{len(papers)}] Processing: {paper.title[:60]}...")
+    results: list[DiscoveredPaper] = []
 
-        # Summary
-        if not paper.description and not skip_llm:
-            paper.description = generate_summary(paper)
+    for i, decision in enumerate(decisions):
+        paper = decision.paper
+        bucket = decision.bucket
+        needs = decision.processing_needed
 
-        # Download PDF once for both classification and thumbnail extraction
+        logger.info(f"[{i+1}/{len(decisions)}] {bucket.value}: {paper.title[:60]}...")
+
+        # SKIP and PROTECTED: just copy as-is
+        if bucket in (ProcessingBucket.SKIP, ProcessingBucket.PROTECTED):
+            if bucket == ProcessingBucket.PROTECTED and decision.existing_paper:
+                # For protected, merge in any new identifiers but preserve processed fields
+                if decision.existing_paper.s2_paper_id and not paper.s2_paper_id:
+                    paper.s2_paper_id = decision.existing_paper.s2_paper_id
+                if decision.existing_paper.openalex_id and not paper.openalex_id:
+                    paper.openalex_id = decision.existing_paper.openalex_id
+            results.append(paper)
+            continue
+
+        # Get PDF path if needed for classification or thumbnail
         pdf_path = None
-        pdf_url = paper.pdf_url
-        if not pdf_url and paper.arxiv_id:
-            pdf_url = f"https://arxiv.org/pdf/{paper.arxiv_id}.pdf"
+        if needs.get("classify") or needs.get("thumbnail"):
+            pdf_path = get_cached_pdf(paper, output_dir)
+            if not pdf_path:
+                logger.warning(f"Could not get PDF for '{paper.title[:50]}...'")
 
-        if pdf_url and not skip_llm:
-            pdf_path = download_pdf(pdf_url, dest_dir=output_dir / "pdfs")
+        # Summary generation
+        if needs.get("summary") and not skip_llm:
+            paper.description = generate_summary(paper)
+            paper.has_summary = bool(paper.description)
 
-        # Category classification (uses shared PDF)
-        if not paper.manual_override and not skip_llm:
-            category, confidence = classify_category(paper, output_dir, pdf_path=pdf_path)
-            paper.detail_category = category
-            paper.category_confidence = confidence
+        # Category classification
+        if needs.get("classify") and not skip_llm:
+            if pdf_path and pdf_path.exists():
+                category, confidence = classify_category(paper, output_dir, pdf_path=pdf_path)
+                paper.detail_category = category
+                paper.category_confidence = confidence
+                paper.has_classification = category != DetailCategory.UNCLASSIFIED
+            else:
+                # No PDF available - mark as UNCLASSIFIED
+                paper.detail_category = DetailCategory.UNCLASSIFIED
+                paper.category_confidence = 0.0
+                paper.has_classification = False
 
-        # Thumbnail (uses shared PDF)
-        image_filename = f"{slugify(paper.title)}.png"
-        image_path = output_dir / "images" / image_filename
+        # Thumbnail extraction
+        if needs.get("thumbnail"):
+            if pdf_path and pdf_path.exists():
+                image_filename = f"{slugify(paper.title)}.png"
+                image_path = output_dir / "images" / image_filename
 
-        if not image_path.exists() and not skip_llm:
-            extracted = extract_thumbnail(paper, output_dir, pdf_path=pdf_path)
-            if extracted:
-                paper.image = extracted
+                if not image_path.exists():
+                    extracted = extract_thumbnail(paper, output_dir, pdf_path=pdf_path)
+                    if extracted:
+                        paper.image = extracted
 
-        # Clean up shared PDF
-        if pdf_path:
-            try:
-                pdf_path.unlink()
-            except OSError:
-                pass
+            paper.has_thumbnail = bool(paper.image)
 
-    # Clean up pdfs directory
-    pdfs_dir = output_dir / "pdfs"
-    if pdfs_dir.exists():
-        for f in pdfs_dir.iterdir():
-            try:
-                f.unlink()
-            except OSError:
-                pass
-        try:
-            pdfs_dir.rmdir()
-        except OSError:
-            pass
+        results.append(paper)
 
     logger.info("Processing complete")
-    return papers
+    return results
+
+
+def process_papers_legacy(
+    papers: list[DiscoveredPaper],
+    output_dir: Path,
+    skip_llm: bool = False
+) -> list[DiscoveredPaper]:
+    """DEPRECATED: Legacy processing without router.
+
+    Use process_papers() with RoutingDecisions instead.
+    """
+    logger.warning("process_papers_legacy is deprecated. Use process_papers with routing decisions.")
+
+    # Convert papers to NEW routing decisions
+    from ndif_citations.router import route_papers
+
+    existing: list[DiscoveredPaper] = []
+    decisions = route_papers(papers, existing)
+
+    return process_papers(decisions, output_dir, skip_llm)

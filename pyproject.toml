@@ -1,6 +1,6 @@
 [project]
 name = "ndif-citations"
-version = "0.5.7"
+version = "1.4.2"
 description = "NDIF Citation Tracking Pipeline — discovers and catalogs papers citing or using NDIF/NNsight"
 requires-python = ">=3.10"
 dependencies = [
