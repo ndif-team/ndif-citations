@@ -7,7 +7,12 @@ from pathlib import Path
 
 from ndif_citations import config
 from ndif_citations.models import DiscoveredPaper
-from ndif_citations.utils import generate_bibtex
+from ndif_citations.utils import (
+    generate_bibtex,
+    query_arxiv_api,
+    query_crossref,
+    rate_limit_sleep,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +44,10 @@ def enrich_papers(papers: list[DiscoveredPaper], raw_dir: Path | None = None) ->
         # Determine best URL (prefer OpenReview > arXiv > DOI)
         paper.url = _best_url(paper)
 
-    # Enrich with OpenAlex affiliations for papers that don't have them
+    # Enrich venue + author names + affiliations via external APIs
+    enrich_via_external_apis(papers)
+
+    # Fill remaining affiliation gaps using OpenAlex
     _enrich_affiliations_from_openalex(papers, raw_dir)
 
     logger.info("Metadata enrichment complete")
@@ -164,13 +172,126 @@ def _best_url(paper: DiscoveredPaper) -> str:
     return url or ""
 
 
+def enrich_via_external_apis(papers: list[DiscoveredPaper]) -> None:
+    """Enrich venue, author names, and affiliations via CrossRef and arXiv APIs.
+
+    Step A — CrossRef: for papers with non-arXiv DOIs, fetch venue + affiliations.
+    Step B — arXiv API: batch-fetch clean author names + affiliations for arXiv papers.
+    """
+    logger.info("Enriching papers via CrossRef and arXiv APIs...")
+
+    # Step A: CrossRef — venue resolution + affiliations for published papers
+    for paper in papers:
+        doi = paper.doi or ""
+        if not doi or "arxiv" in doi.lower():
+            continue
+        try:
+            data = query_crossref(doi)
+            if not data:
+                continue
+
+            # Update venue if we currently show arXiv (or empty) and CrossRef knows better
+            container = data.get("container_title") or ""
+            event = data.get("event_name") or ""
+            best_venue = container or event
+            if best_venue and ("arxiv" in paper.venue.lower() or not paper.venue.strip()):
+                logger.debug(f"CrossRef venue update: '{paper.title[:40]}' -> {best_venue}")
+                paper.venue = best_venue
+
+            # Fill affiliations from CrossRef author objects if still missing
+            if not paper.affiliations:
+                aff_set: set[str] = set()
+                for author in data.get("authors", []):
+                    for aff in author.get("affiliation", []):
+                        name = aff.get("name") if isinstance(aff, dict) else str(aff)
+                        if name:
+                            aff_set.add(name)
+                if aff_set:
+                    paper.affiliations = ", ".join(sorted(aff_set))
+
+            rate_limit_sleep(
+                getattr(config, "CROSSREF_RATE_LIMIT_SLEEP", 0.2), "CrossRef"
+            )
+        except Exception as e:
+            logger.debug(f"CrossRef enrichment failed for '{paper.title[:40]}': {e}")
+
+    # Step B: arXiv API batch fetch — clean author names + affiliation fallback
+    arxiv_ids = [p.arxiv_id for p in papers if p.arxiv_id]
+    if not arxiv_ids:
+        return
+
+    logger.info(f"Fetching arXiv metadata for {len(arxiv_ids)} papers...")
+    arxiv_data = query_arxiv_api(arxiv_ids)
+
+    for paper in papers:
+        if not paper.arxiv_id or paper.arxiv_id not in arxiv_data:
+            continue
+        d = arxiv_data[paper.arxiv_id]
+        # Always refresh author names from arXiv (authoritative, clean Unicode)
+        if d.get("authors"):
+            paper.authors = ", ".join(d["authors"])
+        # Fill affiliations if still missing
+        if not paper.affiliations and d.get("affiliations"):
+            paper.affiliations = ", ".join(d["affiliations"])
+
+
+def _extract_affiliations_from_authorships(authorships: list[dict]) -> str:
+    """Extract sorted, deduplicated institution names from an OpenAlex authorships list."""
+    affiliations_set: set[str] = set()
+    for authorship in authorships:
+        for inst in authorship.get("institutions", []):
+            name = inst.get("display_name")
+            if name:
+                affiliations_set.add(name)
+    return ", ".join(sorted(affiliations_set))
+
+
+def _openalex_fetch_work(identifier: str, by: str = "id") -> dict | None:
+    """Fetch a single OpenAlex work.
+
+    Args:
+        identifier: The OpenAlex work ID (e.g. "W4415020698"), or a filter string.
+        by: "id" for direct fetch, "filter" for search-style filter.
+    """
+    import requests
+
+    params: dict = {}
+    if config.OPENALEX_EMAIL:
+        params["mailto"] = config.OPENALEX_EMAIL
+
+    try:
+        if by == "id":
+            resp = requests.get(
+                f"{config.OPENALEX_BASE_URL}/works/{identifier}",
+                params=params, timeout=10,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+        else:
+            params["filter"] = identifier
+            params["per-page"] = 1
+            resp = requests.get(
+                f"{config.OPENALEX_BASE_URL}/works",
+                params=params, timeout=10,
+            )
+            if resp.status_code == 200:
+                results = resp.json().get("results", [])
+                if results:
+                    return results[0]
+    except Exception as e:
+        logger.debug(f"OpenAlex fetch failed ({by}={identifier}): {e}")
+    return None
+
+
 def _enrich_affiliations_from_openalex(papers: list[DiscoveredPaper],
                                         raw_dir: Path | None = None) -> None:
-    """For papers without affiliations, try to look them up in OpenAlex by DOI or title."""
-    import requests
+    """For papers without affiliations, look them up in OpenAlex.
+
+    Priority: direct openalex_id fetch > arxiv_id URL filter > doi filter > title search.
+    """
     from ndif_citations.utils import rate_limit_sleep
 
-    papers_needing_affiliations = [p for p in papers if not p.affiliations and (p.doi or p.title)]
+    papers_needing_affiliations = [p for p in papers if not p.affiliations]
 
     if not papers_needing_affiliations:
         return
@@ -179,31 +300,31 @@ def _enrich_affiliations_from_openalex(papers: list[DiscoveredPaper],
 
     for paper in papers_needing_affiliations:
         try:
-            params: dict = {"per-page": 1}
-            if config.OPENALEX_EMAIL:
-                params["mailto"] = config.OPENALEX_EMAIL
+            work: dict | None = None
 
-            if paper.doi:
-                params["filter"] = f"doi:{paper.doi}"
-            else:
-                params["filter"] = f"title.search:{paper.title[:100]}"
+            if paper.openalex_id:
+                # Strip full URL prefix to get bare work ID (e.g. "W4415020698")
+                work_id = paper.openalex_id.replace("https://openalex.org/", "")
+                work = _openalex_fetch_work(work_id, by="id")
 
-            resp = requests.get(f"{config.OPENALEX_BASE_URL}/works",
-                                params=params, timeout=10)
+            if not work and paper.arxiv_id:
+                work = _openalex_fetch_work(
+                    f"locations.landing_page_url:https://arxiv.org/abs/{paper.arxiv_id}",
+                    by="filter",
+                )
 
-            if resp.status_code == 200:
-                data = resp.json()
-                results = data.get("results", [])
-                if results:
-                    work = results[0]
-                    affiliations_set: set[str] = set()
-                    for authorship in work.get("authorships", []):
-                        for inst in authorship.get("institutions", []):
-                            name = inst.get("display_name")
-                            if name:
-                                affiliations_set.add(name)
-                    if affiliations_set:
-                        paper.affiliations = ", ".join(sorted(affiliations_set))
+            if not work and paper.doi:
+                work = _openalex_fetch_work(f"doi:{paper.doi}", by="filter")
+
+            if not work and paper.title:
+                work = _openalex_fetch_work(
+                    f"title.search:{paper.title[:100]}", by="filter"
+                )
+
+            if work:
+                affs = _extract_affiliations_from_authorships(work.get("authorships", []))
+                if affs:
+                    paper.affiliations = affs
 
             rate_limit_sleep(config.OPENALEX_RATE_LIMIT_SLEEP, "OpenAlex affiliations")
 

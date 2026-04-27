@@ -20,29 +20,41 @@ from typing import Optional
 import requests
 
 from ndif_citations.models import DiscoveredPaper
-from ndif_citations.utils import extract_arxiv_id_from_url, query_unpaywall, rate_limit_sleep, slugify
+from ndif_citations.utils import (
+    _crossref_pdf_link,
+    extract_arxiv_id_from_url,
+    query_crossref,
+    query_unpaywall,
+    rate_limit_sleep,
+    slugify,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def _test_pdf_url(url: str, timeout: int = 10) -> bool:
-    """Test if a PDF URL is accessible via HEAD request.
+    """Test if a PDF URL is accessible.
 
-    Returns True if:
-    - Status code is 200
-    - Content-Type contains 'pdf' OR URL ends with .pdf
+    Uses HEAD first; falls back to a Range GET when servers (e.g. MDPI, ACM DL)
+    return 403/405 to HEAD requests.  Returns True if the response looks like a PDF.
     """
+    headers = {
+        "User-Agent": "NDIFCitationTracker/1.0 (academic research; https://ndif.us)"
+    }
     try:
-        headers = {
-            "User-Agent": "NDIFCitationTracker/0.1 (academic research; https://ndif.us)"
-        }
         resp = requests.head(url, headers=headers, timeout=timeout, allow_redirects=True)
+        if resp.status_code in (403, 405):
+            # Some publishers block HEAD but allow GET; fetch first 1 KB only
+            resp = requests.get(
+                url,
+                headers={**headers, "Range": "bytes=0-1023"},
+                timeout=timeout,
+                allow_redirects=True,
+                stream=True,
+            )
         resp.raise_for_status()
-
         content_type = resp.headers.get("Content-Type", "").lower()
-        if "pdf" in content_type or url.endswith(".pdf"):
-            return True
-        return False
+        return "pdf" in content_type or "/pdf" in url.lower() or url.lower().endswith(".pdf")
     except Exception:
         return False
 
@@ -99,7 +111,21 @@ def resolve_pdf_url(paper: DiscoveredPaper) -> Optional[str]:
 
         logger.debug(f"No open access found via Unpaywall for DOI: {paper.doi}")
 
-    logger.warning(f"Could not resolve PDF URL for: {paper.title[:50]}...")
+    # 4. CrossRef link array (some publishers register direct PDF links)
+    if paper.doi:
+        try:
+            cr_data = query_crossref(paper.doi)
+            pdf_link = _crossref_pdf_link(cr_data)
+            if pdf_link and _test_pdf_url(pdf_link):
+                logger.debug(f"Found PDF via CrossRef link for '{paper.title[:50]}'")
+                return pdf_link
+        except Exception:
+            pass
+
+    logger.warning(
+        f"No open-access PDF found for '{paper.title[:60]}' "
+        f"(doi={paper.doi}, arxiv={paper.arxiv_id}) — paywalled or unavailable"
+    )
     return None
 
 
@@ -158,6 +184,12 @@ def get_cached_pdf(paper: DiscoveredPaper, output_dir: Path) -> Optional[Path]:
     # Cache hit
     if cache_path.exists():
         logger.debug(f"PDF cache hit: {cache_path.name}")
+        # Write back the resolved URL if paper.pdf_url is missing
+        if not paper.pdf_url:
+            if paper.arxiv_id:
+                paper.pdf_url = f"https://arxiv.org/pdf/{paper.arxiv_id}.pdf"
+            elif paper.doi:
+                paper.pdf_url = f"https://doi.org/{paper.doi}"
         return cache_path
 
     # Cache miss - resolve and download
@@ -165,7 +197,15 @@ def get_cached_pdf(paper: DiscoveredPaper, output_dir: Path) -> Optional[Path]:
     if pdf_url:
         downloaded = _download_pdf(pdf_url, cache_path)
         if downloaded:
+            paper.pdf_url = pdf_url  # write back the resolved URL
             return downloaded
+
+    # All sources exhausted — clear any stale/fake pdf_url that was stored
+    if paper.pdf_url and not _test_pdf_url(paper.pdf_url):
+        logger.warning(
+            f"No accessible PDF found for '{paper.title[:60]}' — clearing stale pdf_url"
+        )
+        paper.pdf_url = None
 
     return None
 

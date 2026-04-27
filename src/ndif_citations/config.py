@@ -82,6 +82,19 @@ CONTEXT_WINDOW = 500  # chars around each keyword mention
 MAX_CONTEXT_EXCERPTS = 5
 
 # ---------------------------------------------------------------------------
+# CrossRef API (free, no key — just polite User-Agent with email)
+# ---------------------------------------------------------------------------
+CROSSREF_BASE_URL = "https://api.crossref.org"
+CROSSREF_RATE_LIMIT_SLEEP = 0.2  # ~5 req/sec polite pool
+
+# ---------------------------------------------------------------------------
+# arXiv API (Atom feed, free, no key)
+# ---------------------------------------------------------------------------
+ARXIV_API_BASE_URL = "https://export.arxiv.org/api/query"
+ARXIV_API_RATE_LIMIT_SLEEP = 3.0  # arXiv requests ≥3s between requests
+ARXIV_API_BATCH_SIZE = 100  # max id_list length per request
+
+# ---------------------------------------------------------------------------
 # Output paths
 # ---------------------------------------------------------------------------
 DEFAULT_OUTPUT_DIR = _PROJECT_ROOT / "output"

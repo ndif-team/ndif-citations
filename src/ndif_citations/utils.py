@@ -157,6 +157,35 @@ def extract_arxiv_id_from_url(url: str) -> Optional[str]:
     return None
 
 
+def extract_arxiv_id_from_doi(doi: str) -> Optional[str]:
+    """Extract arXiv ID from an arXiv DOI (10.48550/arXiv.XXXX.XXXXX).
+
+    Example: "10.48550/arXiv.2504.14107" -> "2504.14107"
+    """
+    match = re.search(r'10\.48550/[aA]r[Xx]iv\.(\d{4}\.\d{4,5})', doi)
+    if match:
+        return normalize_arxiv_id(match.group(1))
+    return None
+
+
+def looks_like_pdf_url(url: str) -> bool:
+    """Return False for URLs that are clearly DOI/landing-page redirects, not actual PDFs.
+
+    A DOI URL (doi.org/... or dx.doi.org/...) without an explicit /pdf path segment
+    almost always redirects to an HTML landing page. Reject those so pdf_cache
+    doesn't store a fake pdf_url.
+    """
+    if not url:
+        return False
+    # Accept anything that ends with .pdf or explicitly contains /pdf in the path
+    if url.lower().endswith(".pdf") or "/pdf" in url.lower():
+        return True
+    # Reject bare DOI redirects
+    if re.match(r'https?://(?:dx\.)?doi\.org/', url):
+        return False
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Rate limiting helper
 # ---------------------------------------------------------------------------
@@ -240,6 +269,131 @@ def query_unpaywall(doi: str) -> dict:
     except Exception as e:
         logger.warning(f"Failed to query Unpaywall for {doi}: {e}")
         return {}
+
+
+# ---------------------------------------------------------------------------
+# CrossRef API for venue resolution via DOI
+# ---------------------------------------------------------------------------
+
+def query_crossref(doi: str) -> dict:
+    """Query CrossRef for metadata about a DOI.
+
+    Returns a normalized dict with keys: container_title, event_name, publisher,
+    type, authors (list of CrossRef author objects with optional affiliation arrays).
+    Returns {} on any failure.
+    """
+    from ndif_citations import config
+
+    try:
+        url = f"https://api.crossref.org/works/{doi}"
+        email = config.OPENALEX_EMAIL or "noreply@ndif.us"
+        ua = f"NDIFCitationTracker/1.0 (academic research; mailto:{email})"
+        resp = requests.get(url, headers={"User-Agent": ua}, timeout=10)
+        if resp.status_code != 200:
+            return {}
+        msg = resp.json().get("message", {})
+        container_titles = msg.get("container-title") or []
+        event = msg.get("event") or {}
+        return {
+            "container_title": container_titles[0] if container_titles else "",
+            "event_name": event.get("name") or "",
+            "publisher": msg.get("publisher") or "",
+            "type": msg.get("type") or "",
+            "authors": msg.get("author") or [],
+        }
+    except Exception as e:
+        logger.debug(f"CrossRef query failed for {doi}: {e}")
+        return {}
+
+
+def _crossref_pdf_link(crossref_data: dict) -> Optional[str]:
+    """Extract a direct PDF URL from a CrossRef response, if one is listed."""
+    # CrossRef 'link' array has objects with content-type and URL
+    for link in crossref_data.get("link", []):
+        ct = link.get("content-type", "")
+        url = link.get("URL", "")
+        if "pdf" in ct.lower() and url:
+            return url
+    return None
+
+
+# ---------------------------------------------------------------------------
+# arXiv API (Atom feed) for author names and affiliations
+# ---------------------------------------------------------------------------
+
+def query_arxiv_api(arxiv_ids: list[str]) -> dict[str, dict]:
+    """Batch-query the arXiv Atom API for author names and affiliations.
+
+    Sends requests in groups of 100 IDs (arXiv's recommended batch size).
+    Returns a mapping of arxiv_id -> {"authors": [...], "affiliations": [...], "categories": [...]}.
+    Affiliations are only populated when <arxiv:affiliation> tags are present.
+    """
+    from ndif_citations import config
+    import xml.etree.ElementTree as ET
+
+    if not arxiv_ids:
+        return {}
+
+    ns = {
+        "atom": "http://www.w3.org/2005/Atom",
+        "arxiv": "http://arxiv.org/schemas/atom",
+    }
+    results: dict[str, dict] = {}
+    batch_size = getattr(config, "ARXIV_API_BATCH_SIZE", 100)
+    base_url = getattr(config, "ARXIV_API_BASE_URL", "https://export.arxiv.org/api/query")
+
+    for i in range(0, len(arxiv_ids), batch_size):
+        batch = arxiv_ids[i : i + batch_size]
+        try:
+            resp = requests.get(
+                base_url,
+                params={"id_list": ",".join(batch), "max_results": len(batch)},
+                timeout=30,
+                headers={"User-Agent": "NDIFCitationTracker/1.0 (academic research; https://ndif.us)"},
+            )
+            resp.raise_for_status()
+            root = ET.fromstring(resp.text)
+
+            for entry in root.findall("atom:entry", ns):
+                # arXiv ID is in <id>http://arxiv.org/abs/XXXX.XXXXX</id>
+                id_el = entry.find("atom:id", ns)
+                if id_el is None or not id_el.text:
+                    continue
+                arxiv_id = normalize_arxiv_id(id_el.text.strip())
+
+                authors: list[str] = []
+                affiliations: list[str] = []
+                aff_set: set[str] = set()
+                for author_el in entry.findall("atom:author", ns):
+                    name_el = author_el.find("atom:name", ns)
+                    if name_el is not None and name_el.text:
+                        authors.append(name_el.text.strip())
+                    for aff_el in author_el.findall("arxiv:affiliation", ns):
+                        if aff_el.text and aff_el.text.strip():
+                            aff_set.add(aff_el.text.strip())
+                affiliations = sorted(aff_set)
+
+                cats: list[str] = []
+                for cat_el in entry.findall("atom:category", ns):
+                    term = cat_el.get("term")
+                    if term:
+                        cats.append(term)
+
+                results[arxiv_id] = {
+                    "authors": authors,
+                    "affiliations": affiliations,
+                    "categories": cats,
+                }
+
+        except Exception as e:
+            logger.warning(f"arXiv API batch query failed (batch starting {batch[0]}): {e}")
+
+        if i + batch_size < len(arxiv_ids):
+            rate_limit_sleep(
+                getattr(config, "ARXIV_API_RATE_LIMIT_SLEEP", 3.0), "arXiv API"
+            )
+
+    return results
 
 
 # ---------------------------------------------------------------------------

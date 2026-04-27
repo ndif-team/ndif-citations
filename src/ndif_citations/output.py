@@ -245,7 +245,7 @@ def _write_csv(papers: list[DiscoveredPaper], csv_path: Path) -> None:
         "manual_override", "github_repo_url",
     ]
 
-    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+    with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
 
@@ -333,12 +333,14 @@ def print_report(run: PipelineRun, papers: list[DiscoveredPaper], output_dir: Pa
     console.print(f"  > {using_ndif} papers categorized as [green]\"uses_ndif\"[/green]")
     console.print(f"  > {using_nnsight} papers categorized as [green]\"uses_nnsight\"[/green]")
     console.print(f"  > {referencing} papers categorized as [yellow]\"referencing\"[/yellow]")
+    if unclassified > 0:
+        console.print(f"  ! {unclassified} papers need manual classification")
     console.print(f"  > {run.thumbnails_extracted} thumbnails extracted")
     if run.thumbnails_missing > 0:
         console.print(f"  ! {run.thumbnails_missing} papers need manual thumbnails")
     console.print()
 
-        # Unclassified papers with reasons
+    # Unclassified papers with reasons
     unclassified_papers = [
         (p.title, "no_pdf" if not p.pdf_url and not p.arxiv_id else "no_keywords")
         for p in papers
@@ -356,6 +358,8 @@ def print_report(run: PipelineRun, papers: list[DiscoveredPaper], output_dir: Pa
     if run.low_confidence:
         console.print("[bold yellow]Category classifications with low confidence:[/bold yellow]")
         for i, msg in enumerate(run.low_confidence[:10], 1):
+            if "UNCLASSIFIED" in msg:
+                continue
             console.print(f"  {i}. {msg}")
         console.print()
 

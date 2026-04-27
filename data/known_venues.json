@@ -3,14 +3,25 @@
     "ICLR", "NeurIPS", "ICML", "EMNLP", "ACL", "NAACL", "EACL", "AACL",
     "COLM", "AAAI", "IJCAI", "CVPR", "ICCV", "ECCV", "KDD", "WWW",
     "SIGIR", "CIKM", "WSDM", "RecSys", "UAI", "AISTATS", "CoRL",
-    "ICRA", "RSS", "ICMLA", "COLT", "ALT"
+    "ICRA", "RSS", "ICMLA", "COLT", "ALT",
+    "FAccT", "FAT*", "WCCI", "IJCNN",
+    "BlackboxNLP", "Findings of EMNLP", "Findings of ACL", "Findings of NAACL",
+    "Proceedings of the", "Annual Meeting of the Association for Computational Linguistics"
   ],
   "journals": [
     "JMLR", "TMLR", "Nature", "Science", "PNAS",
     "Nature Machine Intelligence", "Nature Computational Science",
-    "ACM Computing Surveys", "IEEE TPAMI", "Artificial Intelligence"
+    "ACM Computing Surveys", "IEEE TPAMI", "Artificial Intelligence",
+    "Computational Linguistics",
+    "IEEE Transactions on Technology and Society",
+    "IEEE Transactions on Neural Networks and Learning Systems",
+    "Ecological Informatics",
+    "AI",
+    "Qeios",
+    "Transactions of the Association for Computational Linguistics"
   ],
   "preprint_servers": [
-    "ArXiv", "BiorXiv", "MedRxiv", "SSRN", "OpenReview"
+    "ArXiv", "BiorXiv", "MedRxiv", "SSRN", "OpenReview",
+    "arXiv (Cornell University)"
   ]
 }
