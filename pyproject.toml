@@ -1,8 +1,8 @@
 [project]
 name = "ndif-citations"
-version = "0.1.0"
+version = "1.7.3"
 description = "NDIF Citation Tracking Pipeline — discovers and catalogs papers citing or using NDIF/NNsight"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "semanticscholar>=0.8",
     "requests>=2.31",
@@ -15,6 +15,7 @@ dependencies = [
     "rich>=13.0",
     "Pillow>=10.0",
     "python-dotenv>=1.0",
+    "surya-ocr==0.6.2",
 ]
 
 [project.scripts]

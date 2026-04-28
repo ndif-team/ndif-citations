@@ -14,8 +14,10 @@ from bs4 import BeautifulSoup
 from ndif_citations import config
 from ndif_citations.models import DiscoveredPaper, DiscoverySource
 from ndif_citations.utils import (
+    extract_arxiv_id_from_doi,
     extract_arxiv_id_from_url,
     is_duplicate,
+    looks_like_pdf_url,
     normalize_arxiv_id,
     rate_limit_sleep,
 )
@@ -94,14 +96,22 @@ def _s2_paper_to_discovered(cp) -> Optional[DiscoveredPaper]:
         arxiv_id = external_ids.get("ArXiv")
         doi = external_ids.get("DOI")
         s2_id = getattr(cp, "paperId", None)
+        # Fallback: extract arXiv ID from arXiv-format DOIs (10.48550/arXiv.XXXX.XXXXX)
+        if not arxiv_id and doi:
+            arxiv_id = extract_arxiv_id_from_doi(doi)
 
         # Authors
         authors_list = getattr(cp, "authors", []) or []
         authors = ", ".join(a.get("name", "") if isinstance(a, dict) else getattr(a, "name", str(a))
                            for a in authors_list)
 
-        # Venue
-        venue = getattr(cp, "venue", "") or ""
+        # Venue — prefer structured publicationVenue over bare venue string
+        pub_venue = getattr(cp, "publicationVenue", None)
+        if pub_venue:
+            venue = (pub_venue.get("name") if isinstance(pub_venue, dict)
+                     else getattr(pub_venue, "name", "")) or ""
+        else:
+            venue = getattr(cp, "venue", "") or ""
 
         # Publication date
         pub_date_str = getattr(cp, "publicationDate", None)
@@ -124,11 +134,14 @@ def _s2_paper_to_discovered(cp) -> Optional[DiscoveredPaper]:
         if arxiv_id and not url:
             url = f"https://arxiv.org/abs/{arxiv_id}"
 
-        # PDF URL
+        # PDF URL — validate that S2's openAccessPdf.url is a real PDF link, not a DOI redirect
         open_access = getattr(cp, "openAccessPdf", None)
         pdf_url = None
         if open_access:
-            pdf_url = open_access.get("url") if isinstance(open_access, dict) else getattr(open_access, "url", None)
+            candidate = (open_access.get("url") if isinstance(open_access, dict)
+                         else getattr(open_access, "url", None))
+            if looks_like_pdf_url(candidate):
+                pdf_url = candidate
 
         # Abstract
         abstract = getattr(cp, "abstract", None)
@@ -191,7 +204,7 @@ def _openalex_search(query: str) -> tuple[list[DiscoveredPaper], list[dict]]:
     params: dict = {
         "filter": f"fulltext.search:{query}",
         "per-page": 200,
-        "select": "id,title,authorships,primary_location,publication_date,doi,open_access,biblio,abstract_inverted_index",
+        "select": "id,title,authorships,primary_location,locations,publication_date,doi,open_access,biblio,abstract_inverted_index",
     }
     if config.OPENALEX_EMAIL:
         params["mailto"] = config.OPENALEX_EMAIL
@@ -269,11 +282,31 @@ def _openalex_work_to_discovered(work: dict) -> Optional[DiscoveredPaper]:
         landing_url = primary_loc.get("landing_page_url", "")
         pdf_url = primary_loc.get("pdf_url")
 
-        # Try to extract arXiv ID from URL
+        # Try to extract arXiv ID from URL first, then from DOI
         arxiv_id = extract_arxiv_id_from_url(landing_url) if landing_url else None
+        if not arxiv_id and doi:
+            arxiv_id = extract_arxiv_id_from_doi(doi)
 
-        # Venue
-        venue = source.get("display_name", "") or ""
+        # Venue — prefer a published (non-repository) location from locations[]
+        # Repositories (arXiv, DSpace@MIT, HAL, etc.) are preprint hosts; the
+        # actual conference/journal lives at type=conference|journal.
+        venue = ""
+        for loc in work.get("locations", []):
+            src = loc.get("source") or {}
+            src_name = src.get("display_name") or ""
+            src_type = src.get("type") or ""
+            if not src_name:
+                continue
+            if src_type == "repository":
+                continue
+            if "arxiv" in src_name.lower():
+                continue
+            venue = src_name
+            if not pdf_url and loc.get("pdf_url"):
+                pdf_url = loc.get("pdf_url")
+            break
+        if not venue:
+            venue = source.get("display_name", "") or ""
 
         # Abstract
         abstract = _reconstruct_abstract(work.get("abstract_inverted_index"))
@@ -430,6 +463,10 @@ def deduplicate_papers(all_papers: list[DiscoveredPaper]) -> list[DiscoveredPape
     all_papers.sort(key=lambda p: source_priority.get(p.source, 3))
 
     for paper in all_papers:
+        # Ignore exactly excluded seed papers
+        if paper.title.lower().strip() in config.EXCLUDED_PAPER_TITLES:
+            continue
+
         # Check arXiv ID
         if paper.arxiv_id and paper.arxiv_id in seen_arxiv:
             idx = seen_arxiv[paper.arxiv_id]

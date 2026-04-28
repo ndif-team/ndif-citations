@@ -11,6 +11,7 @@ from rich.logging import RichHandler
 
 from ndif_citations import config
 from ndif_citations.models import PipelineRun
+from ndif_citations.router import route_papers, get_bucket_summary
 
 console = Console()
 
@@ -83,10 +84,23 @@ def run(output_dir: str | None, fresh: bool) -> None:
     unique_papers = enrich_papers(unique_papers, raw_dir)
     console.print(f"  Enriched {len(unique_papers)} papers\n")
 
+    # Phase 2.5: Router - decide which papers need processing
+    console.print("[bold]Phase 2.5:[/bold] Routing")
+    from ndif_citations.router import route_papers
+    from ndif_citations.output import load_existing_papers
+
+    existing_papers = load_existing_papers(out) if not fresh else []
+    decisions = route_papers(unique_papers, existing_papers)
+
+    skipped = sum(1 for d in decisions if d.bucket.value in ("skip", "protected"))
+    console.print(f" [dim]{skipped} papers skipped (already complete)[/dim]")
+    console.print(f" [green]{len(decisions) - skipped}[/green] papers need processing\n")
+
+
     # Phase 3: Content processing
     console.print("[bold]Phase 3:[/bold] Content Processing (LLM summaries, classification, thumbnails)")
-    unique_papers = process_papers(unique_papers, out)
-    console.print(f"  Processed {len(unique_papers)} papers\n")
+    processed_papers = process_papers(decisions, out)
+    console.print(f" Processed {len(processed_papers)} papers\n")
 
     # Phase 4: Output with merge
     console.print("[bold]Phase 4:[/bold] Output")
@@ -97,7 +111,7 @@ def run(output_dir: str | None, fresh: bool) -> None:
     else:
         existing_papers = load_existing_papers(out)
 
-    merged_papers, run_stats = merge_papers(existing_papers, unique_papers, run_stats)
+    merged_papers, run_stats = merge_papers(existing_papers, [d.paper for d in decisions], run_stats)
 
     # Check for venue upgrades (arXiv -> conference)
     if existing_papers:

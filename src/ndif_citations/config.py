@@ -19,6 +19,11 @@ SEED_S2_ID = "ARXIV:2407.14561"  # NNsight & NDIF paper
 SEED_ARXIV_ID = "2407.14561"
 SEED_OPENREVIEW_ID = "MxbEiFRf39"  # ICLR 2025
 
+# Exactly match these full lowercase titles to drop them from discovery (the origin papers themselves)
+EXCLUDED_PAPER_TITLES = {
+    "nnsight and ndif: democratizing access to open-weight foundation model internals",
+}
+
 NNSIGHT_GITHUB_REPO = "ndif-team/nnsight"
 GITHUB_DEPENDENTS_URL = f"https://github.com/{NNSIGHT_GITHUB_REPO}/network/dependents"
 
@@ -50,6 +55,12 @@ OPENALEX_SEARCH_QUERIES = [
 OPENALEX_RATE_LIMIT_SLEEP = 0.15  # ~6-7 req/sec with polite pool
 
 # ---------------------------------------------------------------------------
+# Unpaywall API (free, no key required, just need email)
+# ---------------------------------------------------------------------------
+UNPAYWALL_EMAIL: str | None = os.environ.get("UNPAYWALL_EMAIL") or OPENALEX_EMAIL
+UNPAYWALL_RATE_LIMIT_SLEEP = 0.1  # ~10 req/sec (100K/day limit)
+
+# ---------------------------------------------------------------------------
 # LLM (OpenAI-compatible)
 # ---------------------------------------------------------------------------
 LLM_BASE_URL: str = os.environ.get("LLM_BASE_URL", "https://integrate.api.nvidia.com/v1")
@@ -69,6 +80,19 @@ GITHUB_RATE_LIMIT_SLEEP = 2.0  # seconds between requests
 NDIF_KEYWORDS = ["nnsight", "NNsight", "NDIF", "ndif.us", "nnsight.net", "import nnsight"]
 CONTEXT_WINDOW = 500  # chars around each keyword mention
 MAX_CONTEXT_EXCERPTS = 5
+
+# ---------------------------------------------------------------------------
+# CrossRef API (free, no key — just polite User-Agent with email)
+# ---------------------------------------------------------------------------
+CROSSREF_BASE_URL = "https://api.crossref.org"
+CROSSREF_RATE_LIMIT_SLEEP = 0.2  # ~5 req/sec polite pool
+
+# ---------------------------------------------------------------------------
+# arXiv API (Atom feed, free, no key)
+# ---------------------------------------------------------------------------
+ARXIV_API_BASE_URL = "https://export.arxiv.org/api/query"
+ARXIV_API_RATE_LIMIT_SLEEP = 3.0  # arXiv requests ≥3s between requests
+ARXIV_API_BATCH_SIZE = 100  # max id_list length per request
 
 # ---------------------------------------------------------------------------
 # Output paths
