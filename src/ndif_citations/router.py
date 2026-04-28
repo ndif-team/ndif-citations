@@ -40,12 +40,12 @@ class RoutingDecision:
 
 def _all_true() -> dict[str, bool]:
     """All processing flags True."""
-    return {"summary": True, "classify": True, "thumbnail": True}
+    return {"summary": True, "classify": True, "thumbnail": True, "affiliations": True}
 
 
 def _all_false() -> dict[str, bool]:
     """All processing flags False."""
-    return {"summary": False, "classify": False, "thumbnail": False}
+    return {"summary": False, "classify": False, "thumbnail": False, "affiliations": False}
 
 
 def _detect_venue_type(venue: str) -> str:
@@ -150,6 +150,7 @@ def _route_single_paper(
         "summary": not existing.has_summary,
         "classify": not existing.has_classification,
         "thumbnail": not existing.has_thumbnail,
+        "affiliations": not existing.has_affiliations,
     }
 
     if any(needs.values()):

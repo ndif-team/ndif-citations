@@ -76,10 +76,11 @@ class DiscoveredPaper(BaseModel):
     # Change detection 
     content_hash: str = ""  # SHA256(title + "::" + abstract)[:16]
 
-    # Processing flags 
+    # Processing flags
     has_summary: bool = False
     has_classification: bool = False
     has_thumbnail: bool = False
+    has_affiliations: bool = False
 
     # Routing metadata for debugging 
     processing_bucket: str = "UNKNOWN"  # NEW, REPROCESS, FILL_GAPS, SKIP, PROTECTED
@@ -100,6 +101,8 @@ class DiscoveredPaper(BaseModel):
             self.has_classification = self.detail_category != DetailCategory.REFERENCING or self.category_confidence > 0
         if not hasattr(self, 'has_thumbnail') or self.has_thumbnail is None:
             self.has_thumbnail = bool(self.image)
+        if not hasattr(self, 'has_affiliations') or self.has_affiliations is None:
+            self.has_affiliations = bool(self.affiliations)
 
     @property
     def website_category(self) -> WebsiteCategory:

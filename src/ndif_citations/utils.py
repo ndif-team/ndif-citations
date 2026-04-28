@@ -83,6 +83,208 @@ def extract_text_from_pdf(pdf_path: Path) -> str:
         return ""
 
 
+# ---------------------------------------------------------------------------
+# Affiliation extraction from PDF text (heuristic, no LLM)
+# ---------------------------------------------------------------------------
+
+_AFFILIATION_ORG_KW = re.compile(
+    r'\b(University|Universidade|Universität|Université|Università|Univ\.|'
+    r'Institute|Institut|Instituto|'
+    r'College|Lab(?:oratory)?|Laboratoire|Labs?\b|'
+    r'Research|Corporation|Corp\.|Inc\.|Ltd|GmbH|'
+    r'Foundation|Center|Centre|Centro|'
+    r'School|Department|Dept\.|'
+    r'Polytechnic|Polytechnique|'
+    r'Hospital|Medical|'
+    r'Academy|Hochschule|'
+    r'OpenAI|Anthropic|DeepMind|Google|Meta|Microsoft|NVIDIA|Apple|'
+    r'IBM|Amazon|Adobe|Intel|Salesforce|Hugging\s*Face|Cohere|LinkedIn|'
+    r'CNRS|MILA|Mila\b|MIT\b|CMU\b|UCL\b|ETH\b|EPFL\b|KAIST\b|UCLA\b|UCSD\b|UCSF|UCB\b|NYU\b|'
+    r'Northeastern|Stanford|Harvard|Princeton|Yale|Cornell|Columbia|Berkeley|Tsinghua|Peking|'
+    r'EleutherAI|Eleuther|Redwood|Apollo|MATS|Surge|Reality\s+Labs|Allen\s+(Institute|AI)|FAIR\b|'
+    r'Tübingen|Tubingen|Heidelberg|Munich|München|Edinburgh|Oxford|Cambridge|Toronto|McGill|Imperial|'
+    r'Sorbonne|Bocconi|Politecnico|Stuttgart|Karlsruhe|Saarland|Aachen|Hamburg|Heilbronn|Ansbach|'
+    r'Helmholtz|Fraunhofer|Max\s+Planck|Saint\s+Exupéry|'
+    r'Transluce|COAI|Independent\s+Researcher|Metagov)',
+    re.IGNORECASE,
+)
+
+_AFFILIATION_NOISE = [
+    re.compile(r'(Equal\s+contributions?|Equally\s+contributed)', re.IGNORECASE),
+    re.compile(r'Work\s+done\s+(?:during|while)', re.IGNORECASE),
+    re.compile(r'^\s*(?:Code|Correspondence|Preprint|Under\s+review|Published\s+as)', re.IGNORECASE),
+    re.compile(r'\S+@\S+'),
+    re.compile(r'^\s*\{[^}]+@', re.IGNORECASE),  # email groups
+    re.compile(r'^(?:github|http|https|www)\.', re.IGNORECASE),
+]
+
+
+def _affil_clean(s: str) -> str:
+    """Strip emails, brace-groups, leading/trailing markers, normalize whitespace."""
+    s = re.sub(r'\S+@\S+', '', s)
+    s = re.sub(r'\{[^}]+\}', '', s)
+    s = re.sub(r'^\s*[\d*†‡§¶♠♢♣♡⋆✠]+\s*', '', s)
+    s = re.sub(r'\s+', ' ', s).strip()
+    return s.rstrip(',;.: ').strip()
+
+
+def _affil_looks_valid(s: str) -> bool:
+    if not s or not (4 <= len(s) <= 200):
+        return False
+    if any(p.search(s) for p in _AFFILIATION_NOISE):
+        return False
+    return bool(_AFFILIATION_ORG_KW.search(s))
+
+
+def _affil_fix_hyphens(text: str) -> str:
+    """Join hyphenated line breaks: 'Col-\\nlege' -> 'College'."""
+    return re.sub(r'(\w)-\s*\n\s*(\w)', r'\1\2', text)
+
+
+def _affil_dedupe(affs: list[str]) -> list[str]:
+    seen, out = set(), []
+    for a in affs:
+        key = a.lower().strip()
+        if key and key not in seen:
+            seen.add(key)
+            out.append(a)
+    return out
+
+
+def _affil_parse_marker_block(block: str) -> list[str]:
+    """Parse '1Stanford 2MIT' or '†Stanford ‡Apple' into clean entries."""
+    if not block:
+        return []
+    parts = re.split(r'(?<!\w)([\d†‡§¶♠♢♣♡⋆✠*]{1,2})\s*(?=[A-Z])', block)
+    affs: list[str] = []
+    for i in range(1, len(parts), 2):
+        if i + 1 >= len(parts):
+            break
+        chunk = parts[i + 1]
+        # Cut at next sentence/marker that ends affiliations
+        chunk = re.split(
+            r'(?:\.\s+(?:Correspondence|Preprint|Under review|Code|Published|We|This)\b)',
+            chunk, maxsplit=1,
+        )[0]
+        cleaned = _affil_clean(chunk)
+        if _affil_looks_valid(cleaned):
+            affs.append(cleaned)
+    return _affil_dedupe(affs)
+
+
+def _affil_find_footnote_block(text: str) -> Optional[str]:
+    """Find the bottom-of-page-1 affiliation footnote (ICML/NeurIPS template)."""
+    end_match = re.search(
+        r'(Correspondence to:|Preprint\.|Under review|Code for all|Published as a conference)',
+        text,
+    )
+    if not end_match:
+        return None
+    end_idx = end_match.start()
+    window = text[max(0, end_idx - 1500):end_idx]
+    if not re.search(r'\d{1,2}\s*[A-Z][^\d]{6,}', window):
+        return None
+    first = re.search(r'\d{1,2}\s*[A-Z]', window)
+    return window[first.start():] if first else window
+
+
+def _affil_parse_inline_block(text: str, authors: str) -> list[str]:
+    """Parse affiliations between authors and 'Abstract' (ACL/EMNLP style)."""
+    head = text[:2500]
+    abs_match = re.search(r'(?im)^\s*(Abstract|ABSTRACT)\b', head)
+    if not abs_match:
+        return []
+    abs_idx = abs_match.start()
+    surnames = [a.split()[-1] for a in (authors.split(',')[:5]) if a.split()]
+    max_end = 0
+    for s in surnames:
+        for m in re.finditer(re.escape(s), head[:abs_idx]):
+            if m.end() > max_end:
+                max_end = m.end()
+    if not max_end:
+        return []
+    block = head[max_end:abs_idx]
+    affs = list(_affil_parse_marker_block(block))
+    for line in block.split('\n'):
+        cleaned = _affil_clean(line)
+        if _affil_looks_valid(cleaned) and cleaned not in affs:
+            affs.append(cleaned)
+    return _affil_dedupe(affs)
+
+
+def _affil_block_aware(doc) -> Optional[str]:
+    """Use PyMuPDF block layout to find footer affiliation blocks (IEEE template)."""
+    try:
+        blocks = doc[0].get_text('blocks')
+        if not blocks:
+            return None
+        blocks = sorted(blocks, key=lambda b: b[1])
+        abs_y = None
+        for b in blocks:
+            if 'Abstract' in b[4][:60] or 'ABSTRACT' in b[4][:60]:
+                abs_y = b[1]
+                break
+        candidates = []
+        for b in blocks:
+            x0, y0, x1, y1, text, *_ = b
+            if abs_y is not None and y0 < abs_y - 10:
+                continue
+            if (y1 - y0) < 80 and re.search(r'\d\s*[A-Z][^\d]{4,}', text) and _AFFILIATION_ORG_KW.search(text):
+                candidates.append(text)
+        return '\n'.join(candidates) if candidates else None
+    except Exception:
+        return None
+
+
+def extract_affiliations_from_pdf(pdf_path: Path, authors: str = "") -> list[str]:
+    """Extract author affiliations from a PDF using pure heuristics (no LLM).
+
+    Tries three strategies in order:
+      1. Block-aware footer (IEEE template)
+      2. Footnote block anchored on 'Correspondence to:' / 'Preprint.' (ICML/NeurIPS)
+      3. Inline block between authors and 'Abstract' (ACL/EMNLP)
+
+    Returns a deduplicated list of affiliation strings; empty list if none found.
+    """
+    try:
+        import fitz
+        doc = fitz.open(str(pdf_path))
+    except Exception as e:
+        logger.debug(f"Failed to open PDF for affiliation extraction: {e}")
+        return []
+
+    try:
+        text = doc[0].get_text()
+        if len(text) < 500 and len(doc) > 1:
+            text += '\n' + doc[1].get_text()
+        text = _affil_fix_hyphens(text)
+
+        # Strategy 1: block-aware footer (IEEE template)
+        block_text = _affil_block_aware(doc)
+        if block_text:
+            affs = _affil_parse_marker_block(block_text)
+            if affs:
+                return affs
+
+        # Strategy 2: anchored footnote block (ICML/NeurIPS)
+        footnote = _affil_find_footnote_block(text)
+        if footnote:
+            affs = _affil_parse_marker_block(footnote)
+            if affs:
+                return affs
+
+        # Strategy 3: inline block (ACL/EMNLP)
+        return _affil_parse_inline_block(text, authors)
+    except Exception as e:
+        logger.debug(f"Affiliation extraction failed for {pdf_path.name}: {e}")
+        return []
+    finally:
+        try:
+            doc.close()
+        except Exception:
+            pass
+
+
 def extract_ndif_context(pdf_path: Path, keywords: list[str] | None = None,
                          window: int = 500, max_excerpts: int = 5) -> str:
     """Extract text around NDIF/nnsight mentions in a PDF."""
@@ -303,6 +505,92 @@ def query_crossref(doi: str) -> dict:
         }
     except Exception as e:
         logger.debug(f"CrossRef query failed for {doi}: {e}")
+        return {}
+
+
+def query_s2_publication_venue(arxiv_id: str | None = None,
+                                 doi: str | None = None) -> dict:
+    """Query Semantic Scholar for a paper's publicationVenue.
+
+    Returns {} on failure. On success: {"name": str, "type": str}.
+    Useful for papers discovered via OpenAlex/GitHub that S2 also indexes —
+    S2 often has accurate conference/journal venue data even when OpenAlex
+    is still showing the arXiv preprint.
+    """
+    from ndif_citations import config
+
+    if not arxiv_id and not doi:
+        return {}
+
+    paper_ref = f"ARXIV:{arxiv_id}" if arxiv_id else f"DOI:{doi}"
+    url = f"https://api.semanticscholar.org/graph/v1/paper/{paper_ref}"
+    headers = {"User-Agent": "NDIFCitationTracker/1.0 (academic research; https://ndif.us)"}
+    if config.S2_API_KEY:
+        headers["x-api-key"] = config.S2_API_KEY
+
+    try:
+        resp = requests.get(
+            url,
+            params={"fields": "publicationVenue,venue"},
+            headers=headers,
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            return {}
+        data = resp.json()
+        pv = data.get("publicationVenue") or {}
+        if pv:
+            return {
+                "name": pv.get("name") or "",
+                "type": pv.get("type") or "",
+            }
+        # Fallback to bare venue string
+        venue = data.get("venue") or ""
+        return {"name": venue, "type": ""} if venue else {}
+    except Exception as e:
+        logger.debug(f"S2 publicationVenue query failed for {paper_ref}: {e}")
+        return {}
+
+
+def query_openreview_venue(title: str, min_title_match: int = 90) -> dict:
+    """Query OpenReview for a paper's accepted-venue metadata (ICLR/ICML/NeurIPS/etc).
+
+    OpenReview's public search has limited coverage and inconsistent indexing,
+    so we fuzzy-match the title against the top-25 v1 search results and only
+    accept matches above `min_title_match` (default 90/100 rapidfuzz ratio).
+
+    Returns {} on no confident match. On match: {"venue": str, "venueid": str}.
+    """
+    if not title:
+        return {}
+    headers = {"User-Agent": "NDIFCitationTracker/1.0 (academic research; https://ndif.us)"}
+    try:
+        resp = requests.get(
+            "https://api.openreview.net/notes/search",
+            params={"term": title, "limit": 25, "source": "forum"},
+            headers=headers,
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            return {}
+        notes = resp.json().get("notes", []) or []
+        target = title.lower().strip()
+        best_score, best_note = 0, None
+        for note in notes:
+            nt = (note.get("content", {}) or {}).get("title", "") or ""
+            score = fuzz.ratio(target, nt.lower().strip())
+            if score > best_score:
+                best_score, best_note = score, note
+        if best_note is None or best_score < min_title_match:
+            return {}
+        content = best_note.get("content", {}) or {}
+        venue = content.get("venue") or ""
+        venueid = content.get("venueid") or ""
+        if not venue or "submitted" in str(venue).lower():
+            return {}
+        return {"venue": str(venue), "venueid": str(venueid)}
+    except Exception as e:
+        logger.debug(f"OpenReview query failed for '{title[:60]}': {e}")
         return {}
 
 

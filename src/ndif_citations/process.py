@@ -439,9 +439,9 @@ def process_papers(
             results.append(paper)
             continue
 
-        # Get PDF path if needed for classification or thumbnail
+        # Get PDF path if needed for classification, thumbnail, or affiliations
         pdf_path = None
-        if needs.get("classify") or needs.get("thumbnail"):
+        if needs.get("classify") or needs.get("thumbnail") or needs.get("affiliations"):
             pdf_path = get_cached_pdf(paper, output_dir)
             if not pdf_path:
                 logger.warning(f"Could not get PDF for '{paper.title[:50]}...'")
@@ -476,6 +476,18 @@ def process_papers(
                         paper.image = extracted
 
             paper.has_thumbnail = bool(paper.image)
+
+        # Affiliation extraction from PDF (heuristic, no LLM)
+        if needs.get("affiliations") and not paper.affiliations and pdf_path and pdf_path.exists():
+            from ndif_citations.utils import extract_affiliations_from_pdf
+            try:
+                affs = extract_affiliations_from_pdf(pdf_path, paper.authors or "")
+                if affs:
+                    paper.affiliations = ", ".join(affs)
+                    logger.debug(f"Extracted affiliations: {paper.affiliations[:80]}")
+            except Exception as e:
+                logger.debug(f"Affiliation extraction failed: {e}")
+        paper.has_affiliations = bool(paper.affiliations)
 
         results.append(paper)
 

@@ -11,6 +11,8 @@ from ndif_citations.utils import (
     generate_bibtex,
     query_arxiv_api,
     query_crossref,
+    query_openreview_venue,
+    query_s2_publication_venue,
     rate_limit_sleep,
 )
 
@@ -172,11 +174,28 @@ def _best_url(paper: DiscoveredPaper) -> str:
     return url or ""
 
 
+_PREPRINT_VENUE_HINTS = (
+    "arxiv", "biorxiv", "medrxiv", "ssrn", "dspace", "hal archives",
+    "repository", "openreview"  # plain "OpenReview" is the preprint host, not a venue
+)
+
+
+def _is_placeholder_venue(venue: str) -> bool:
+    """True if `venue` is empty or matches a preprint/repository placeholder."""
+    if not venue or not venue.strip():
+        return True
+    v = venue.lower()
+    return any(hint in v for hint in _PREPRINT_VENUE_HINTS)
+
+
 def enrich_via_external_apis(papers: list[DiscoveredPaper]) -> None:
-    """Enrich venue, author names, and affiliations via CrossRef and arXiv APIs.
+    """Enrich venue, author names, and affiliations via CrossRef, S2, OpenReview, arXiv.
 
     Step A — CrossRef: for papers with non-arXiv DOIs, fetch venue + affiliations.
-    Step B — arXiv API: batch-fetch clean author names + affiliations for arXiv papers.
+    Step B — S2 publicationVenue: universal lookup by arxiv_id or doi for any paper
+             whose venue is still preprint-flavoured (regardless of discovery source).
+    Step C — OpenReview: catches ICLR/ICML/NeurIPS papers that S2 hasn't yet updated.
+    Step D — arXiv API: batch-fetch clean author names + affiliation fallback.
     """
     logger.info("Enriching papers via CrossRef and arXiv APIs...")
 
@@ -190,15 +209,14 @@ def enrich_via_external_apis(papers: list[DiscoveredPaper]) -> None:
             if not data:
                 continue
 
-            # Update venue if we currently show arXiv (or empty) and CrossRef knows better
             container = data.get("container_title") or ""
             event = data.get("event_name") or ""
             best_venue = container or event
-            if best_venue and ("arxiv" in paper.venue.lower() or not paper.venue.strip()):
+            # Override when the current venue is a preprint/repository placeholder
+            if best_venue and _is_placeholder_venue(paper.venue):
                 logger.debug(f"CrossRef venue update: '{paper.title[:40]}' -> {best_venue}")
                 paper.venue = best_venue
 
-            # Fill affiliations from CrossRef author objects if still missing
             if not paper.affiliations:
                 aff_set: set[str] = set()
                 for author in data.get("authors", []):
@@ -215,7 +233,47 @@ def enrich_via_external_apis(papers: list[DiscoveredPaper]) -> None:
         except Exception as e:
             logger.debug(f"CrossRef enrichment failed for '{paper.title[:40]}': {e}")
 
-    # Step B: arXiv API batch fetch — clean author names + affiliation fallback
+    # Step B: Universal S2 publicationVenue lookup
+    # Catches papers like pyvene that S2 has the conference for, but were
+    # discovered via OpenAlex (so the discovery-time S2 parse never ran).
+    logger.info("Querying S2 publicationVenue for papers with placeholder venues...")
+    for paper in papers:
+        if not _is_placeholder_venue(paper.venue):
+            continue
+        if not paper.arxiv_id and not paper.doi:
+            continue
+        try:
+            pv = query_s2_publication_venue(paper.arxiv_id, paper.doi)
+            name = pv.get("name") or ""
+            # Skip if S2 also says it's just on arXiv
+            if name and not _is_placeholder_venue(name):
+                logger.debug(f"S2 publicationVenue update: '{paper.title[:40]}' -> {name}")
+                paper.venue = name
+            rate_limit_sleep(
+                config.S2_RATE_LIMIT_SLEEP if not config.S2_API_KEY else 0.5,
+                "S2 publicationVenue",
+            )
+        except Exception as e:
+            logger.debug(f"S2 venue lookup failed for '{paper.title[:40]}': {e}")
+
+    # Step C: OpenReview — for papers still without a real venue, fuzzy-match by title
+    logger.info("Querying OpenReview for venue resolution...")
+    for paper in papers:
+        if not _is_placeholder_venue(paper.venue):
+            continue
+        if not paper.title:
+            continue
+        try:
+            data = query_openreview_venue(paper.title)
+            venue_name = data.get("venue") or ""
+            if venue_name:
+                logger.debug(f"OpenReview venue update: '{paper.title[:40]}' -> {venue_name}")
+                paper.venue = venue_name
+            rate_limit_sleep(0.3, "OpenReview")
+        except Exception as e:
+            logger.debug(f"OpenReview lookup failed for '{paper.title[:40]}': {e}")
+
+    # Step D: arXiv API batch fetch — clean author names + affiliation fallback
     arxiv_ids = [p.arxiv_id for p in papers if p.arxiv_id]
     if not arxiv_ids:
         return
@@ -230,7 +288,7 @@ def enrich_via_external_apis(papers: list[DiscoveredPaper]) -> None:
         # Always refresh author names from arXiv (authoritative, clean Unicode)
         if d.get("authors"):
             paper.authors = ", ".join(d["authors"])
-        # Fill affiliations if still missing
+        # Fill affiliations if still missing (arXiv tags rarely populated, but try)
         if not paper.affiliations and d.get("affiliations"):
             paper.affiliations = ", ".join(d["affiliations"])
 

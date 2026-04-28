@@ -287,17 +287,24 @@ def _openalex_work_to_discovered(work: dict) -> Optional[DiscoveredPaper]:
         if not arxiv_id and doi:
             arxiv_id = extract_arxiv_id_from_doi(doi)
 
-        # Venue — prefer a non-arXiv location from the full locations[] array
+        # Venue — prefer a published (non-repository) location from locations[]
+        # Repositories (arXiv, DSpace@MIT, HAL, etc.) are preprint hosts; the
+        # actual conference/journal lives at type=conference|journal.
         venue = ""
         for loc in work.get("locations", []):
             src = loc.get("source") or {}
             src_name = src.get("display_name") or ""
-            if src_name and "arxiv" not in src_name.lower():
-                venue = src_name
-                # Also pick up PDF URL from this preferred location if missing
-                if not pdf_url and loc.get("pdf_url"):
-                    pdf_url = loc.get("pdf_url")
-                break
+            src_type = src.get("type") or ""
+            if not src_name:
+                continue
+            if src_type == "repository":
+                continue
+            if "arxiv" in src_name.lower():
+                continue
+            venue = src_name
+            if not pdf_url and loc.get("pdf_url"):
+                pdf_url = loc.get("pdf_url")
+            break
         if not venue:
             venue = source.get("display_name", "") or ""
 
