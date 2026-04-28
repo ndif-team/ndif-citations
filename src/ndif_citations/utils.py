@@ -110,7 +110,9 @@ _AFFILIATION_ORG_KW = re.compile(
 )
 
 _AFFILIATION_NOISE = [
-    re.compile(r'(Equal\s+contributions?|Equally\s+contributed)', re.IGNORECASE),
+    # Bug E fix: anchor to start so "University of Freiburg♡, Microsoft Research♣"
+    # isn't rejected just because "Equal contribution∗" appears elsewhere on the page.
+    re.compile(r'^\s*(Equal\s+contributions?|Equally\s+contributed)', re.IGNORECASE),
     re.compile(r'Work\s+done\s+(?:during|while)', re.IGNORECASE),
     re.compile(r'^\s*(?:Code|Correspondence|Preprint|Under\s+review|Published\s+as)', re.IGNORECASE),
     re.compile(r'\S+@\S+'),
@@ -124,6 +126,11 @@ def _affil_clean(s: str) -> str:
     s = re.sub(r'\S+@\S+', '', s)
     s = re.sub(r'\{[^}]+\}', '', s)
     s = re.sub(r'^\s*[\d*†‡§¶♠♢♣♡⋆✠]+\s*', '', s)
+    # Bug A fix: strip trailing "Correspondence to:", "Preprint.", "Under review" etc.
+    s = re.sub(r'\s+(?:Correspondence|Preprint|Under\s+review|Published\s+as)[\s\S]*$',
+               '', s, flags=re.IGNORECASE)
+    # Strip trailing suffix markers left over from the affiliation body
+    s = re.sub(r'[\s♡♣♢♠⋆✠*†‡§¶,;.:]+$', '', s)
     s = re.sub(r'\s+', ' ', s).strip()
     return s.rstrip(',;.: ').strip()
 
@@ -132,6 +139,10 @@ def _affil_looks_valid(s: str) -> bool:
     if not s or not (4 <= len(s) <= 200):
         return False
     if any(p.search(s) for p in _AFFILIATION_NOISE):
+        return False
+    # Bug B fix: reject compound entries e.g. "1Stanford 2MIT 3Apple" that
+    # contain 2+ internal digit-letter patterns — these should have been split.
+    if len(re.findall(r'(?:^|\s)\d{1,2}\s*[A-Z]', s)) >= 2:
         return False
     return bool(_AFFILIATION_ORG_KW.search(s))
 
@@ -188,6 +199,22 @@ def _affil_find_footnote_block(text: str) -> Optional[str]:
     return window[first.start():] if first else window
 
 
+def _affil_parse_suffix_markers(block: str) -> list[str]:
+    """Handle 'Lab Name♡, Other Lab♣' format (ICML suffix-marker legend).
+
+    Some papers list affiliations inline using trailing Unicode symbols
+    (e.g. ♡♣♢♠) instead of leading digit prefixes. Split on commas and
+    strip the trailing marker from each token.
+    """
+    if not block:
+        return []
+    suffix_re = re.compile(r'([A-Z][^,\n]+?)\s*[♡♣♢♠⋆✠*†‡§¶]+(?=\s*,|\s*\n|\s*$)')
+    matches = [m.group(1).strip() for m in suffix_re.finditer(block)]
+    if len(matches) < 2:
+        return []
+    return _affil_dedupe([m for m in matches if _affil_looks_valid(m)])
+
+
 def _affil_parse_inline_block(text: str, authors: str) -> list[str]:
     """Parse affiliations between authors and 'Abstract' (ACL/EMNLP style)."""
     head = text[:2500]
@@ -204,12 +231,25 @@ def _affil_parse_inline_block(text: str, authors: str) -> list[str]:
     if not max_end:
         return []
     block = head[max_end:abs_idx]
-    affs = list(_affil_parse_marker_block(block))
+
+    # Bug B fix: try prefix-marker parsing first; if it succeeds, trust it and stop.
+    # Don't fall through to line-capture — that produces duplicate compound entries.
+    prefix_affs = _affil_parse_marker_block(block)
+    if prefix_affs:
+        return prefix_affs
+
+    # Bug D fix: try suffix-marker format (Lab♡, Other♣) before plain-line fallback.
+    suffix_affs = _affil_parse_suffix_markers(block)
+    if suffix_affs:
+        return suffix_affs
+
+    # Plain-line fallback: each line is a single affiliation (no marker splitting).
+    line_affs = []
     for line in block.split('\n'):
         cleaned = _affil_clean(line)
-        if _affil_looks_valid(cleaned) and cleaned not in affs:
-            affs.append(cleaned)
-    return _affil_dedupe(affs)
+        if _affil_looks_valid(cleaned):
+            line_affs.append(cleaned)
+    return _affil_dedupe(line_affs)
 
 
 def _affil_block_aware(doc) -> Optional[str]:
@@ -267,13 +307,15 @@ def extract_affiliations_from_pdf(pdf_path: Path, authors: str = "") -> list[str
                 return affs
 
         # Strategy 2: anchored footnote block (ICML/NeurIPS)
+        # Bug C fix: only return here if parsing actually found entries;
+        # if footnote block was detected but empty, fall through to inline.
         footnote = _affil_find_footnote_block(text)
         if footnote:
             affs = _affil_parse_marker_block(footnote)
             if affs:
                 return affs
 
-        # Strategy 3: inline block (ACL/EMNLP)
+        # Strategy 3: inline block (ACL/EMNLP) — also catches suffix-marker format
         return _affil_parse_inline_block(text, authors)
     except Exception as e:
         logger.debug(f"Affiliation extraction failed for {pdf_path.name}: {e}")
