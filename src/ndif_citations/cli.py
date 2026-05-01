@@ -37,22 +37,37 @@ def cli(verbose: bool) -> None:
 @cli.command()
 @click.option("--output-dir", "-o", default=None, help="Custom output directory")
 @click.option("--fresh", is_flag=True, help="Ignore existing data, start from scratch")
-def run(output_dir: str | None, fresh: bool) -> None:
+@click.option("--skip-github", is_flag=True, default=False, help="Skip GitHub repo discovery and output")
+@click.option("--skip-papers", is_flag=True, default=False, help="Skip paper discovery, LLM processing, and paper output")
+def run(output_dir: str | None, fresh: bool, skip_github: bool, skip_papers: bool) -> None:
     """Full pipeline: discover → extract → process → output."""
+    if skip_github and skip_papers:
+        console.print("[bold red]Error:[/bold red] --skip-github and --skip-papers cannot both be set (nothing to do)")
+        raise SystemExit(1)
+
     from ndif_citations.discover import (
         deduplicate_papers,
         discover_github_dependents,
         discover_openalex,
         discover_s2_citations,
+        enrich_repos_from_github_api,
+        link_repos_to_papers,
+        _tag_repo_type,
+        _unlink_shared_template_papers,
     )
     from ndif_citations.extract import check_venue_upgrades, enrich_papers
     from ndif_citations.output import (
+        _write_repos_outputs,
+        _write_xlsx,
         load_existing_papers,
+        load_existing_repos,
         merge_papers,
+        merge_repos,
         print_report,
         write_outputs,
     )
-    from ndif_citations.process import process_papers
+    from ndif_citations.process import process_papers, process_repos
+    from ndif_citations.router import route_papers, route_repos
 
     out = config.get_output_dir(output_dir)
     raw_dir = out / "raw"
@@ -60,72 +75,166 @@ def run(output_dir: str | None, fresh: bool) -> None:
 
     console.print("\n[bold cyan]NDIF Citation Tracker[/bold cyan] — Starting full pipeline\n")
 
+    # ------------------------------------------------------------------ #
     # Phase 1: Discovery
+    # ------------------------------------------------------------------ #
     console.print("[bold]Phase 1:[/bold] Discovery")
 
-    s2_papers = discover_s2_citations(raw_dir)
-    run_stats.s2_citations_found = len(s2_papers)
+    unique_papers = []
+    if not skip_papers:
+        s2_papers = discover_s2_citations(raw_dir)
+        run_stats.s2_citations_found = len(s2_papers)
 
-    openalex_papers = discover_openalex(raw_dir)
-    run_stats.openalex_found = len(openalex_papers)
+        openalex_papers = discover_openalex(raw_dir)
+        run_stats.openalex_found = len(openalex_papers)
 
-    github_papers = discover_github_dependents(raw_dir)
-    run_stats.github_dependents_found = len(github_papers)
+        all_papers = s2_papers + openalex_papers
+        unique_papers = deduplicate_papers(all_papers)
+        console.print(f"  Papers — S2: {run_stats.s2_citations_found}, OpenAlex: {run_stats.openalex_found}")
+        console.print(f"  After deduplication: [cyan]{len(unique_papers)}[/cyan] unique papers")
+    else:
+        console.print("  [dim]--skip-papers: skipping S2/OpenAlex discovery[/dim]")
 
-    all_papers = s2_papers + openalex_papers + github_papers
-    console.print(f"  Found {len(all_papers)} total papers across all sources")
+    discovered_repos = []
+    if not skip_github:
+        discovered_repos = discover_github_dependents(raw_dir)
+        run_stats.github_dependents_found = len(discovered_repos)
+        console.print(f"  GitHub dependents: [green]{len(discovered_repos)}[/green] repos found")
+    else:
+        console.print("  [dim]--skip-github: skipping GitHub discovery[/dim]")
+    console.print()
 
-    # Deduplicate
-    unique_papers = deduplicate_papers(all_papers)
-    console.print(f"  After deduplication: [cyan]{len(unique_papers)}[/cyan] unique papers\n")
-
-    # Phase 2: Metadata enrichment
+    # ------------------------------------------------------------------ #
+    # Phase 2: Enrichment
+    # ------------------------------------------------------------------ #
     console.print("[bold]Phase 2:[/bold] Metadata Enrichment")
-    unique_papers = enrich_papers(unique_papers, raw_dir)
-    console.print(f"  Enriched {len(unique_papers)} papers\n")
 
-    # Phase 2.5: Router - decide which papers need processing
+    if not skip_papers and unique_papers:
+        unique_papers = enrich_papers(unique_papers, raw_dir)
+        console.print(f"  Enriched {len(unique_papers)} papers")
+
+    repo_removal_counts: dict[str, int] = {"404": 0, "rename_redirect": 0, "archived": 0}
+    if not skip_github and discovered_repos:
+        console.print("  Enriching repos via GitHub API (stars, forks, last commit)...")
+        discovered_repos, repo_removal_counts = enrich_repos_from_github_api(discovered_repos)
+        console.print(f"  {len(discovered_repos)} repos retained after staleness check")
+
+        # Drop excluded repos (e.g. ndif-team/nnsight — the library itself)
+        pre_filter = len(discovered_repos)
+        discovered_repos = [r for r in discovered_repos if r.merge_key() not in config.EXCLUDED_GITHUB_REPOS]
+        if len(discovered_repos) < pre_filter:
+            console.print(f"  Excluded {pre_filter - len(discovered_repos)} repo(s) from EXCLUDED_GITHUB_REPOS")
+
+        # Cross-repo cleanup: unlink shared template papers (runs on merged set)
+        if not fresh:
+            existing_for_cross = load_existing_repos(out)
+            # Merge: discovered repos override existing by merge_key
+            by_key = {r.merge_key(): r for r in existing_for_cross}
+            by_key.update({r.merge_key(): r for r in discovered_repos})
+            all_for_cross = list(by_key.values())
+        else:
+            all_for_cross = discovered_repos
+
+        unlinked_set = _unlink_shared_template_papers(all_for_cross)
+        if unlinked_set:
+            console.print(f"  Shared-paper cleanup: {len(unlinked_set)} template links unlinked")
+
+        # Tag every repo (runs on the merged set for consistent cross-repo state)
+        for repo in all_for_cross:
+            repo.repo_type = _tag_repo_type(repo, unlinked_set)
+
+        # Cross-link repos <-> papers (minimal URL fields)
+        if not skip_papers:
+            link_repos_to_papers(discovered_repos, unique_papers)
+            console.print("  Cross-linked repos and papers")
+    console.print()
+
+    # ------------------------------------------------------------------ #
+    # Phase 2.5: Routing
+    # ------------------------------------------------------------------ #
     console.print("[bold]Phase 2.5:[/bold] Routing")
-    from ndif_citations.router import route_papers
-    from ndif_citations.output import load_existing_papers
 
-    existing_papers = load_existing_papers(out) if not fresh else []
-    decisions = route_papers(unique_papers, existing_papers)
+    decisions = []
+    if not skip_papers:
+        existing_papers = load_existing_papers(out) if not fresh else []
+        decisions = route_papers(unique_papers, existing_papers)
+        skipped = sum(1 for d in decisions if d.bucket.value in ("skip", "protected"))
+        console.print(f"  Papers — {len(decisions) - skipped} to process, {skipped} skipped")
 
-    skipped = sum(1 for d in decisions if d.bucket.value in ("skip", "protected"))
-    console.print(f" [dim]{skipped} papers skipped (already complete)[/dim]")
-    console.print(f" [green]{len(decisions) - skipped}[/green] papers need processing\n")
+    repo_decisions = []
+    if not skip_github and discovered_repos:
+        existing_repos = load_existing_repos(out) if not fresh else []
+        repo_decisions = route_repos(discovered_repos, existing_repos)
+        repo_skipped = sum(1 for d in repo_decisions if d.bucket.value in ("skip", "protected"))
+        console.print(f"  Repos — {len(repo_decisions) - repo_skipped} to process, {repo_skipped} skipped")
+    console.print()
 
+    # ------------------------------------------------------------------ #
+    # Phase 3: Processing
+    # ------------------------------------------------------------------ #
+    console.print("[bold]Phase 3:[/bold] Content Processing")
 
-    # Phase 3: Content processing
-    console.print("[bold]Phase 3:[/bold] Content Processing (LLM summaries, classification, thumbnails)")
-    processed_papers = process_papers(decisions, out)
-    console.print(f" Processed {len(processed_papers)} papers\n")
+    processed_papers = []
+    if not skip_papers and decisions:
+        console.print("  Running LLM summaries, classification, thumbnails...")
+        processed_papers = process_papers(decisions, out)
+        console.print(f"  Processed {len(processed_papers)} papers")
 
-    # Phase 4: Output with merge
+    processed_repos = []
+    if not skip_github and repo_decisions:
+        console.print("  Classifying repos (keyword-only)...")
+        processed_repos = process_repos(repo_decisions)
+        console.print(f"  Classified {len(processed_repos)} repos")
+    console.print()
+
+    # ------------------------------------------------------------------ #
+    # Phase 4: Output
+    # ------------------------------------------------------------------ #
     console.print("[bold]Phase 4:[/bold] Output")
 
-    if fresh:
-        console.print("  [yellow]--fresh flag: ignoring existing data[/yellow]")
-        existing_papers = []
-    else:
-        existing_papers = load_existing_papers(out)
+    merged_papers = []
+    if not skip_papers:
+        if fresh:
+            console.print("  [yellow]--fresh flag: rebuilding papers from scratch[/yellow]")
+            existing_for_merge = []
+        else:
+            existing_for_merge = load_existing_papers(out)
+        merged_papers, run_stats = merge_papers(existing_for_merge, [d.paper for d in decisions], run_stats)
 
-    merged_papers, run_stats = merge_papers(existing_papers, [d.paper for d in decisions], run_stats)
+        if existing_for_merge:
+            upgrades = check_venue_upgrades(unique_papers, existing_for_merge)
+            if upgrades:
+                console.print(f"  [green]{len(upgrades)} venue upgrade(s) detected[/green]")
 
-    # Check for venue upgrades (arXiv -> conference)
-    if existing_papers:
-        upgrades = check_venue_upgrades(unique_papers, existing_papers)
-        if upgrades:
-            console.print(f"  [green]{len(upgrades)} venue upgrade(s) detected:[/green]")
-            for msg in upgrades:
-                console.print(f"    {msg}")
-            console.print()
+        write_outputs(merged_papers, out, run_stats)
 
-    write_outputs(merged_papers, out, run_stats)
+    merged_repos = []
+    if not skip_github:
+        if fresh:
+            console.print("  [yellow]--fresh flag: rebuilding repos from scratch[/yellow]")
+            existing_repos_for_merge = []
+        else:
+            existing_repos_for_merge = load_existing_repos(out)
+        merged_repos = merge_repos(processed_repos, existing_repos_for_merge)
+        _write_repos_outputs(merged_repos, out)
+
+    # Write combined XLSX (only if both sides ran, or just one)
+    _write_xlsx(
+        merged_papers if not skip_papers else [],
+        merged_repos if not skip_github else [],
+        out,
+        skip_papers=skip_papers,
+        skip_github=skip_github,
+    )
 
     # Print final report
-    print_report(run_stats, merged_papers, out)
+    print_report(
+        run_stats, merged_papers, out,
+        repos=merged_repos,
+        skip_github=skip_github,
+        skip_papers=skip_papers,
+        repos_removed_counts=repo_removal_counts,
+    )
 
 
 @cli.command()
@@ -152,10 +261,11 @@ def discover(output_dir: str | None) -> None:
     openalex_papers = discover_openalex(raw_dir)
     console.print(f"  OpenAlex: [green]{len(openalex_papers)}[/green] papers")
 
-    github_papers = discover_github_dependents(raw_dir)
-    console.print(f"  GitHub: [green]{len(github_papers)}[/green] papers from dependents")
+    github_repos = discover_github_dependents(raw_dir)
+    run_stats_github = len(github_repos)
+    console.print(f"  GitHub: [green]{run_stats_github}[/green] repos discovered")
 
-    all_papers = s2_papers + openalex_papers + github_papers
+    all_papers = s2_papers + openalex_papers
     unique_papers = deduplicate_papers(all_papers)
 
     # Basic enrichment (no LLM)
@@ -183,6 +293,23 @@ def discover(output_dir: str | None) -> None:
 
     console.print(table)
     console.print()
+
+    # Repos summary
+    if github_repos:
+        console.print(f"\n[bold]GitHub Repos:[/bold] [cyan]{len(github_repos)}[/cyan] discovered\n")
+        from rich.table import Table as RichTable
+        repo_table = RichTable(title="Discovered GitHub Repos", show_lines=True)
+        repo_table.add_column("#", style="dim", width=4)
+        repo_table.add_column("Owner/Repo", max_width=40)
+        repo_table.add_column("arXiv links in README", max_width=40)
+        for i, repo in enumerate(github_repos, 1):
+            repo_table.add_row(
+                str(i),
+                f"{repo.owner}/{repo.repo}",
+                ", ".join(repo.readme_arxiv_ids[:3]) or "(none)",
+            )
+        console.print(repo_table)
+        console.print()
 
 
 @cli.command()

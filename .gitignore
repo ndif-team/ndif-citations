@@ -3,6 +3,7 @@
 
 # Output (generated at runtime)
 output/
+debug_output/
 
 # Python
 __pycache__/
@@ -18,3 +19,6 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+docs/CI_CD_NOTES.md
+docs/CODEBASE_CONTEXT.md
+docs/github_actions_template.yml

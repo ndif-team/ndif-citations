@@ -8,7 +8,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from ndif_citations.models import DiscoveredPaper, PipelineRun
+from ndif_citations.models import DiscoveredPaper, DiscoveredRepo, PipelineRun
 from ndif_citations.utils import is_duplicate
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,32 @@ def load_existing_papers(output_dir: Path) -> list[DiscoveredPaper]:
 
     except Exception as e:
         logger.warning(f"Failed to load existing papers: {e}")
+        return []
+
+
+def load_existing_repos(output_dir: Path) -> list[DiscoveredRepo]:
+    """Load existing repos from the full JSON file."""
+    full_json = output_dir / "github-repos-full.json"
+    if not full_json.exists():
+        return []
+
+    try:
+        with open(full_json) as f:
+            data = json.load(f)
+
+        repos = []
+        for item in data:
+            try:
+                repo = DiscoveredRepo.model_validate(item)
+                repos.append(repo)
+            except Exception as e:
+                logger.warning(f"Failed to parse existing repo: {e}")
+
+        logger.info(f"Loaded {len(repos)} existing repos from {full_json}")
+        return repos
+
+    except Exception as e:
+        logger.warning(f"Failed to load existing repos: {e}")
         return []
 
 
@@ -125,6 +151,63 @@ def merge_papers(existing: list[DiscoveredPaper],
     return merged, run
 
 
+def merge_repos(
+    discovered: list[DiscoveredRepo],
+    existing: list[DiscoveredRepo],
+) -> list[DiscoveredRepo]:
+    """Merge discovered repos into existing state.
+
+    - Stale entries (404 / renamed / archived) are NOT in discovered list
+      (already dropped by enrich_repos_from_github_api). This function
+      therefore purges any existing entry that doesn't appear in discovered,
+      UNLESS it has manual_override=True.
+    - For repos that appear in both: carry over existing state for SKIP/PROTECTED;
+      update fields for NEW/REPROCESS/FILL_GAPS (routing has already set processing_bucket).
+    - New repos (in discovered but not in existing): append as-is.
+    """
+    by_key: dict[str, DiscoveredRepo] = {r.merge_key(): r for r in existing}
+    discovered_keys: set[str] = {r.merge_key() for r in discovered}
+
+    merged: list[DiscoveredRepo] = []
+
+    # Keep existing repos that are still discovered (or protected)
+    removed_count = 0
+    for existing_repo in existing:
+        key = existing_repo.merge_key()
+        if key in discovered_keys:
+            continue  # Will be handled in the discovered loop below
+        if existing_repo.manual_override:
+            logger.debug(f"Keeping protected repo not seen this run: {key}")
+            merged.append(existing_repo)
+        else:
+            logger.info(f"Purging stale repo from state: {key}")
+            removed_count += 1
+
+    if removed_count:
+        logger.info(f"Purged {removed_count} stale repo(s) from github-repos-full.json")
+
+    # Merge each discovered repo
+    for repo in discovered:
+        key = repo.merge_key()
+        existing_repo = by_key.get(key)
+
+        if existing_repo is None:
+            # New repo — append as-is
+            merged.append(repo)
+        elif repo.processing_bucket in ("skip", "protected"):
+            # Keep existing state (routing already swapped in the existing object in process_repos,
+            # but guard here too)
+            merged.append(existing_repo)
+        else:
+            # NEW / REPROCESS / FILL_GAPS — use freshly processed repo
+            # Preserve manual_override from existing
+            if existing_repo.manual_override:
+                repo.manual_override = True
+            merged.append(repo)
+
+    return merged
+
+
 def _update_existing(existing: DiscoveredPaper, new: DiscoveredPaper) -> bool:
     """Update an existing paper with new data, preserving manual overrides.
 
@@ -183,7 +266,7 @@ def _update_existing(existing: DiscoveredPaper, new: DiscoveredPaper) -> bool:
 # ---------------------------------------------------------------------------
 
 def write_outputs(papers: list[DiscoveredPaper], output_dir: Path, run: PipelineRun) -> None:
-    """Write all output files: website JSON, full JSON, CSV."""
+    """Write all output files: website JSON, full JSON."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Sort: year descending, then title ascending
@@ -228,10 +311,72 @@ def write_outputs(papers: list[DiscoveredPaper], output_dir: Path, run: Pipeline
         json.dump(full_data, f, indent=2, ensure_ascii=False, default=str)
     logger.info(f"Wrote {len(papers)} papers to {full_json}")
 
-    # 3. CSV
-    csv_path = output_dir / "research-papers.csv"
-    _write_csv(papers, csv_path)
-    logger.info(f"Wrote {len(papers)} papers to {csv_path}")
+def _write_repos_outputs(repos: list[DiscoveredRepo], output_dir: Path) -> None:
+    """Write github-repos.json, github-repos-full.json."""
+    # Sort: stars desc (null last), then owner/repo asc
+    def _sort_key(r: DiscoveredRepo) -> tuple:
+        return (r.stars is None, -(r.stars or 0), r.owner.lower(), r.repo.lower())
+
+    repos_sorted = sorted(repos, key=_sort_key)
+
+    # 1. Slim website JSON
+    website_data = [r.to_website_dict() for r in repos_sorted]
+    website_json = output_dir / "github-repos.json"
+    with open(website_json, "w") as f:
+        json.dump(website_data, f, indent=2, ensure_ascii=False)
+    logger.info(f"Wrote {len(repos_sorted)} repos to {website_json}")
+
+    # 2. Full state JSON
+    full_data = [r.to_full_dict() for r in repos_sorted]
+    full_json = output_dir / "github-repos-full.json"
+    with open(full_json, "w") as f:
+        json.dump(full_data, f, indent=2, ensure_ascii=False, default=str)
+    logger.info(f"Wrote {len(repos_sorted)} repos to {full_json}")
+
+
+
+def _write_repos_csv(repos: list[DiscoveredRepo], csv_path: Path) -> None:
+    """Write repos to CSV."""
+    fieldnames = [
+        "owner", "repo", "url", "description",
+        "stars", "forks", "last_commit", "archived", "is_fork",
+        "language", "license", "topics",
+        "repo_type", "parent_full_name",
+        "category", "classification_reason",
+        "linked_paper_url", "readme_arxiv_ids",
+        "manual_override", "has_metadata", "has_classification",
+        "content_hash", "processing_bucket",
+    ]
+
+    with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for repo in repos:
+            writer.writerow({
+                "owner": repo.owner,
+                "repo": repo.repo,
+                "url": repo.url,
+                "description": repo.description or "",
+                "stars": repo.stars if repo.stars is not None else "",
+                "forks": repo.forks if repo.forks is not None else "",
+                "last_commit": repo.last_commit.isoformat() if repo.last_commit else "",
+                "archived": repo.archived,
+                "is_fork": repo.is_fork,
+                "language": repo.language or "",
+                "license": repo.license or "",
+                "topics": "|".join(repo.topics),
+                "repo_type": repo.repo_type,
+                "parent_full_name": repo.parent_full_name or "",
+                "category": repo.detail_category.value,
+                "classification_reason": repo.classification_reason,
+                "linked_paper_url": repo.linked_paper_url or "",
+                "readme_arxiv_ids": "|".join(repo.readme_arxiv_ids),
+                "manual_override": repo.manual_override,
+                "has_metadata": repo.has_metadata,
+                "has_classification": repo.has_classification,
+                "content_hash": repo.content_hash,
+                "processing_bucket": repo.processing_bucket,
+            })
 
 
 def _write_csv(papers: list[DiscoveredPaper], csv_path: Path) -> None:
@@ -279,11 +424,139 @@ def _write_csv(papers: list[DiscoveredPaper], csv_path: Path) -> None:
             writer.writerow(row)
 
 
+def _write_xlsx(
+    papers: list[DiscoveredPaper],
+    repos: list[DiscoveredRepo],
+    output_dir: Path,
+    skip_papers: bool = False,
+    skip_github: bool = False,
+) -> None:
+    """Write research-data.xlsx with Papers and GitHub sheets."""
+    import openpyxl
+    from openpyxl.styles import Font
+    from openpyxl.utils import get_column_letter
+
+    wb = openpyxl.Workbook()
+    # Remove default sheet
+    wb.remove(wb.active)
+
+    # --- Papers sheet ---
+    if not skip_papers:
+        ws_papers = wb.create_sheet("Papers")
+        paper_cols = [
+            "title", "authors", "affiliations", "venue", "year",
+            "url", "pdf_url", "github_repo_url",
+            "description", "category", "detail_category",
+            "peer_reviewed", "venue_type",
+            "arxiv_id", "doi", "date_discovered",
+            "category_confidence", "source", "manual_override",
+        ]
+        # Header row
+        for col_idx, col_name in enumerate(paper_cols, 1):
+            cell = ws_papers.cell(row=1, column=col_idx, value=col_name)
+            cell.font = Font(bold=True)
+
+        # Data rows (already sorted year desc by write_outputs before this call)
+        url_columns = {"url", "pdf_url", "github_repo_url"}
+        for row_idx, paper in enumerate(papers, 2):
+            row_data = {
+                "title": paper.title,
+                "authors": paper.authors,
+                "affiliations": paper.affiliations,
+                "venue": paper.venue,
+                "year": paper.year,
+                "url": paper.url,
+                "pdf_url": paper.pdf_url or "",
+                "github_repo_url": paper.github_repo_url or "",
+                "description": paper.description,
+                "category": paper.website_category.value,
+                "detail_category": paper.detail_category.value,
+                "peer_reviewed": paper.peer_reviewed,
+                "venue_type": paper.venue_type or "",
+                "arxiv_id": paper.arxiv_id or "",
+                "doi": paper.doi or "",
+                "date_discovered": paper.date_discovered.isoformat() if paper.date_discovered else "",
+                "category_confidence": f"{paper.category_confidence:.2f}",
+                "source": paper.source.value,
+                "manual_override": paper.manual_override,
+            }
+            for col_idx, col_name in enumerate(paper_cols, 1):
+                value = row_data[col_name]
+                cell = ws_papers.cell(row=row_idx, column=col_idx, value=value)
+                # Make URL columns hyperlinks
+                if col_name in url_columns and isinstance(value, str) and value.startswith("http"):
+                    cell.hyperlink = value
+                    cell.style = "Hyperlink"
+
+    # --- GitHub sheet ---
+    if not skip_github:
+        ws_github = wb.create_sheet("GitHub")
+        github_cols = [
+            "owner", "repo", "url", "description",
+            "stars", "forks", "last_commit",
+            "language", "license", "topics",
+            "category", "classification_reason",
+            "repo_type", "parent_full_name",
+            "linked_paper_url",
+            "manual_override", "has_metadata", "has_classification",
+        ]
+        # Header row
+        for col_idx, col_name in enumerate(github_cols, 1):
+            cell = ws_github.cell(row=1, column=col_idx, value=col_name)
+            cell.font = Font(bold=True)
+
+        # Sort repos: stars desc, null last
+        repos_sorted = sorted(
+            repos,
+            key=lambda r: (r.stars is None, -(r.stars or 0), r.owner.lower(), r.repo.lower())
+        )
+        github_url_cols = {"url", "linked_paper_url"}
+        for row_idx, repo in enumerate(repos_sorted, 2):
+            row_data = {
+                "owner": repo.owner,
+                "repo": repo.repo,
+                "url": repo.url,
+                "description": repo.description or "",
+                "stars": repo.stars,
+                "forks": repo.forks,
+                "last_commit": repo.last_commit.isoformat() if repo.last_commit else "",
+                "language": repo.language or "",
+                "license": repo.license or "",
+                "topics": "|".join(repo.topics),
+                "category": repo.detail_category.value,
+                "classification_reason": repo.classification_reason,
+                "repo_type": repo.repo_type,
+                "parent_full_name": repo.parent_full_name or "",
+                "linked_paper_url": repo.linked_paper_url or "",
+                "manual_override": repo.manual_override,
+                "has_metadata": repo.has_metadata,
+                "has_classification": repo.has_classification,
+            }
+            for col_idx, col_name in enumerate(github_cols, 1):
+                value = row_data[col_name]
+                cell = ws_github.cell(row=row_idx, column=col_idx, value=value)
+                if col_name in github_url_cols and isinstance(value, str) and value.startswith("http"):
+                    cell.hyperlink = value
+                    cell.style = "Hyperlink"
+
+    xlsx_path = output_dir / "research-data.xlsx"
+    wb.save(xlsx_path)
+    logger.info(f"Wrote research-data.xlsx ({wb.sheetnames}) to {xlsx_path}")
+
+
 # ---------------------------------------------------------------------------
 # CLI Report
 # ---------------------------------------------------------------------------
 
-def print_report(run: PipelineRun, papers: list[DiscoveredPaper], output_dir: Path) -> None:
+def print_report(
+    run: PipelineRun,
+    papers: list[DiscoveredPaper],
+    output_dir: Path,
+    repos: list[DiscoveredRepo] | None = None,
+    skip_github: bool = False,
+    skip_papers: bool = False,
+    repos_removed_counts: dict[str, int] | None = None,
+) -> None:
     """Print a rich CLI summary report."""
     from rich.console import Console
     from rich.panel import Panel
@@ -372,12 +645,70 @@ def print_report(run: PipelineRun, papers: list[DiscoveredPaper], output_dir: Pa
             console.print(f"  ... and {len(run.missing_thumbnails) - 15} more")
         console.print()
 
+    # GitHub Repos section (only when GitHub ran)
+    if not skip_github and repos is not None:
+        console.print()
+        console.print(Panel.fit(
+            "[bold green]GitHub Repos Summary[/bold green]",
+            border_style="green",
+        ))
+        console.print()
+
+        total_repos = len(repos)
+        ndif_repos = sum(1 for r in repos if r.detail_category.value == "uses_ndif")
+        nnsight_repos = total_repos - ndif_repos
+
+        # Bucket breakdown from processing_bucket field
+        bucket_counts: dict[str, int] = {}
+        for r in repos:
+            bucket_counts[r.processing_bucket] = bucket_counts.get(r.processing_bucket, 0) + 1
+
+        # Classification breakdown
+        ndif_kw = sum(1 for r in repos if r.classification_reason == "ndif_keyword_match")
+        gh_dep = sum(1 for r in repos if r.classification_reason == "github_dependent")
+
+        console.print(f"  > [cyan]{total_repos}[/cyan] repos in database")
+        console.print(f"  > {ndif_repos} classified as [green]\"uses_ndif\"[/green] (NDIF keyword in README)")
+        console.print(f"  > {nnsight_repos} classified as [green]\"uses_nnsight\"[/green]")
+        console.print()
+        console.print("[bold]Routing breakdown:[/bold]")
+        for bucket in ("new", "reprocess", "fill_gaps", "skip", "protected"):
+            count = bucket_counts.get(bucket, 0)
+            if count > 0 or bucket in ("new", "skip"):
+                console.print(f"  > {count} [{bucket.upper()}]")
+        if repos_removed_counts:
+            total_removed = sum(repos_removed_counts.values())
+            if total_removed > 0:
+                console.print(f"  ! {total_removed} repo(s) removed this run:")
+                for reason, count in repos_removed_counts.items():
+                    if count > 0:
+                        console.print(f"      - {count} via {reason}")
+        console.print()
+        console.print("[bold]Classification breakdown:[/bold]")
+        console.print(f"  > {ndif_kw} via NDIF keyword match in README")
+        console.print(f"  > {gh_dep} default (uses_nnsight, no NDIF keywords found)")
+        console.print()
+
+        # Type breakdown
+        research_repos = sum(1 for r in repos if r.repo_type == "research")
+        course_repos = sum(1 for r in repos if r.repo_type == "course")
+        experiment_repos = sum(1 for r in repos if r.repo_type == "experiment")
+
+        console.print("[bold]Type breakdown:[/bold]")
+        console.print(f"  > {research_repos} \\[research]")
+        console.print(f"  > {course_repos} \\[course]")
+        console.print(f"  > {experiment_repos} \\[experiment]")
+        console.print()
+
     # Output files
     console.print("[bold]Output files:[/bold]")
     console.print(f"  -> {output_dir / 'research-papers.json'}  ({run.total_unique} papers)")
     console.print(f"  -> {output_dir / 'research-papers-full.json'}  ({run.total_unique} papers, all metadata)")
-    console.print(f"  -> {output_dir / 'research-papers.csv'}  ({run.total_unique} papers, extended columns)")
     console.print(f"  -> {output_dir / 'images/'}  ({run.thumbnails_extracted} thumbnails)")
+    if not skip_github:
+        console.print(f"  -> {output_dir / 'github-repos.json'}  ({len(repos) if repos else 0} repos)")
+        console.print(f"  -> {output_dir / 'github-repos-full.json'}  ({len(repos) if repos else 0} repos, all metadata)")
+    console.print(f"  -> {output_dir / 'research-data.xlsx'}  (Papers + GitHub sheets)")
     console.print()
 
     # Usage hint

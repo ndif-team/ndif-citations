@@ -887,6 +887,81 @@ def calculate_image_score(
 # BibTeX generation
 # ---------------------------------------------------------------------------
 
+def _fetch_repo_readme(owner: str, repo: str) -> Optional[str]:
+    """Fetch raw README text for a GitHub repo. Returns None on any failure."""
+    from ndif_citations import config
+    try:
+        url = f"{config.GITHUB_API_BASE}/repos/{owner}/{repo}/readme"
+        headers = {
+            "Accept": "application/vnd.github.raw",
+            "User-Agent": "NDIFCitationTracker/1.0 (academic research; https://ndif.us)",
+        }
+        if config.GITHUB_TOKEN:
+            headers["Authorization"] = f"Bearer {config.GITHUB_TOKEN}"
+        resp = requests.get(url, headers=headers, timeout=config.GITHUB_API_TIMEOUT)
+        if resp.status_code == 200:
+            return resp.text
+        return None
+    except Exception as e:
+        logger.debug(f"Failed to fetch README for {owner}/{repo}: {e}")
+        return None
+
+
+# Module-level rate-limit flag — set to True when we hit GitHub API rate limit
+_github_rate_limited = False
+
+
+def _github_api_get(path: str) -> tuple[Optional[dict], int]:
+    """Make an authenticated (or anonymous) GET request to the GitHub API.
+
+    Returns (response_json_or_None, status_code).
+    status_code=0 indicates a transport/connection error.
+
+    Sets module-level _github_rate_limited=True on 403/429 so callers
+    can skip subsequent requests in the same run.
+    """
+    global _github_rate_limited
+    from ndif_citations import config
+
+    if _github_rate_limited:
+        logger.debug(f"GitHub API rate-limited — skipping {path}")
+        return None, 0
+
+    headers = {
+        "User-Agent": "NDIFCitationTracker/1.0 (academic research; https://ndif.us)",
+        "Accept": "application/vnd.github+json",
+    }
+    if config.GITHUB_TOKEN:
+        headers["Authorization"] = f"Bearer {config.GITHUB_TOKEN}"
+
+    try:
+        url = f"{config.GITHUB_API_BASE}{path}"
+        resp = requests.get(url, headers=headers, timeout=config.GITHUB_API_TIMEOUT)
+
+        if resp.status_code in (403, 429):
+            logger.warning(
+                f"GitHub API rate-limit hit ({resp.status_code}) — "
+                "skipping remaining API calls this run"
+            )
+            _github_rate_limited = True
+            return None, resp.status_code
+
+        if resp.status_code == 404:
+            return None, 404
+
+        if resp.status_code == 200:
+            try:
+                return resp.json(), 200
+            except Exception:
+                return None, 200
+
+        return None, resp.status_code
+
+    except Exception as e:
+        logger.debug(f"GitHub API transport error for {path}: {e}")
+        return None, 0
+
+
 def generate_bibtex(title: str, authors: str, year: int, venue: str,
                     url: str, arxiv_id: str | None = None,
                     doi: str | None = None) -> str:
@@ -917,3 +992,86 @@ def generate_bibtex(title: str, authors: str, year: int, venue: str,
     lines.append("}")
 
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# README parsing and BibTeX extraction
+# ---------------------------------------------------------------------------
+
+def parse_readme_sections(readme_text: str) -> dict[str, str]:
+    """Split a README into sections by markdown headers.
+
+    Returns {header_name_lower: section_body} where header_name_lower is the
+    header text stripped and lowercased. Content before the first header is
+    stored under key "".
+    """
+    sections: dict[str, str] = {}
+    current_key = ""
+    current_lines: list[str] = []
+
+    header_re = re.compile(r'^#{1,6}\s+(.+)$')
+
+    for line in readme_text.splitlines():
+        m = header_re.match(line)
+        if m:
+            # Save current section
+            sections[current_key] = "\n".join(current_lines)
+            # Start new section
+            current_key = m.group(1).strip().lower()
+            current_lines = []
+        else:
+            current_lines.append(line)
+
+    # Save last section
+    sections[current_key] = "\n".join(current_lines)
+    return sections
+
+
+def extract_bibtex_arxiv_ids(readme_text: str) -> list[str]:
+    """Find all BibTeX blocks in a README and extract arXiv IDs from them.
+
+    Handles:
+    - eprint = {2407.14561} or eprint={2407.14561}
+    - arxiv = {2407.14561}
+    - https://arxiv.org/abs/2407.14561 URLs inside bib entries
+
+    Returns arXiv IDs in order of appearance, deduplicated.
+    """
+    # Find BibTeX blocks by matching opening @ and properly balancing braces
+    bib_start_re = re.compile(
+        r'@(?:article|inproceedings|misc|techreport|preprint|phdthesis|mastersthesis|book|booklet|conference|proceedings)\s*\{',
+        re.IGNORECASE
+    )
+
+    arxiv_in_bib_patterns = [
+        re.compile(r'(?:eprint|arxiv)\s*=\s*[{"](\d{4}\.\d{4,5})(?:v\d+)?[}"]', re.IGNORECASE),
+        re.compile(r'arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5})', re.IGNORECASE),
+    ]
+
+    seen: set[str] = set()
+    result: list[str] = []
+
+    # Find all BibTeX blocks by matching braces
+    for match in bib_start_re.finditer(readme_text):
+        start = match.start()
+        pos = match.end()
+        brace_count = 1
+
+        # Balance braces to find the end of this entry
+        while pos < len(readme_text) and brace_count > 0:
+            if readme_text[pos] == '{':
+                brace_count += 1
+            elif readme_text[pos] == '}':
+                brace_count -= 1
+            pos += 1
+
+        if brace_count == 0:
+            block_text = readme_text[start:pos]
+            for pattern in arxiv_in_bib_patterns:
+                for m in pattern.finditer(block_text):
+                    arxiv_id = normalize_arxiv_id(m.group(1))
+                    if arxiv_id not in seen:
+                        seen.add(arxiv_id)
+                        result.append(arxiv_id)
+
+    return result

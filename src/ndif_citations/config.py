@@ -69,15 +69,41 @@ LLM_MODEL: str = os.environ.get("LLM_MODEL", "meta/llama-3.1-70b-instruct")
 LLM_RATE_LIMIT_SLEEP = 12.0  # NVIDIA Build free tier is ~5 req/min
 
 # ---------------------------------------------------------------------------
-# GitHub scraping
+# GitHub scraping + API
 # ---------------------------------------------------------------------------
-GITHUB_RATE_LIMIT_SLEEP = 2.0  # seconds between requests
+GITHUB_TOKEN: str | None = os.environ.get("GITHUB_TOKEN") or None
+GITHUB_RATE_LIMIT_SLEEP = 2.0  # seconds between dependents-page requests
+GITHUB_API_BASE = "https://api.github.com"
+GITHUB_API_TIMEOUT = 10
+GITHUB_API_RATE_LIMIT_AUTH = 0.5   # seconds between calls when authenticated
+GITHUB_API_RATE_LIMIT_ANON = 1.0   # seconds between calls when anonymous
+
+EXCLUDED_GITHUB_REPOS: set[str] = {"ndif-team/nnsight"}  # repos to drop entirely
+KNOWN_COURSE_SOURCES: set[str] = {"callummcdougall/ARENA_3.0"}  # repos whose forks → "course"
+COURSE_NAME_PATTERNS: list[str] = ["ARENA", "MATS", "CBAI"]  # case-insensitive name/desc substrings
+SHARED_PAPER_THRESHOLD: int = 5  # min repos sharing same linked_paper_url for template detection
 
 # ---------------------------------------------------------------------------
 # PDF / content processing -- keyword detection in paper text
 # ---------------------------------------------------------------------------
 # Keywords searched in PDF full text to extract context for LLM classification.
 NDIF_KEYWORDS = ["nnsight", "NNsight", "NDIF", "ndif.us", "nnsight.net", "import nnsight"]
+
+# Keywords searched in GitHub README text to detect NDIF infrastructure usage.
+# Intentionally narrower than NDIF_KEYWORDS (no "nnsight" — all repos use it by definition).
+# Split into two lists: regex (word-boundary, case-sensitive) and substring (case-insensitive).
+NDIF_README_KEYWORDS_REGEX = [r"\bNDIF\b"]                    # word-boundary, case-sensitive
+NDIF_README_KEYWORDS_SUBSTR = ["ndif.us", "NDIF cluster", "hosted on NDIF"]  # case-insensitive substring
+
+# Boilerplate phrases that mention "NDIF" but don't indicate infrastructure use.
+# A repo whose only NDIF mentions match these (case-insensitive substring) is NOT
+# upgraded to uses_ndif. Common in nnsight install instructions and project labels.
+NDIF_README_NEGATIVE_PATTERNS = [
+    "NDIF Discord",        # "join the NDIF Discord community" — boilerplate install line
+    "NDIF Pilot Program",  # heading/label used by some clones
+    "join the NDIF",       # generic onboarding boilerplate
+]
+
 CONTEXT_WINDOW = 500  # chars around each keyword mention
 MAX_CONTEXT_EXCERPTS = 5
 

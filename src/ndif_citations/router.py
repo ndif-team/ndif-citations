@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
-from ndif_citations.models import DiscoveredPaper
+from ndif_citations.models import DiscoveredPaper, DiscoveredRepo
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,14 @@ class RoutingDecision:
     bucket: ProcessingBucket
     existing_paper: DiscoveredPaper | None
     processing_needed: dict[str, bool]  # {"summary": True, "classify": False, ...}
+
+
+@dataclass
+class RepoRoutingDecision:
+    """Result of routing a single GitHub repo."""
+    repo: DiscoveredRepo
+    bucket: ProcessingBucket
+    existing_repo: DiscoveredRepo | None
 
 
 def _all_true() -> dict[str, bool]:
@@ -208,6 +216,52 @@ def route_papers(
         bucket_counts[d.bucket.value] = bucket_counts.get(d.bucket.value, 0) + 1
 
     logger.info(f"Routing complete: {bucket_counts}")
+
+    return decisions
+
+
+def route_repos(
+    discovered: list[DiscoveredRepo],
+    existing: list[DiscoveredRepo],
+) -> list[RepoRoutingDecision]:
+    """Route all discovered repos against existing database.
+
+    Uses merge_key() (owner/repo string) for O(1) lookup.
+    Buckets:
+    - NEW: Not in DB
+    - REPROCESS: content_hash changed (description, last_commit, or archived changed)
+    - FILL_GAPS: Same hash, but has_classification is False
+    - SKIP: Hash same, classification complete
+    - PROTECTED: manual_override=True (note: does NOT protect against staleness removal)
+    """
+    logger.info(f"Routing {len(discovered)} repos against {len(existing)} existing...")
+
+    # Build O(1) lookup by merge_key
+    by_key: dict[str, DiscoveredRepo] = {r.merge_key(): r for r in existing}
+
+    decisions: list[RepoRoutingDecision] = []
+    for repo in discovered:
+        key = repo.merge_key()
+        existing_repo = by_key.get(key)
+
+        if existing_repo is None:
+            bucket = ProcessingBucket.NEW
+        elif existing_repo.manual_override:
+            bucket = ProcessingBucket.PROTECTED
+        elif existing_repo.content_hash != repo.content_hash:
+            bucket = ProcessingBucket.REPROCESS
+        elif not existing_repo.has_classification:
+            bucket = ProcessingBucket.FILL_GAPS
+        else:
+            bucket = ProcessingBucket.SKIP
+
+        repo.processing_bucket = bucket.value
+        decisions.append(RepoRoutingDecision(repo=repo, bucket=bucket, existing_repo=existing_repo))
+
+    bucket_counts: dict[str, int] = {}
+    for d in decisions:
+        bucket_counts[d.bucket.value] = bucket_counts.get(d.bucket.value, 0) + 1
+    logger.info(f"Repo routing complete: {bucket_counts}")
 
     return decisions
 

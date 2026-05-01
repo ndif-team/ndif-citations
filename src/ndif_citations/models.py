@@ -126,6 +126,8 @@ class DiscoveredPaper(BaseModel):
         }
         if self.image:
             result["image"] = self.image
+        if self.github_repo_url:
+            result["github_repo_url"] = self.github_repo_url
         return result
 
     def to_full_dict(self) -> dict:
@@ -141,6 +143,86 @@ class DiscoveredPaper(BaseModel):
         if self.doi:
             return f"doi:{self.doi}"
         return f"title:{self.title.lower().strip()}"
+
+
+class DiscoveredRepo(BaseModel):
+    """Internal representation of a GitHub repository discovered via dependents."""
+
+    # Identity
+    owner: str
+    repo: str
+    url: str
+    description: Optional[str] = None
+
+    # Activity
+    stars: Optional[int] = None
+    forks: Optional[int] = None
+    last_commit: Optional[date] = None
+    archived: bool = False
+    is_fork: bool = False
+
+    # Tech (provisional)
+    language: Optional[str] = None
+    license: Optional[str] = None
+    topics: list[str] = Field(default_factory=list)
+
+    # Linkage (minimal — no title/arxiv_id copies)
+    readme_arxiv_ids: list[str] = Field(default_factory=list)
+    linked_paper_url: Optional[str] = None  # bare arXiv URL, e.g. "https://arxiv.org/abs/2407.14561"
+
+    # Classification
+    detail_category: DetailCategory = DetailCategory.USES_NNSIGHT
+    classification_reason: str = "github_dependent"
+
+    # Classification metadata
+    repo_type: str = "experiment"  # values: "research", "course", "experiment"
+    parent_full_name: Optional[str] = None  # set to parent.full_name for forks, None otherwise
+
+    # Persistence
+    content_hash: str = ""
+    manual_override: bool = False
+    has_metadata: bool = False
+    has_classification: bool = False
+    processing_bucket: str = ""
+
+    def merge_key(self) -> str:
+        """Return key for deduplication: owner/repo."""
+        return f"{self.owner}/{self.repo}"
+
+    def compute_content_hash(self) -> str:
+        """Compute content hash for change detection."""
+        return hashlib.sha256(
+            ((self.description or "") + "::" + str(self.last_commit) + "::" + str(self.archived)).encode()
+        ).hexdigest()[:16]
+
+    def model_post_init(self, __context):
+        """Auto-compute hash on creation if not set."""
+        if not self.content_hash:
+            self.content_hash = self.compute_content_hash()
+
+    def to_website_dict(self) -> dict:
+        """Export slim dict for github-repos.json."""
+        return {
+            "owner": self.owner,
+            "repo": self.repo,
+            "url": self.url,
+            "description": self.description,
+            "stars": self.stars,
+            "forks": self.forks,
+            "last_commit": self.last_commit.isoformat() if self.last_commit else None,
+            "language": self.language,
+            "license": self.license,
+            "topics": self.topics,
+            "archived": self.archived,
+            "category": self.detail_category.value,
+            "linked_paper_url": self.linked_paper_url,
+            "repo_type": self.repo_type,
+            "parent_full_name": self.parent_full_name,
+        }
+
+    def to_full_dict(self) -> dict:
+        """Export all fields."""
+        return self.model_dump(mode="json")
 
 
 class ResearchPaper(BaseModel):

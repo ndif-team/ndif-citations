@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 
 from ndif_citations import config
-from ndif_citations.models import DetailCategory, DiscoveredPaper
-from ndif_citations.router import ProcessingBucket, RoutingDecision
+from ndif_citations.models import DetailCategory, DiscoveredPaper, DiscoveredRepo
+from ndif_citations.router import ProcessingBucket, RepoRoutingDecision, RoutingDecision
 from ndif_citations.utils import (
+    _fetch_repo_readme,
     download_pdf,
     extract_ndif_context,
     rate_limit_sleep,
@@ -492,6 +494,99 @@ def process_papers(
         results.append(paper)
 
     logger.info("Processing complete")
+    return results
+
+
+def classify_repo(repo: "DiscoveredRepo") -> None:
+    """Classify a repo's NDIF usage via keyword-only README scan (no LLM).
+
+    Default: uses_nnsight (all nnsight dependents use the library by definition).
+    Upgrade to uses_ndif if README mentions any NDIF_README_KEYWORDS.
+    Mutates repo in place.
+    """
+    from ndif_citations.models import DetailCategory, DiscoveredRepo
+
+    # Default — all GitHub dependents use nnsight
+    repo.detail_category = DetailCategory.USES_NNSIGHT
+    repo.classification_reason = "github_dependent"
+
+    # Fetch README and keyword-scan for NDIF usage
+    readme_text = _fetch_repo_readme(repo.owner, repo.repo)
+    if readme_text:
+        matched = False
+        for pattern in config.NDIF_README_KEYWORDS_REGEX:
+            if re.search(pattern, readme_text):
+                matched = True
+                break
+        if not matched:
+            readme_lower = readme_text.lower()
+            for kw in config.NDIF_README_KEYWORDS_SUBSTR:
+                if kw.lower() in readme_lower:
+                    matched = True
+                    break
+        if matched:
+            repo.detail_category = DetailCategory.USES_NDIF
+            repo.classification_reason = "ndif_keyword_match"
+            logger.debug(
+                f"Repo {repo.owner}/{repo.repo} upgraded to uses_ndif (ndif_keyword_match)"
+            )
+
+    repo.has_classification = True
+
+
+def process_repos(decisions: list[RepoRoutingDecision]) -> list[DiscoveredRepo]:
+    """Phase 3 for repos: apply classification per routing bucket.
+
+    NEW / REPROCESS: recompute content_hash (classification already done in enrichment)
+    FILL_GAPS: classify_repo() only if has_classification is False (enrichment fallback)
+    SKIP / PROTECTED: pass through unchanged
+    """
+    results: list[DiscoveredRepo] = []
+    total = len(decisions)
+
+    for i, decision in enumerate(decisions):
+        repo = decision.repo
+        bucket = decision.bucket
+
+        try:
+            if bucket in (ProcessingBucket.NEW, ProcessingBucket.REPROCESS):
+                logger.info(
+                    f"[{i + 1}/{total}] Repo {repo.owner}/{repo.repo} "
+                    f"(bucket: {bucket.value}, already classified in enrichment)"
+                )
+                repo.content_hash = repo.compute_content_hash()
+
+            elif bucket == ProcessingBucket.FILL_GAPS:
+                logger.info(
+                    f"[{i + 1}/{total}] Fill-gaps repo {repo.owner}/{repo.repo}"
+                )
+                if not repo.has_classification:
+                    classify_repo(repo)  # fallback for repos that enrichment missed
+                repo.content_hash = repo.compute_content_hash()
+
+            elif bucket == ProcessingBucket.SKIP:
+                logger.debug(
+                    f"[{i + 1}/{total}] Skipping repo {repo.owner}/{repo.repo}"
+                )
+                # Carry over existing state from routing decision
+                if decision.existing_repo:
+                    repo = decision.existing_repo
+
+            elif bucket == ProcessingBucket.PROTECTED:
+                logger.debug(
+                    f"[{i + 1}/{total}] Protected repo {repo.owner}/{repo.repo}"
+                )
+                if decision.existing_repo:
+                    repo = decision.existing_repo
+
+        except Exception as e:
+            logger.warning(
+                f"Failed to process repo {repo.owner}/{repo.repo}: {e}"
+            )
+
+        results.append(repo)
+
+    logger.info(f"Repo processing complete: {len(results)} repos processed")
     return results
 
 

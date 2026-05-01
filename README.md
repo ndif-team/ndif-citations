@@ -29,9 +29,11 @@ python -m ndif_citations run
 
 | Command | Description |
 |---------|-------------|
-| `python -m ndif_citations run` | Full pipeline: discover, enrich, process, output |
-| `python -m ndif_citations run --fresh` | Full pipeline, ignoring existing output |
-| `python -m ndif_citations discover` | Discovery only — list papers, no LLM calls |
+| `python -m ndif_citations run` | Full pipeline: discover papers + repos, enrich, process, output |
+| `python -m ndif_citations run --fresh` | Full pipeline, ignoring all existing output |
+| `python -m ndif_citations run --skip-github` | Papers only — skip GitHub repo discovery |
+| `python -m ndif_citations run --skip-papers` | GitHub repos only — skip S2/OpenAlex/LLM |
+| `python -m ndif_citations discover` | Discovery only — list papers and repos, no LLM calls |
 | `python -m ndif_citations add <url>` | Process a single paper by URL and append to output |
 
 All commands accept `--output-dir <path>` and `--verbose` flags.
@@ -50,9 +52,13 @@ Use `--fresh` to rebuild from scratch.
 
 ```
 output/
-├── research-papers.json       # Website-ready (matches ResearchPaper TS interface)
-├── research-papers-full.json  # Full metadata — persistent state between runs
-├── research-papers.csv        # Extended columns for spreadsheet / grant reporting
+├── research-papers.json       # Website-ready papers (matches ResearchPaper TS interface)
+├── research-papers-full.json  # Full paper metadata — persistent state between runs
+├── research-papers.csv        # Extended paper columns for spreadsheet / grant reporting
+├── github-repos.json          # Website-ready GitHub repos (all nnsight dependents)
+├── github-repos-full.json     # Full repo metadata — persistent state between runs
+├── github-repos.csv           # Extended repo columns
+├── research-data.xlsx         # Two-sheet spreadsheet: "Papers" + "GitHub"
 ├── images/                    # Extracted paper thumbnails
 └── raw/                       # Raw API responses for debugging
 ```
@@ -85,6 +91,7 @@ ndif-citations/
 | `LLM_API_KEY` | For `run` | API key for the LLM provider |
 | `LLM_MODEL` | For `run` | Model identifier |
 | `OPENALEX_EMAIL` | No | Email for OpenAlex polite pool |
+| `GITHUB_TOKEN` | No | GitHub personal access token — upgrades GitHub API from 60 req/hr (anonymous) to 5000 req/hr. Without it, activity fields (stars, forks, last_commit) may be null for repos beyond the first ~30 per run. No scopes needed for public repos. |
 
 LLM keys are only needed for `run` (summaries + classification). The `discover` command works without them.
 
@@ -122,7 +129,27 @@ The pipeline runs in four phases. The [architecture diagram](#ndif-citation-trac
 
 - **Semantic Scholar** — traverses the citation graph of the [NDIF seed paper](https://arxiv.org/abs/2407.14561) (ICLR 2025). Catches every paper that formally cites NDIF/NNsight.
 - **OpenAlex** — fulltext search across millions of papers. Catches papers that mention NDIF in their text but may not have a formal citation yet.
-- **GitHub dependents** — scrapes the [nnsight dependents page](https://github.com/ndif-team/nnsight/network/dependents), fetches each repo's README via the GitHub API, and extracts arXiv links. Catches code users who haven't published or cited yet.
+- **GitHub dependents** — scrapes the [nnsight dependents page](https://github.com/ndif-team/nnsight/network/dependents) and captures **every non-fork, non-archived repo** as a first-class `DiscoveredRepo` entity. READMEs are scanned for arXiv links (for cross-linking to papers) and NDIF keywords (for classification). Activity metadata (stars, forks, last commit, language, license, topics) is fetched via the GitHub API. Stale repos (404 / renamed / archived since last run) are automatically removed from the output on the next run.
+
+**GitHub Repo Classification**
+
+After scraping the GitHub dependents list, each repo is enriched via the GitHub API (stars, forks, description, parent fork info). The README is fetched **once** per repo during enrichment. The following classification happens in a single pass:
+
+- **`repo_type` tagging** — every repo is tagged as one of:
+  - `research` — uses NDIF infrastructure (`uses_ndif` category), has a linked paper, or has ≥6 stars and a description
+  - `course` — forked from a known course source (e.g. `callummcdougall/ARENA_3.0`), matches course name patterns (ARENA, MATS, CBAI), or lost a template-inherited paper link while having 0 stars and no description
+  - `experiment` — everything else (default)
+
+- **Linked paper detection** — `linked_paper_url` is set using a 5-tier priority:
+  1. BibTeX block in README (most reliable — author-placed citation)
+  2. arXiv ID under a `## Citation` / `## Paper` / `## Reference` section header
+  3. Exactly one post-2020 arXiv ID in the entire README
+  4. Most recent post-2020 arXiv ID when multiple exist
+  5. `null` — no paper detected
+
+- **Shared-paper template detection** — After enrichment, a cross-repo pass detects when ≥ `SHARED_PAPER_THRESHOLD` (default: 5) repos share the same `linked_paper_url`. This signals template-inherited links (e.g. 22+ ARENA course forks all pointing to the same paper). Only the highest-star repo keeps the link; all others are cleared. These unlinked repos with 0 stars and no description are tagged `course`.
+
+- **Checkpoint resilience** — The GitHub dependents HTML scrape persists each page to `output/raw/github_dependents_checkpoint/page_{n}.json` immediately after scraping. If the scrape is interrupted (timeout, network error), the next run resumes from the last successful page. The checkpoint directory is deleted only on full successful completion.
 
 Results are deduplicated by arXiv ID, DOI, and title similarity (>90% via `rapidfuzz`). When duplicates exist across sources, metadata is merged — S2 preferred for structured fields, OpenAlex for affiliations.
 
@@ -172,6 +199,7 @@ New results merge into existing `research-papers-full.json`:
 - Fills metadata gaps on existing papers
 - Detects **venue upgrades** (arXiv preprint → conference acceptance)
 - Respects `manual_override` — hand-edited papers are never overwritten
+- **GitHub repo staleness** — repos that return 404, have been renamed, or become archived since the last run are automatically purged from `github-repos-full.json`. Rate-limit responses never trigger removal (transient API budget issues don't delete real data).
 
 </details>
 
@@ -255,6 +283,22 @@ Controls venue formatting, peer-review detection, and venue-type classification:
 ```
 
 Matching is case-insensitive substring — adding `"WCCI"` matches `"2026 IEEE WCCI"`, etc.
+
+</details>
+
+<details>
+<summary><strong>GitHub repo classification</strong> — <code>config.py</code></summary>
+
+<br/>
+
+Controls repo tagging, linked-paper detection, and shared-paper template cleanup:
+
+| Config constant | Default | Description |
+|---|---|---|
+| `EXCLUDED_GITHUB_REPOS` | `{"ndif-team/nnsight"}` | Repos to exclude entirely from output (e.g. the library itself) |
+| `KNOWN_COURSE_SOURCES` | `{"callummcdougall/ARENA_3.0"}` | Repos whose forks are tagged `course`. Extend as new course templates are discovered. |
+| `COURSE_NAME_PATTERNS` | `["ARENA", "MATS", "CBAI"]` | Case-insensitive substrings in repo name or description that signal course origin |
+| `SHARED_PAPER_THRESHOLD` | `5` | Minimum number of repos sharing a `linked_paper_url` to trigger template detection |
 
 </details>
 
