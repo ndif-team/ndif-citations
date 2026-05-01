@@ -543,17 +543,129 @@ def debug(paper_id: str, output_dir: str | None, out_file: str | None) -> None:
 
     # --- 7. Final verdict ---
     _print("## 7. Final verdict")
-    _print(f"   detail_category:     {paper.detail_category.value}")
-    _print(f"   category_confidence: {paper.category_confidence}")
-    _print(f"   unclassified_reason: {paper.unclassified_reason!r}")
-    _print(f"   has_summary:         {paper.has_summary}")
-    _print(f"   has_classification:  {paper.has_classification}")
-    _print(f"   has_thumbnail:       {paper.has_thumbnail}")
+    _print(f"   detail_category:      {paper.detail_category.value}")
+    _print(f"   category_confidence:  {paper.category_confidence}")
+    _print(f"   unclassified_reason:  {paper.unclassified_reason!r}")
+    _print(f"   classification_signal: {paper.classification_signal!r}")
+    _print(f"   has_summary:          {paper.has_summary}")
+    _print(f"   has_classification:   {paper.has_classification}")
+    _print(f"   has_thumbnail:        {paper.has_thumbnail}")
     _print()
 
     if out_file:
         sink.close()
         console.print(f"  Trace written to [cyan]{out_file}[/cyan]")
+
+
+@cli.command()
+@click.option("--ids", default=None, help="Comma-separated arXiv IDs, DOIs, or URLs to reclassify")
+@click.option("--output-dir", "-o", default=None, help="Custom output directory")
+@click.option("--dry-run", is_flag=True, help="Print changes without writing files")
+def reclassify(ids: str | None, output_dir: str | None, dry_run: bool) -> None:
+    """Re-run classify_category on existing papers without a full pipeline run.
+
+    Useful to apply new pre-filter fixes to already-classified papers.
+    Papers with manual_override=True are skipped.
+    """
+    from ndif_citations.models import DetailCategory
+    from ndif_citations.output import load_existing_papers, write_outputs
+    from ndif_citations.pdf_cache import get_cached_pdf
+    from ndif_citations.process import classify_category
+    from ndif_citations.utils import normalize_arxiv_id, extract_arxiv_id_from_url
+    from ndif_citations import config as cfg
+    from ndif_citations.models import PipelineRun
+
+    _setup_logging(verbose=True)
+
+    out = cfg.get_output_dir(output_dir)
+    papers = load_existing_papers(out)
+
+    if not papers:
+        console.print(f"[bold red]No papers found in {out}/research-papers-full.json[/bold red]")
+        return
+
+    # Build lookup: all possible IDs → paper index
+    def _resolve_id(paper_id: str) -> list[int]:
+        """Return indices of papers matching the given ID."""
+        matches: list[int] = []
+        if paper_id.startswith("http"):
+            candidate_arxiv = extract_arxiv_id_from_url(paper_id)
+        else:
+            candidate_arxiv = normalize_arxiv_id(paper_id)
+
+        for i, p in enumerate(papers):
+            if candidate_arxiv and p.arxiv_id == candidate_arxiv:
+                matches.append(i)
+            elif paper_id.startswith("10.") and p.doi == paper_id:
+                matches.append(i)
+            elif p.url == paper_id:
+                matches.append(i)
+        return matches
+
+    # Determine which papers to reclassify
+    if ids:
+        id_list = [x.strip() for x in ids.split(",") if x.strip()]
+        target_indices: list[int] = []
+        for paper_id in id_list:
+            found = _resolve_id(paper_id)
+            if not found:
+                console.print(f"  [yellow]WARNING:[/yellow] Paper not found for ID {paper_id!r}")
+            else:
+                target_indices.extend(found)
+    else:
+        target_indices = list(range(len(papers)))
+
+    if not target_indices:
+        console.print("[yellow]No papers to reclassify.[/yellow]")
+        return
+
+    console.print(
+        f"\n[bold cyan]Reclassify[/bold cyan] — "
+        f"{len(target_indices)} paper(s) targeted"
+        f"{' [DRY RUN]' if dry_run else ''}\n"
+    )
+
+    changes: list[tuple[str, str, str, str | None]] = []  # (title, old, new, signal)
+
+    for idx in target_indices:
+        paper = papers[idx]
+
+        if paper.manual_override:
+            console.print(f"  [dim]SKIP (manual_override=True):[/dim] {paper.title[:60]}")
+            continue
+
+        old_cat = paper.detail_category.value
+        pdf_path = get_cached_pdf(paper, out)
+
+        new_cat, new_conf = classify_category(paper, out, pdf_path=pdf_path)
+
+        if new_cat != paper.detail_category or new_conf != paper.category_confidence:
+            signal = paper.classification_signal
+            changes.append((paper.title, old_cat, new_cat.value, signal))
+            if not dry_run:
+                paper.detail_category = new_cat
+                paper.category_confidence = new_conf
+                paper.has_classification = new_cat != DetailCategory.UNCLASSIFIED
+
+    # Print diff
+    if changes:
+        console.print(f"\n[bold]Changes ({len(changes)}):[/bold]")
+        for title, old, new, signal in changes:
+            sig_str = f" (signal: {signal})" if signal else " (signal: llm)"
+            console.print(
+                f"  {title[:60]}: [yellow]{old}[/yellow] → [green]{new}[/green]{sig_str}"
+            )
+    else:
+        console.print("\n[dim]No classification changes.[/dim]")
+
+    if not dry_run and changes:
+        run = PipelineRun()
+        write_outputs(papers, out, run)
+        console.print(
+            f"\n[green]Wrote updated research-papers-full.json and research-papers.json[/green]"
+        )
+    elif dry_run:
+        console.print("\n[dim]Dry run — no files written.[/dim]")
 
 
 if __name__ == "__main__":

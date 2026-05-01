@@ -1,0 +1,6 @@
+We present a study of attention head superposition using activation patching.
+All experiments were performed using standard PyTorch infrastructure.
+
+Acknowledgments
+We thank the team working on NNsight which is the python package we used to implement
+all our experiments. We also acknowledge support from the NSF.

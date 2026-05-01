@@ -1,0 +1,6 @@
+{
+  "expected_category": "uses_ndif",
+  "expected_keyword_hits_min": 2,
+  "expected_keyword_hits_max": 5,
+  "notes": "Acks thank NDIF but body also confirms usage — should reach LLM and classify as uses_ndif"
+}

@@ -1,0 +1,6 @@
+We introduce a new approach to mechanistic interpretability that avoids the overhead
+of existing frameworks.
+
+Removing the dependency on nnsight (only used for collecting MLP neuron activations)
+and replacing it with vanilla torch hooks significantly reduced our runtime by 40%.
+Our final implementation uses standard PyTorch hooks throughout.

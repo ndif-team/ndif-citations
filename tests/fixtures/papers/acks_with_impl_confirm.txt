@@ -1,0 +1,6 @@
+We propose a new mechanistic interpretability method for circuit discovery.
+All experiments were conducted using NDIF cluster with nnsight for activation access.
+
+Acknowledgments
+We thank NDIF for providing compute resources for our experiments. We also thank
+the anonymous reviewers for their constructive feedback.

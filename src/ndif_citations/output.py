@@ -604,9 +604,15 @@ def print_report(
     referencing = sum(1 for p in papers if p.detail_category.value == "referencing")
 
     console.print("[bold]Results:[/bold]")
+    pre_filter_referencing = sum(
+        1 for p in papers
+        if p.detail_category.value == "referencing" and p.classification_signal
+    )
     console.print(f"  > {using_ndif} papers categorized as [green]\"uses_ndif\"[/green]")
     console.print(f"  > {using_nnsight} papers categorized as [green]\"uses_nnsight\"[/green]")
     console.print(f"  > {referencing} papers categorized as [yellow]\"referencing\"[/yellow]")
+    if pre_filter_referencing > 0:
+        console.print(f"    ({pre_filter_referencing} via pre-filter, no LLM call)")
     if unclassified > 0:
         console.print(f"  ! {unclassified} papers need manual classification")
     console.print(f"  > {run.thumbnails_extracted} thumbnails extracted")

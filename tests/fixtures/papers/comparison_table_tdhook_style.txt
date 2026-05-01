@@ -1,0 +1,9 @@
+We compare TDHook against existing mechanistic interpretability frameworks.
+
+Table 1: Capabilities of neural network intervention frameworks.
+captum ✓ ✗ ✗ ∼ 35+ 93%
+nnsight ✓ ✓ ✓ ✗ 0 -
+tdhook ✓ ✓ ✓ ✓ 0 -
+
+Related Work. NNsight [Smith et al., 2024] provides a unified interface for model
+interventions. Our framework extends this design with additional circuit analysis tools.

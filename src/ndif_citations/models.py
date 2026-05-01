@@ -92,6 +92,9 @@ class DiscoveredPaper(BaseModel):
         ]
     ] = None
 
+    # Pre-filter classification path (set when a pre-filter classifies without LLM; None otherwise)
+    classification_signal: Optional[str] = None
+
     # Routing metadata for debugging
     processing_bucket: str = "UNKNOWN"  # NEW, REPROCESS, FILL_GAPS, SKIP, PROTECTED
 

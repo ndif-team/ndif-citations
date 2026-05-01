@@ -215,3 +215,29 @@ class TestFullDictRoundTrip:
         d = p.to_full_dict()
         assert "website_category" in d
         assert d["website_category"] == "used-nnsight"
+
+    def test_classification_signal_in_full_dict(self):
+        p = make_paper()
+        p.classification_signal = "pre_filter:comparison_table"
+        d = p.to_full_dict()
+        assert "classification_signal" in d
+        assert d["classification_signal"] == "pre_filter:comparison_table"
+
+    def test_classification_signal_not_in_website_dict(self):
+        p = make_paper()
+        p.classification_signal = "pre_filter:negative_evidence"
+        d = p.to_website_dict()
+        assert "classification_signal" not in d
+
+    def test_classification_signal_round_trip(self):
+        p = make_paper()
+        p.classification_signal = "pre_filter:acks_only_thank_you"
+        d = p.to_full_dict()
+        restored = DiscoveredPaper.model_validate(d)
+        assert restored.classification_signal == "pre_filter:acks_only_thank_you"
+
+    def test_classification_signal_none_by_default(self):
+        p = make_paper()
+        assert p.classification_signal is None
+        d = p.to_full_dict()
+        assert d["classification_signal"] is None

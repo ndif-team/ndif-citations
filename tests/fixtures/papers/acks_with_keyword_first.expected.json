@@ -1,0 +1,6 @@
+{
+  "expected_category": "uses_nnsight",
+  "expected_keyword_hits_min": 1,
+  "expected_keyword_hits_max": 3,
+  "notes": "NNsight appears before 'we used' in acks — Pattern B fires, so window reaches LLM"
+}

@@ -91,6 +91,89 @@ def _fallback_summary(abstract: str) -> str:
 # 3b. Category classification
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# 3b-i. Pre-filter helpers (no LLM needed for these patterns)
+# ---------------------------------------------------------------------------
+
+_NEGATIVE_RE = re.compile(
+    r'removing\s+(?:the\s+)?(?:dependency\s+on\s+)?(?:nnsight|ndif)'
+    r'|removed?\s+(?:the\s+)?(?:nnsight|ndif)(?:\s+dependency)?'
+    r'|rather\s+than\s+(?:nnsight|ndif)'
+    r'|instead\s+of\s+(?:nnsight|ndif)'
+    r'|without\s+(?:using\s+)?(?:nnsight|ndif)'
+    r'|no\s+longer\s+(?:uses?|using)\s+(?:nnsight|ndif)'
+    r'|alternative\s+to\s+(?:nnsight|ndif)'
+    r'|compared\s+to\s+(?:alternatives?\s+like\s+)?(?:nnsight|ndif)',
+    re.IGNORECASE,
+)
+
+_TABLE_CHARS_RE = re.compile(r'[✓✗∼]')
+
+_ACK_THANK_RE = re.compile(
+    r'\b(?:thank|acknowledge|grateful|supported\s+by|funded\s+by|provided\s+by)\b'
+    r'.{0,60}'
+    r'\b(?:ndif|nnsight|national\s+deep\s+inference)\b',
+    re.IGNORECASE | re.DOTALL,
+)
+
+_IMPL_CONFIRM_RE = re.compile(
+    r'(?:'
+    r'\b(?:implement|use[sd]?|using|appl(?:y|ied)|ran|conduct(?:ed)?|perform)[^.]{0,60}\b(?:nnsight|ndif)\b'
+    r'|'
+    r'\b(?:nnsight|ndif)\b[^.]{0,150}\b(?:is|was|we)\s+used\b'
+    r'|'
+    r'\b(?:nnsight|ndif)\b[^.]{0,100}to\s+implement\b'
+    r')',
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _has_negative_evidence(window: str) -> bool:
+    """Return True if the context window explicitly states nnsight/NDIF was removed or not used."""
+    return bool(_NEGATIVE_RE.search(window))
+
+
+def _context_is_comparison_table(window: str) -> bool:
+    """Return True if the context window looks like a capability-comparison table row."""
+    return len(_TABLE_CHARS_RE.findall(window)) >= 3
+
+
+def _is_ack_only_thank_you(window: str) -> bool:
+    """Return True if window is an acknowledgment thank-you without implementation confirmation."""
+    return bool(_ACK_THANK_RE.search(window)) and not bool(_IMPL_CONFIRM_RE.search(window))
+
+
+def _apply_prefilters(windows: list[str], paper) -> tuple[list[str], Optional[str]]:
+    """Filter context windows through pre-filter rules.
+
+    Returns (surviving_windows, signal) where signal is set only if ALL windows were filtered.
+    Applies negative evidence first, then comparison-table, then acks-only.
+    """
+    surviving = []
+    first_signal: Optional[str] = None
+
+    for window in windows:
+        if _has_negative_evidence(window):
+            if first_signal is None:
+                first_signal = "pre_filter:negative_evidence"
+        elif _context_is_comparison_table(window):
+            if first_signal is None:
+                first_signal = "pre_filter:comparison_table"
+        elif _is_ack_only_thank_you(window):
+            if first_signal is None:
+                first_signal = "pre_filter:acks_only_thank_you"
+        else:
+            surviving.append(window)
+
+    if not surviving:
+        return [], first_signal
+    return surviving, None
+
+
+# ---------------------------------------------------------------------------
+# 3b-ii. Classification prompt + LLM call
+# ---------------------------------------------------------------------------
+
 CATEGORY_SYSTEM_PROMPT = """Classify how this paper relates to NDIF/NNsight based on the evidence provided.
 
 Reply with ONLY one of these exact strings:
@@ -156,6 +239,21 @@ def classify_category(paper: DiscoveredPaper, output_dir: Path,
         f"Classifying '{paper.title}': context_source={context_source}, "
         f"context_length={len(context)}"
     )
+
+    # Pre-filters: split context into windows and filter each one
+    windows = context.split("\n---\n")
+    surviving_windows, signal = _apply_prefilters(windows, paper)
+    if not surviving_windows:
+        # All windows eliminated by pre-filter — classify without LLM
+        confidence = 0.9 if signal == "pre_filter:negative_evidence" else 0.85
+        paper.classification_signal = signal
+        logger.debug(
+            f"Pre-filter '{signal}' matched all windows for '{paper.title}' — REFERENCING"
+        )
+        return DetailCategory.REFERENCING, confidence
+
+    # Some or all windows survived — rebuild context for LLM
+    context = "\n---\n".join(surviving_windows)
 
     # Use LLM to classify
     client = _get_llm_client()
