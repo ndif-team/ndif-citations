@@ -1,0 +1,11 @@
+We validate our circuit discovery method on multiple benchmarks. For large-scale
+experiments we leverage shared GPU infrastructure for open-weight models.
+
+@article{bau2024nnsight,
+  title={NNsight and NDIF: Democratizing Access to Open-Weight Foundation Model Internals},
+  author={Bau, David and others},
+  journal={ICLR 2025},
+  year={2025},
+  eprint={2407.14561},
+  archivePrefix={arXiv}
+}

@@ -1,0 +1,8 @@
+All activation patching experiments were implemented using the NNsight library (version 0.3).
+We import nnsight and use nnsight.trace() to hook into intermediate layers of the model.
+The following code illustrates our approach:
+
+  from nnsight import LanguageModel
+  model = LanguageModel("meta-llama/Llama-3-8b")
+  with model.trace("The Eiffel Tower is in") as tracer:
+      hidden = model.model.layers[12].output[0].save()

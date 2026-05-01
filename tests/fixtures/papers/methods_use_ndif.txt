@@ -1,0 +1,5 @@
+We conducted all experiments on the NDIF cluster hosted at Northeastern University.
+Models were accessed via the NDIF infrastructure at ndif.us, which provides shared
+GPU resources for mechanistic interpretability research. Specifically, we used NDIF to
+run inference on Llama-3 70B by submitting jobs through the NNsight API connected to
+the NDIF backend.

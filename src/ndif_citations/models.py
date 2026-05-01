@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 from datetime import date, datetime
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -82,7 +82,17 @@ class DiscoveredPaper(BaseModel):
     has_thumbnail: bool = False
     has_affiliations: bool = False
 
-    # Routing metadata for debugging 
+    # Classification diagnostics
+    unclassified_reason: Optional[
+        Literal[
+            "no_evidence_extractable",
+            "no_keywords_anywhere",
+            "llm_returned_unclassified",
+            "llm_unparseable",
+        ]
+    ] = None
+
+    # Routing metadata for debugging
     processing_bucket: str = "UNKNOWN"  # NEW, REPROCESS, FILL_GAPS, SKIP, PROTECTED
 
     def compute_hash(self) -> str:

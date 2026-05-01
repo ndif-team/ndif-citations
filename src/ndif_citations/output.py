@@ -291,10 +291,11 @@ def write_outputs(papers: list[DiscoveredPaper], output_dir: Path, run: Pipeline
     run.thumbnails_missing = len(missing)
     run.missing_thumbnails = missing
 
+    from ndif_citations.models import DetailCategory
     run.low_confidence = [
         f'"{p.title}" -- classified as "{p.detail_category.value}" (confidence: {p.category_confidence:.2f})'
         for p in papers
-        if p.category_confidence < 0.7
+        if p.category_confidence < 0.7 and p.detail_category != DetailCategory.UNCLASSIFIED
     ]
 
     # 1. Website JSON (matches ResearchPaper TS interface)
@@ -615,7 +616,7 @@ def print_report(
 
     # Unclassified papers with reasons
     unclassified_papers = [
-        (p.title, "no_pdf" if not p.pdf_url and not p.arxiv_id else "no_keywords")
+        (p.title, p.unclassified_reason or "unknown")
         for p in papers
         if p.detail_category.value == "unclassified"
     ]
@@ -627,12 +628,10 @@ def print_report(
             console.print(f" ... and {len(unclassified_papers) - 15} more")
         console.print()
 
-# Low confidence
+    # Low confidence
     if run.low_confidence:
         console.print("[bold yellow]Category classifications with low confidence:[/bold yellow]")
         for i, msg in enumerate(run.low_confidence[:10], 1):
-            if "UNCLASSIFIED" in msg:
-                continue
             console.print(f"  {i}. {msg}")
         console.print()
 

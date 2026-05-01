@@ -1,0 +1,6 @@
+{
+  "expected_category": "uses_nnsight",
+  "expected_keyword_hits_min": 3,
+  "expected_keyword_hits_max": 8,
+  "notes": "Methods section with import nnsight and nnsight.trace usage"
+}

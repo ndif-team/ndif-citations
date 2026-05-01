@@ -1,0 +1,5 @@
+In our initial implementation we used nnsight for activation access. However,
+we found that nnsight introduced significant overhead for our use case.
+We therefore removed the nnsight dependency and implemented a lighter-weight
+hook-based approach directly in PyTorch rather than nnsight. Our final system
+does not use NNsight.

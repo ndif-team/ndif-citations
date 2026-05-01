@@ -1,0 +1,6 @@
+{
+  "expected_category": "referencing",
+  "expected_keyword_hits_min": 2,
+  "expected_keyword_hits_max": 5,
+  "notes": "NNsight/NDIF appear in a comparison table — should be referencing. Current pipeline may false-positive as uses_nnsight."
+}

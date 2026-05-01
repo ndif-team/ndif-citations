@@ -1,0 +1,6 @@
+{
+  "expected_category": "referencing",
+  "expected_keyword_hits_min": 3,
+  "expected_keyword_hits_max": 8,
+  "notes": "nnsight mentioned but negated — removed dependency, rather than nnsight. Current pipeline may false-positive as uses_nnsight."
+}

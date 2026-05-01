@@ -1,0 +1,6 @@
+{
+  "expected_category": "uses_ndif",
+  "expected_keyword_hits_min": 2,
+  "expected_keyword_hits_max": 6,
+  "notes": "Methods section with direct NDIF cluster/infrastructure usage"
+}

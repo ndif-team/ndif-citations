@@ -1,0 +1,5 @@
+Several recent tools have been developed for mechanistic interpretability.
+In related work, NDIF (Bau et al., 2024) provides a shared compute infrastructure
+for AI safety research. Similarly, NNsight offers a unified interface for model
+intervention. Our work differs from these tools in that we focus on automated
+circuit discovery rather than providing a general-purpose infrastructure.

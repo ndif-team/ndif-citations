@@ -340,19 +340,31 @@ def extract_ndif_context(pdf_path: Path, keywords: list[str] | None = None,
     if not full_text:
         return "No text could be extracted from the PDF."
 
+    logger.debug(f"extract_ndif_context: text length={len(full_text)} chars")
+
     text_lower = full_text.lower()
     contexts: list[str] = []
 
     for kw in keywords:
+        kw_lower = kw.lower()
+        positions: list[int] = []
         idx = 0
         while True:
-            idx = text_lower.find(kw.lower(), idx)
+            idx = text_lower.find(kw_lower, idx)
             if idx == -1:
                 break
+            positions.append(idx)
             start = max(0, idx - window)
             end = min(len(full_text), idx + len(kw) + window)
             contexts.append(full_text[start:end])
             idx += len(kw)
+        if positions:
+            logger.debug(
+                f"  keyword '{kw}': {len(positions)} occurrence(s), "
+                f"first 5 positions: {positions[:5]}"
+            )
+
+    logger.debug(f"extract_ndif_context: {len(contexts)} context windows produced (cap={max_excerpts})")
 
     if not contexts:
         return "No direct mentions of NDIF or nnsight found in the paper text."

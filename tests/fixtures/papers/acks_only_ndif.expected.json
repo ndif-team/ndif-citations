@@ -1,0 +1,6 @@
+{
+  "expected_category": "referencing",
+  "expected_keyword_hits_min": 1,
+  "expected_keyword_hits_max": 3,
+  "notes": "NDIF appears only in Acknowledgments — should be referencing not uses_ndif"
+}

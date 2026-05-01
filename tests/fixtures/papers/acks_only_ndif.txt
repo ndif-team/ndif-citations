@@ -1,0 +1,6 @@
+We propose a new approach to circuit discovery using automated interpretability tools.
+Our method achieves state-of-the-art results on the IOI benchmark.
+
+Acknowledgments
+We thank the National Deep Inference Fabric (NDIF) for providing compute resources
+used in preliminary experiments. We also thank reviewers for their helpful comments.

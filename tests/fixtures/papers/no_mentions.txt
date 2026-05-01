@@ -1,0 +1,5 @@
+We study in-context learning in large language models through the lens of
+gradient descent. Our theoretical analysis shows that attention-based transformers
+implement a form of implicit gradient descent on the input context. Experiments
+on GPT-2 and Llama-2 confirm our theoretical predictions. We use TransformerLens
+for all activation patching experiments.

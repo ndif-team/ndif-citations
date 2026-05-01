@@ -400,5 +400,161 @@ def add(url: str, output_dir: str | None) -> None:
     console.print()
 
 
+@cli.command()
+@click.argument("paper_id")
+@click.option("--output-dir", "-o", default=None, help="Custom output directory")
+@click.option("--out", "out_file", default=None, help="Write trace to file instead of stdout")
+def debug(paper_id: str, output_dir: str | None, out_file: str | None) -> None:
+    """Step-by-step trace for a single paper. Read-only against the cache.
+
+    PAPER_ID can be an arXiv ID (e.g. 2407.14561), a DOI, or a full URL.
+    """
+    import sys
+    from rich.panel import Panel
+
+    from ndif_citations.output import load_existing_papers
+    from ndif_citations.utils import (
+        extract_ndif_context,
+        extract_text_from_pdf,
+        normalize_arxiv_id,
+        extract_arxiv_id_from_url,
+    )
+    from ndif_citations.pdf_cache import get_cached_pdf
+    from ndif_citations import config as cfg
+
+    _setup_logging(verbose=True)  # debug implies --verbose
+
+    out = cfg.get_output_dir(output_dir)
+
+    # Determine target key from paper_id arg
+    if paper_id.startswith("http"):
+        candidate_arxiv = extract_arxiv_id_from_url(paper_id)
+    else:
+        candidate_arxiv = normalize_arxiv_id(paper_id)
+
+    # Output sink
+    if out_file:
+        sink = open(out_file, "w")
+    else:
+        sink = sys.stdout
+
+    def _print(text: str = "") -> None:
+        print(text, file=sink)
+
+    _print(f"\n{'='*60}")
+    _print(f"  debug trace: {paper_id}")
+    _print(f"{'='*60}\n")
+
+    # --- 1. Identifiers ---
+    papers = load_existing_papers(out)
+    paper = None
+    for p in papers:
+        if candidate_arxiv and p.arxiv_id == candidate_arxiv:
+            paper = p
+            break
+        if paper_id.startswith("10.") and p.doi == paper_id:
+            paper = p
+            break
+
+    if paper is None:
+        _print(f"[WARNING] Paper not found in {out}/research-papers-full.json")
+        _print(f"          arXiv ID attempted: {candidate_arxiv!r}")
+        if out_file:
+            sink.close()
+        return
+
+    _print("## 1. Identifiers")
+    _print(f"   Title:     {paper.title}")
+    _print(f"   arXiv ID:  {paper.arxiv_id}")
+    _print(f"   DOI:       {paper.doi}")
+    _print(f"   URL:       {paper.url}")
+    _print(f"   GitHub:    {paper.github_repo_url}")
+    _print()
+
+    # --- 2. PDF cache check ---
+    _print("## 2. PDF cache check")
+    pdf_path = get_cached_pdf(paper, out)
+    if pdf_path and pdf_path.exists():
+        stat = pdf_path.stat()
+        magic = pdf_path.read_bytes()[:4]
+        _print(f"   Cache path:     {pdf_path}")
+        _print(f"   File size:      {stat.st_size:,} bytes")
+        _print(f"   PDF magic:      {magic!r}  ({'OK' if magic == b'%PDF' else 'BAD - not a PDF'})")
+        import datetime
+        _print(f"   Last modified:  {datetime.datetime.fromtimestamp(stat.st_mtime)}")
+    else:
+        _print(f"   [NO CACHED PDF FOUND]")
+        pdf_path = None
+    _print()
+
+    # --- 3. Text extraction ---
+    _print("## 3. Text extraction")
+    if pdf_path:
+        full_text = extract_text_from_pdf(pdf_path)
+        _print(f"   Characters extracted: {len(full_text):,}")
+        _print(f"   First 300 chars:")
+        _print(f"   {full_text[:300]!r}")
+        _print(f"   Last 300 chars:")
+        _print(f"   {full_text[-300:]!r}")
+    else:
+        full_text = ""
+        _print("   [Skipped — no PDF]")
+    _print()
+
+    # --- 4. Keyword hits ---
+    _print("## 4. Keyword hits")
+    if full_text:
+        text_lower = full_text.lower()
+        for kw in cfg.NDIF_KEYWORDS:
+            positions = []
+            idx = 0
+            while True:
+                idx = text_lower.find(kw.lower(), idx)
+                if idx == -1:
+                    break
+                positions.append(idx)
+                idx += len(kw)
+            _print(f"   {kw!r}: {len(positions)} occurrence(s)")
+            for pos in positions[:3]:
+                start = max(0, pos - 100)
+                end = min(len(full_text), pos + len(kw) + 100)
+                _print(f"     pos={pos}: ...{full_text[start:end]!r}...")
+    else:
+        _print("   [No text available]")
+    _print()
+
+    # --- 5. Abstract scan ---
+    _print("## 5. Abstract scan")
+    if paper.abstract:
+        abstract_lower = paper.abstract.lower()
+        matched_kws = [kw for kw in cfg.NDIF_KEYWORDS if kw.lower() in abstract_lower]
+        _print(f"   Abstract length: {len(paper.abstract)} chars")
+        _print(f"   Keywords matched in abstract: {matched_kws}")
+    else:
+        _print("   [No abstract available]")
+    _print()
+
+    # --- 6. Classification (cached state — no re-call) ---
+    _print("## 6. Classification (cached state)")
+    _print(f"   detail_category:      {paper.detail_category.value}")
+    _print(f"   category_confidence:  {paper.category_confidence}")
+    _print(f"   [Re-classification skipped in debug mode — use process_papers to re-run]")
+    _print()
+
+    # --- 7. Final verdict ---
+    _print("## 7. Final verdict")
+    _print(f"   detail_category:     {paper.detail_category.value}")
+    _print(f"   category_confidence: {paper.category_confidence}")
+    _print(f"   unclassified_reason: {paper.unclassified_reason!r}")
+    _print(f"   has_summary:         {paper.has_summary}")
+    _print(f"   has_classification:  {paper.has_classification}")
+    _print(f"   has_thumbnail:       {paper.has_thumbnail}")
+    _print()
+
+    if out_file:
+        sink.close()
+        console.print(f"  Trace written to [cyan]{out_file}[/cyan]")
+
+
 if __name__ == "__main__":
     cli()

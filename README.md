@@ -302,6 +302,10 @@ Controls repo tagging, linked-paper detection, and shared-paper template cleanup
 
 </details>
 
+## Development
+
+Run tests: `pytest tests/` (after `pip install -e ".[dev]"`).
+
 ## License
 
 Internal tool for [NDIF](https://ndif.us) — an NSF-funded project at Northeastern University.

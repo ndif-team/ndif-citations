@@ -118,11 +118,14 @@ def classify_category(paper: DiscoveredPaper, output_dir: Path,
         pdf_path: Pre-downloaded PDF path (avoids re-downloading).
 
     Returns (category, confidence) where confidence is 0.0-1.0.
+    Sets paper.unclassified_reason when returning UNCLASSIFIED.
     """
     # Try to extract context from PDF (use pre-downloaded if available)
     context = ""
+    context_source = "none"
     if pdf_path and pdf_path.exists():
         context = extract_ndif_context(pdf_path, window=config.CONTEXT_WINDOW)
+        logger.debug(f"PDF text extracted for '{paper.title}': context length={len(context)}")
 
     # If no PDF context, try using abstract
     if not context or "No direct mentions" in context:
@@ -132,35 +135,51 @@ def classify_category(paper: DiscoveredPaper, output_dir: Path,
             has_mention = any(kw.lower() in abstract_lower for kw in config.NDIF_KEYWORDS)
             if has_mention:
                 context = paper.abstract
+                context_source = "abstract"
+                logger.debug(f"Using abstract as context for '{paper.title}'")
             else:
-                # No mentions at all — mark as UNCLASSIFIED (be honest about evidence)
+                # No mentions anywhere — abstract checked, no keywords
                 logger.info(f"No NDIF/nnsight mentions found for '{paper.title}' — marking as UNCLASSIFIED")
+                logger.debug(f"Context source: {'pdf (no mentions)' if pdf_path else 'none'} + abstract (no keywords)")
+                paper.unclassified_reason = "no_keywords_anywhere"
                 return DetailCategory.UNCLASSIFIED, 0.0
         else:
-            # No PDF and no abstract — cannot verify mentions
-            logger.info(f"No PDF or abstract for '{paper.title}' — cannot verify mentions, marking as UNCLASSIFIED")
+            # No usable PDF context and no abstract
+            logger.info(f"No extractable evidence for '{paper.title}' — marking as UNCLASSIFIED")
+            logger.debug(f"Context source: none (pdf_path={pdf_path}, abstract={paper.abstract!r})")
+            paper.unclassified_reason = "no_evidence_extractable"
             return DetailCategory.UNCLASSIFIED, 0.0
+    else:
+        context_source = "pdf"
+
+    logger.debug(
+        f"Classifying '{paper.title}': context_source={context_source}, "
+        f"context_length={len(context)}"
+    )
 
     # Use LLM to classify
     client = _get_llm_client()
     if not client:
+        logger.debug(f"No LLM client — using fallback keyword rules for '{paper.title}'")
         return _fallback_classification(context), 0.4
 
     try:
+        messages = [
+            {"role": "system", "content": CATEGORY_SYSTEM_PROMPT},
+            {"role": "user", "content": (
+                f"Paper title: {paper.title}\n\n"
+                f"Evidence of NDIF/nnsight usage:\n"
+                f"{context if context and 'No direct mentions' not in context else 'No direct mentions found in available text.'}"
+            )},
+        ]
         response = client.chat.completions.create(
             model=config.LLM_MODEL,
-            messages=[
-                {"role": "system", "content": CATEGORY_SYSTEM_PROMPT},
-                {"role": "user", "content": (
-                    f"Paper title: {paper.title}\n\n"
-                    f"Evidence of NDIF/nnsight usage:\n"
-                    f"{context if context and 'No direct mentions' not in context else 'No direct mentions found in available text.'}"
-                )},
-            ],
+            messages=messages,
             temperature=0.1,
             max_tokens=20,
         )
         raw = response.choices[0].message.content.strip().lower()
+        logger.debug(f"LLM raw reply for '{paper.title}': {raw!r}")
         rate_limit_sleep(config.LLM_RATE_LIMIT_SLEEP, "LLM classify")
 
         # Parse response
@@ -171,9 +190,11 @@ def classify_category(paper: DiscoveredPaper, output_dir: Path,
         elif "referencing" in raw:
             return DetailCategory.REFERENCING, 0.85
         elif "unclassified" in raw:
+            paper.unclassified_reason = "llm_returned_unclassified"
             return DetailCategory.UNCLASSIFIED, 0.0
         else:
             logger.warning(f"Unexpected LLM classification '{raw}' for '{paper.title}' — defaulting to unclassified")
+            paper.unclassified_reason = "llm_unparseable"
             return DetailCategory.UNCLASSIFIED, 0.0
 
     except Exception as e:

@@ -1,0 +1,8 @@
+We study polysemanticity in transformer models using sparse autoencoders.
+Our method trains SAEs on residual stream activations.
+
+References
+[1] Elhage, N. et al. (2022). Toy models of superposition.
+[2] Bau, D. et al. (2024). NNsight and NDIF: Democratizing Access to Open-Weight
+    Foundation Model Internals. ICLR 2025.
+[3] Conmy, A. et al. (2023). Towards Automated Circuit Discovery.

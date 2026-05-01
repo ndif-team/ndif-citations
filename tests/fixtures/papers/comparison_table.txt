@@ -1,0 +1,11 @@
+We compare our system against existing frameworks for neural network intervention.
+
+Table 1: Comparison of mechanistic interpretability frameworks.
+| Framework | Supported models | Distributed | License |
+|-----------|-----------------|-------------|---------|
+| TransformerLens | GPT-2, Pythia | No | MIT |
+| NNsight | Any HuggingFace | Yes (NDIF) | MIT |
+| baukit | GPT-2, BERT | No | Apache |
+| pyvene | Any HuggingFace | No | Apache |
+
+Our framework extends the approach of NNsight with additional circuit analysis tools.

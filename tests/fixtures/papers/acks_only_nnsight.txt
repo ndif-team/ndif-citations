@@ -1,0 +1,6 @@
+We introduce a new method for steering model behavior using activation addition.
+Our approach is evaluated on GPT-2 and Llama-2 across multiple datasets.
+
+Acknowledgments
+The authors thank the NNsight team for their helpful library and for early access
+to nnsight.net documentation. This work was supported by NSF grant #2121234.

@@ -1,0 +1,6 @@
+{
+  "expected_category": "referencing",
+  "expected_keyword_hits_min": 1,
+  "expected_keyword_hits_max": 4,
+  "notes": "NDIF/nnsight appear only in Related Work as citations — should be referencing"
+}

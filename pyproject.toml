@@ -1,6 +1,6 @@
 [project]
 name = "ndif-citations"
-version = "1.8.0"
+version = "1.9.0"
 description = "NDIF Citation Tracking Pipeline — discovers and catalogs papers citing or using NDIF/NNsight"
 requires-python = ">=3.10"
 dependencies = [
@@ -20,6 +20,9 @@ dependencies = [
 
 [project.scripts]
 ndif-citations = "ndif_citations.cli:cli"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-mock>=3.10"]
 
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
