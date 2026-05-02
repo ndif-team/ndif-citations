@@ -73,6 +73,7 @@ def make_repo(
     content_hash: str = "",
     parent_full_name: str | None = None,
     linked_paper_url: str | None = None,
+    linked_paper_tier: int | None = None,
     **kwargs,
 ) -> DiscoveredRepo:
     """Factory for DiscoveredRepo with sensible defaults."""
@@ -87,6 +88,7 @@ def make_repo(
         has_classification=has_classification,
         parent_full_name=parent_full_name,
         linked_paper_url=linked_paper_url,
+        linked_paper_tier=linked_paper_tier,
         **kwargs,
     )
     if content_hash:

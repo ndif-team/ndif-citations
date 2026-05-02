@@ -92,6 +92,8 @@ class DiscoveredPaper(BaseModel):
     date_discovered: datetime = Field(default_factory=datetime.now)
     manual_override: bool = False  # If true, preserve description/category/bucket on merge
     github_repo_url: Optional[str] = None
+    # Cross-link tier (1=BibTeX, 2=Citation section, 3=single ID, 4=most-recent; None when not cross-linked)
+    linked_paper_tier: Optional[int] = None
 
     # Change detection
     content_hash: str = ""  # SHA256(title + "::" + abstract)[:16]
@@ -194,6 +196,8 @@ class DiscoveredRepo(BaseModel):
     # Linkage (minimal — no title/arxiv_id copies)
     readme_arxiv_ids: list[str] = Field(default_factory=list)
     linked_paper_url: Optional[str] = None  # bare arXiv URL, e.g. "https://arxiv.org/abs/2407.14561"
+    # Linkage tier (1=BibTeX, 2=Citation section, 3=single post-2020, 4=most-recent-of-many; None when unlinked)
+    linked_paper_tier: Optional[int] = None
 
     # Classification
     category: Category = Category.USES_NNSIGHT
@@ -241,6 +245,7 @@ class DiscoveredRepo(BaseModel):
             "archived": self.archived,
             "category": self.category.value,
             "linked_paper_url": self.linked_paper_url,
+            "linked_paper_tier": self.linked_paper_tier,
             "repo_type": self.repo_type,
             "parent_full_name": self.parent_full_name,
         }
