@@ -120,7 +120,7 @@ _IMPL_CONFIRM_RE = re.compile(
     r'(?:'
     r'\b(?:implement|use[sd]?|using|appl(?:y|ied)|ran|conduct(?:ed)?|perform)[^.]{0,60}\b(?:nnsight|ndif)\b'
     r'|'
-    r'\b(?:nnsight|ndif)\b[^.]{0,150}\b(?:is|was|we)\s+used\b'
+    r'\b(?:nnsight|ndif)\b(?:[^.]|et\s+al\.|i\.e\.|e\.g\.|\.(?!\s+[A-Z])){0,200}\b(?:is|was|we)\s+used\b'
     r'|'
     r'\b(?:nnsight|ndif)\b[^.]{0,100}to\s+implement\b'
     r')',
@@ -574,16 +574,11 @@ def process_papers(
 
         # Category classification
         if needs.get("classify") and not skip_llm:
-            if pdf_path and pdf_path.exists():
-                category, confidence = classify_category(paper, output_dir, pdf_path=pdf_path)
-                paper.detail_category = category
-                paper.category_confidence = confidence
-                paper.has_classification = category != DetailCategory.UNCLASSIFIED
-            else:
-                # No PDF available - mark as UNCLASSIFIED
-                paper.detail_category = DetailCategory.UNCLASSIFIED
-                paper.category_confidence = 0.0
-                paper.has_classification = False
+            effective_pdf = pdf_path if pdf_path and pdf_path.exists() else None
+            category, confidence = classify_category(paper, output_dir, pdf_path=effective_pdf)
+            paper.detail_category = category
+            paper.category_confidence = confidence
+            paper.has_classification = category != DetailCategory.UNCLASSIFIED
 
         # Thumbnail extraction
         if needs.get("thumbnail"):

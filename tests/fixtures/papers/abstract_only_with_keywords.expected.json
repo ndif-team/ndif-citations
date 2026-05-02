@@ -1,0 +1,6 @@
+{
+  "expected_category": "uses_ndif",
+  "expected_keyword_hits_min": 2,
+  "expected_keyword_hits_max": 4,
+  "notes": "Abstract-only fallback case — no PDF available. classify_category must reach the LLM via paper.abstract instead of bypassing to UNCLASSIFIED."
+}

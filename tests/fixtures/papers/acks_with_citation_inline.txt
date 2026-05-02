@@ -1,0 +1,6 @@
+We propose a method for activation patching across language pairs.
+
+Acknowledgment
+We would like to thank the team working on NNsight (Fiotto-Kaufman et al., 2024)
+which is the python package we used to implement all our experiments. We thank
+the reviewers for their feedback.

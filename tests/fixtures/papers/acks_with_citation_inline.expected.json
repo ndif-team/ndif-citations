@@ -1,0 +1,6 @@
+{
+  "expected_category": "uses_nnsight",
+  "expected_keyword_hits_min": 1,
+  "expected_keyword_hits_max": 3,
+  "notes": "Real-world acknowledgment pattern from arXiv:2411.08745 — citation 'et al., 2024' inside the impl-confirm window. Pattern B must fire to prevent ack-only filtering."
+}

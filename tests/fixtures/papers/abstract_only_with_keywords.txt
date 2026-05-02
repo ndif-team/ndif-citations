@@ -1,0 +1,3 @@
+We propose a system for distributed model interpretability. All experiments
+in this paper were conducted on the NDIF cluster using nnsight to extract
+activations from open-weight foundation models.

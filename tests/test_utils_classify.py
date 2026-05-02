@@ -161,3 +161,34 @@ class TestIsAckOnlyThankYou:
 
     def test_empty_string(self):
         assert not _is_ack_only_thank_you("")
+
+    @pytest.mark.parametrize("text", [
+        # The exact 2411.08745 phrasing — pinned regression test
+        "We thank the team working on NNsight (Fiotto-Kaufman et al., 2024) which is the python package we used to implement all our experiments.",
+        # Other common citation styles
+        "We acknowledge NNsight (Smith et al., 2024) which is the package we used.",
+        "Thanks to NDIF, which (i.e., the inference fabric) is the platform we used.",
+        "We thank the NDIF team. NDIF (e.g., for hosted models) is the system we used.",
+        # No citation, plain prose — must still match
+        "We thank NNsight which is the package we used to implement experiments.",
+        # Citation with "was used"
+        "Thanks to nnsight (Author et al., 2024) which was used for all probes.",
+    ])
+    def test_pattern_b_matches_real_world_citation_styles(self, text):
+        assert _is_ack_only_thank_you(text) is False
+
+    def test_2411_08745_regression_guard(self):
+        """Real-world acknowledgment from arXiv:2411.08745. Must not filter as ack-only."""
+        text = (
+            "We would like to thank the team working on NNsight "
+            "(Fiotto-Kaufman et al., 2024) which is the python package we used "
+            "to implement all our experiments."
+        )
+        assert _is_ack_only_thank_you(text) is False
+
+    @pytest.mark.parametrize("text", [
+        "We thank NDIF. Our experiments use TransformerLens.",
+        "We thank NDIF for support. The package we used was something else.",
+    ])
+    def test_pattern_b_cross_sentence_guard(self, text):
+        assert _is_ack_only_thank_you(text) is True

@@ -145,6 +145,21 @@ class TestClassifyCategoryEarlyReturn:
         assert paper.unclassified_reason == "no_evidence_extractable"
         mock.assert_no_calls()
 
+    def test_abstract_with_keyword_no_pdf_calls_llm_via_abstract_path(self, monkeypatch):
+        mock = MockLLMClient()
+        mock.expect("uses_ndif")
+        _inject_mock(monkeypatch, mock)
+        paper = make_paper(
+            abstract="We hosted models on NDIF cluster for all experiments.",
+        )
+        cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=None)
+        assert cat == DetailCategory.USES_NDIF
+        assert conf == pytest.approx(0.85)
+        assert paper.unclassified_reason is None
+        assert len(mock.record_calls()) == 1
+        user_msg = mock.record_calls()[0][-1]["content"]
+        assert "NDIF cluster" in user_msg
+
 
 # ---------------------------------------------------------------------------
 # LLM_API_KEY unset path — falls back to keyword rules at confidence 0.4
@@ -323,6 +338,21 @@ class TestAcksOnlyPreFilter:
         mock.expect("uses_nnsight")
         _inject_mock(monkeypatch, mock)
         context = (FIXTURE_DIR / "acks_with_keyword_first.txt").read_text()
+        pdf = _setup_pdf_context(monkeypatch, tmp_path, context)
+        paper = make_paper()
+        cat, _ = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
+        assert cat == DetailCategory.USES_NNSIGHT
+        assert paper.classification_signal is None
+        assert len(mock.record_calls()) == 1
+
+    def test_acks_with_citation_inline_llm_called_2411_08745_regression(
+        self, monkeypatch, tmp_path
+    ):
+        """End-to-end regression for arXiv:2411.08745 — citation must not break Pattern B."""
+        mock = MockLLMClient()
+        mock.expect("uses_nnsight")
+        _inject_mock(monkeypatch, mock)
+        context = (FIXTURE_DIR / "acks_with_citation_inline.txt").read_text()
         pdf = _setup_pdf_context(monkeypatch, tmp_path, context)
         paper = make_paper()
         cat, _ = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
