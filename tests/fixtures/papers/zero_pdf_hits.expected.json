@@ -1,0 +1,6 @@
+{
+  "expected_category": "discarded",
+  "expected_keyword_hits_min": 0,
+  "expected_keyword_hits_max": 0,
+  "notes": "Paper with substantial PDF text (>1000 chars) and zero NDIF/nnsight keyword hits. Should be placed in discarded bucket with reason zero_pdf_hits. Mirrors SVD-survey and grey-seal false-positive pattern from 2026-05-01 production run."
+}

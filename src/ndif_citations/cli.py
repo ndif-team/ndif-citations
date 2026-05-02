@@ -318,7 +318,7 @@ def discover(output_dir: str | None) -> None:
 def add(url: str, output_dir: str | None) -> None:
     """Process a single paper by URL and append it to the output."""
     from ndif_citations.extract import enrich_papers
-    from ndif_citations.models import DiscoveredPaper, DiscoverySource
+    from ndif_citations.models import Category, DiscoveredPaper, DiscoverySource
     from ndif_citations.output import load_existing_papers, merge_papers, write_outputs
     from ndif_citations.process import process_papers
     from ndif_citations.utils import extract_arxiv_id_from_url
@@ -384,7 +384,7 @@ def add(url: str, output_dir: str | None) -> None:
 
     # Process
     papers = process_papers(papers, out)
-    console.print(f"  Category: [green]{papers[0].detail_category.value}[/green]")
+    console.print(f"  Category: [green]{papers[0].category.value}[/green]")
     console.print(f"  Description: {papers[0].description[:100]}...")
 
     # Merge and save
@@ -536,14 +536,14 @@ def debug(paper_id: str, output_dir: str | None, out_file: str | None) -> None:
 
     # --- 6. Classification (cached state — no re-call) ---
     _print("## 6. Classification (cached state)")
-    _print(f"   detail_category:      {paper.detail_category.value}")
+    _print(f"   category:             {paper.category.value}")
     _print(f"   category_confidence:  {paper.category_confidence}")
     _print(f"   [Re-classification skipped in debug mode — use process_papers to re-run]")
     _print()
 
     # --- 7. Final verdict ---
     _print("## 7. Final verdict")
-    _print(f"   detail_category:      {paper.detail_category.value}")
+    _print(f"   category:             {paper.category.value}")
     _print(f"   category_confidence:  {paper.category_confidence}")
     _print(f"   unclassified_reason:  {paper.unclassified_reason!r}")
     _print(f"   classification_signal: {paper.classification_signal!r}")
@@ -567,7 +567,7 @@ def reclassify(ids: str | None, output_dir: str | None, dry_run: bool) -> None:
     Useful to apply new pre-filter fixes to already-classified papers.
     Papers with manual_override=True are skipped.
     """
-    from ndif_citations.models import DetailCategory
+    from ndif_citations.models import Category
     from ndif_citations.output import load_existing_papers, write_outputs
     from ndif_citations.pdf_cache import get_cached_pdf
     from ndif_citations.process import classify_category
@@ -634,18 +634,18 @@ def reclassify(ids: str | None, output_dir: str | None, dry_run: bool) -> None:
             console.print(f"  [dim]SKIP (manual_override=True):[/dim] {paper.title[:60]}")
             continue
 
-        old_cat = paper.detail_category.value
+        old_cat = paper.category.value
         pdf_path = get_cached_pdf(paper, out)
 
         new_cat, new_conf = classify_category(paper, out, pdf_path=pdf_path)
 
-        if new_cat != paper.detail_category or new_conf != paper.category_confidence:
+        if new_cat != paper.category or new_conf != paper.category_confidence:
             signal = paper.classification_signal
             changes.append((paper.title, old_cat, new_cat.value, signal))
             if not dry_run:
-                paper.detail_category = new_cat
+                paper.category = new_cat
                 paper.category_confidence = new_conf
-                paper.has_classification = new_cat != DetailCategory.UNCLASSIFIED
+                paper.has_classification = new_cat != Category.UNCLASSIFIED
 
     # Print diff
     if changes:
@@ -666,6 +666,136 @@ def reclassify(ids: str | None, output_dir: str | None, dry_run: bool) -> None:
         )
     elif dry_run:
         console.print("\n[dim]Dry run — no files written.[/dim]")
+
+
+def _resolve_paper(papers, paper_id: str):
+    """Return (index, paper) matching paper_id (arXiv ID, DOI, or URL). Returns (None, None) if not found."""
+    from ndif_citations.utils import normalize_arxiv_id, extract_arxiv_id_from_url
+
+    if paper_id.startswith("http"):
+        candidate_arxiv = extract_arxiv_id_from_url(paper_id)
+    else:
+        candidate_arxiv = normalize_arxiv_id(paper_id)
+
+    for i, p in enumerate(papers):
+        if candidate_arxiv and p.arxiv_id == candidate_arxiv:
+            return i, p
+        if paper_id.startswith("10.") and p.doi == paper_id:
+            return i, p
+        if p.url == paper_id:
+            return i, p
+    return None, None
+
+
+@cli.command()
+@click.argument("paper_id")
+@click.option("--output-dir", "-o", default=None, help="Custom output directory")
+@click.option("--detail", default=None, help="Optional audit note (stored in reason_detail)")
+@click.option("--dry-run", is_flag=True, help="Preview without writing files")
+def promote(paper_id: str, output_dir: str | None, detail: str | None, dry_run: bool) -> None:
+    """Move a paper to the verified bucket and freeze it with manual_override=True."""
+    from ndif_citations.models import Bucket, PipelineRun
+    from ndif_citations.output import load_existing_papers, write_outputs
+
+    out = config.get_output_dir(output_dir)
+    papers = load_existing_papers(out)
+
+    idx, paper = _resolve_paper(papers, paper_id)
+    if paper is None:
+        console.print(f"[bold yellow]WARNING:[/bold yellow] Paper not found for ID {paper_id!r}")
+        return
+
+    console.print(f"  [{paper.bucket.value}] → [verified]: {paper.title[:70]}")
+    if dry_run:
+        console.print("  [dim]Dry run — no changes written.[/dim]")
+        return
+
+    paper.bucket = Bucket.VERIFIED
+    paper.reason = None
+    paper.reason_detail = detail
+    paper.manual_override = True
+
+    run = PipelineRun()
+    write_outputs(papers, out, run)
+    console.print("  [green]✓ Promoted and saved.[/green]")
+
+
+@cli.command()
+@click.argument("paper_id")
+@click.option("--reason", "reason_str", required=True,
+              help="Demotion reason (openalex_source, low_confidence, stub_metadata, "
+                   "unclassified_no_keywords, unclassified_llm, manual_demote)")
+@click.option("--output-dir", "-o", default=None, help="Custom output directory")
+@click.option("--detail", default=None, help="Optional audit note (stored in reason_detail)")
+@click.option("--dry-run", is_flag=True, help="Preview without writing files")
+def demote(paper_id: str, reason_str: str, output_dir: str | None, detail: str | None, dry_run: bool) -> None:
+    """Move a paper to the pending bucket and freeze it with manual_override=True."""
+    from ndif_citations.models import Bucket, PaperReason, PipelineRun
+    from ndif_citations.output import load_existing_papers, write_outputs
+
+    try:
+        reason = PaperReason(reason_str)
+    except ValueError:
+        valid = [r.value for r in PaperReason]
+        console.print(f"[bold red]Error:[/bold red] Unknown reason {reason_str!r}. Valid: {valid}")
+        raise SystemExit(1)
+
+    out = config.get_output_dir(output_dir)
+    papers = load_existing_papers(out)
+
+    idx, paper = _resolve_paper(papers, paper_id)
+    if paper is None:
+        console.print(f"[bold yellow]WARNING:[/bold yellow] Paper not found for ID {paper_id!r}")
+        return
+
+    console.print(f"  [{paper.bucket.value}] → [pending ({reason.value})]: {paper.title[:70]}")
+    if dry_run:
+        console.print("  [dim]Dry run — no changes written.[/dim]")
+        return
+
+    paper.bucket = Bucket.PENDING
+    paper.reason = reason
+    paper.reason_detail = detail
+    paper.manual_override = True
+
+    run = PipelineRun()
+    write_outputs(papers, out, run)
+    console.print("  [green]✓ Demoted and saved.[/green]")
+
+
+@cli.command()
+@click.argument("paper_id")
+@click.option("--output-dir", "-o", default=None, help="Custom output directory")
+@click.option("--detail", default=None, help="Curator reason for discarding (stored in reason_detail)")
+@click.option("--dry-run", is_flag=True, help="Preview without writing files")
+def discard(paper_id: str, output_dir: str | None, detail: str | None, dry_run: bool) -> None:
+    """Move a paper to the discarded bucket and freeze it with manual_override=True."""
+    from ndif_citations.models import Bucket, PaperReason, PipelineRun
+    from ndif_citations.output import load_existing_papers, write_outputs
+
+    out = config.get_output_dir(output_dir)
+    papers = load_existing_papers(out)
+
+    idx, paper = _resolve_paper(papers, paper_id)
+    if paper is None:
+        console.print(f"[bold yellow]WARNING:[/bold yellow] Paper not found for ID {paper_id!r}")
+        return
+
+    console.print(f"  [{paper.bucket.value}] → [discarded]: {paper.title[:70]}")
+    if detail:
+        console.print(f"  Reason: {detail}")
+    if dry_run:
+        console.print("  [dim]Dry run — no changes written.[/dim]")
+        return
+
+    paper.bucket = Bucket.DISCARDED
+    paper.reason = PaperReason.MANUAL_DISCARD
+    paper.reason_detail = detail
+    paper.manual_override = True
+
+    run = PipelineRun()
+    write_outputs(papers, out, run)
+    console.print("  [green]✓ Discarded and saved.[/green]")
 
 
 if __name__ == "__main__":

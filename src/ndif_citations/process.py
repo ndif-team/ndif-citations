@@ -8,12 +8,13 @@ from pathlib import Path
 from typing import Optional
 
 from ndif_citations import config
-from ndif_citations.models import DetailCategory, DiscoveredPaper, DiscoveredRepo
+from ndif_citations.models import Bucket, Category, DiscoveredPaper, DiscoveredRepo, PaperReason
 from ndif_citations.router import ProcessingBucket, RepoRoutingDecision, RoutingDecision
 from ndif_citations.utils import (
     _fetch_repo_readme,
     download_pdf,
     extract_ndif_context,
+    extract_text_from_pdf,
     rate_limit_sleep,
     slugify,
 )
@@ -174,7 +175,7 @@ def _apply_prefilters(windows: list[str], paper) -> tuple[list[str], Optional[st
 # 3b-ii. Classification prompt + LLM call
 # ---------------------------------------------------------------------------
 
-CATEGORY_SYSTEM_PROMPT = """Classify how this paper relates to NDIF/NNsight based on the evidence provided.
+UNIFIED_PROMPT = """Classify how this paper relates to NDIF/NNsight based on the evidence provided.
 
 Reply with ONLY one of these exact strings:
 - "uses_ndif" — verifiable evidence the paper actively uses NDIF infrastructure (e.g., hosted models on NDIF cluster, experiments run on ndif.us)
@@ -190,9 +191,57 @@ Evidence guide:
 
 Reply with ONLY the category string, nothing else."""
 
+LIBRARY_PROMPT = """Classify how this paper uses the NNsight library based on the evidence provided.
+The paper mentions only NNsight (the library) — not NDIF infrastructure.
+
+Reply with ONLY one of these exact strings:
+- "uses_nnsight" — verifiable evidence of nnsight library usage (e.g., import nnsight, nnsight.trace, code using nnsight API)
+- "referencing" — mentions or cites NNsight in related work, but no verifiable active use
+- "unclassified" — insufficient evidence to determine relationship
+
+Reply with ONLY the category string, nothing else."""
+
+INFRASTRUCTURE_PROMPT = """Classify how this paper uses NDIF infrastructure based on the evidence provided.
+The paper mentions only NDIF (the inference fabric) — not the NNsight library specifically.
+
+Reply with ONLY one of these exact strings:
+- "uses_ndif" — verifiable evidence the paper uses NDIF infrastructure (e.g., hosted models on NDIF cluster, experiments run on ndif.us)
+- "referencing" — mentions or cites NDIF in related work, but no verifiable active use
+- "unclassified" — insufficient evidence to determine relationship
+
+Reply with ONLY the category string, nothing else."""
+
+# Keep legacy alias so existing code referencing CATEGORY_SYSTEM_PROMPT still works
+CATEGORY_SYSTEM_PROMPT = UNIFIED_PROMPT
+
+# Keyword families for prompt routing
+_LIBRARY_KEYWORDS = frozenset({"nnsight", "import nnsight", "nnsight.net", "nnsight.trace", "from nnsight"})
+_INFRA_KEYWORDS = frozenset({"ndif", "ndif.us", "national deep inference", "ndif cluster", "hosted on ndif"})
+
+
+def _select_classification_prompt(context: str) -> str:
+    """Select the appropriate classification prompt based on which keyword families matched.
+
+    Returns LIBRARY_PROMPT if only library keywords matched,
+    INFRASTRUCTURE_PROMPT if only infrastructure keywords matched,
+    UNIFIED_PROMPT for mixed matches or empty context.
+    """
+    if not context or "No direct mentions" in context:
+        return UNIFIED_PROMPT
+
+    lower = context.lower()
+    has_library = any(kw in lower for kw in _LIBRARY_KEYWORDS)
+    has_infra = any(kw in lower for kw in _INFRA_KEYWORDS)
+
+    if has_library and not has_infra:
+        return LIBRARY_PROMPT
+    if has_infra and not has_library:
+        return INFRASTRUCTURE_PROMPT
+    return UNIFIED_PROMPT
+
 
 def classify_category(paper: DiscoveredPaper, output_dir: Path,
-                      pdf_path: Path | None = None) -> tuple[DetailCategory, float]:
+                      pdf_path: Path | None = None) -> tuple[Category, float]:
     """Classify a paper's relationship to NDIF/NNsight.
 
     Args:
@@ -225,13 +274,13 @@ def classify_category(paper: DiscoveredPaper, output_dir: Path,
                 logger.info(f"No NDIF/nnsight mentions found for '{paper.title}' — marking as UNCLASSIFIED")
                 logger.debug(f"Context source: {'pdf (no mentions)' if pdf_path else 'none'} + abstract (no keywords)")
                 paper.unclassified_reason = "no_keywords_anywhere"
-                return DetailCategory.UNCLASSIFIED, 0.0
+                return Category.UNCLASSIFIED, 0.0
         else:
             # No usable PDF context and no abstract
             logger.info(f"No extractable evidence for '{paper.title}' — marking as UNCLASSIFIED")
             logger.debug(f"Context source: none (pdf_path={pdf_path}, abstract={paper.abstract!r})")
             paper.unclassified_reason = "no_evidence_extractable"
-            return DetailCategory.UNCLASSIFIED, 0.0
+            return Category.UNCLASSIFIED, 0.0
     else:
         context_source = "pdf"
 
@@ -250,7 +299,7 @@ def classify_category(paper: DiscoveredPaper, output_dir: Path,
         logger.debug(
             f"Pre-filter '{signal}' matched all windows for '{paper.title}' — REFERENCING"
         )
-        return DetailCategory.REFERENCING, confidence
+        return Category.REFERENCING, confidence
 
     # Some or all windows survived — rebuild context for LLM
     context = "\n---\n".join(surviving_windows)
@@ -262,8 +311,9 @@ def classify_category(paper: DiscoveredPaper, output_dir: Path,
         return _fallback_classification(context), 0.4
 
     try:
+        system_prompt = _select_classification_prompt(context)
         messages = [
-            {"role": "system", "content": CATEGORY_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": (
                 f"Paper title: {paper.title}\n\n"
                 f"Evidence of NDIF/nnsight usage:\n"
@@ -282,40 +332,40 @@ def classify_category(paper: DiscoveredPaper, output_dir: Path,
 
         # Parse response
         if "uses_ndif" in raw:
-            return DetailCategory.USES_NDIF, 0.85
+            return Category.USES_NDIF, 0.85
         elif "uses_nnsight" in raw:
-            return DetailCategory.USES_NNSIGHT, 0.85
+            return Category.USES_NNSIGHT, 0.85
         elif "referencing" in raw:
-            return DetailCategory.REFERENCING, 0.85
+            return Category.REFERENCING, 0.85
         elif "unclassified" in raw:
             paper.unclassified_reason = "llm_returned_unclassified"
-            return DetailCategory.UNCLASSIFIED, 0.0
+            return Category.UNCLASSIFIED, 0.0
         else:
             logger.warning(f"Unexpected LLM classification '{raw}' for '{paper.title}' — defaulting to unclassified")
             paper.unclassified_reason = "llm_unparseable"
-            return DetailCategory.UNCLASSIFIED, 0.0
+            return Category.UNCLASSIFIED, 0.0
 
     except Exception as e:
         logger.warning(f"LLM classification failed for '{paper.title}': {e}")
         return _fallback_classification(context), 0.4
 
 
-def _fallback_classification(context: str) -> DetailCategory:
+def _fallback_classification(context: str) -> Category:
     """Fallback classification without LLM — rule-based."""
     context_lower = context.lower()
 
     # Strong signals for uses_ndif
     ndif_signals = ["hosted on ndif", "ndif cluster", "ndif.us", "ndif infrastructure"]
     if any(s in context_lower for s in ndif_signals):
-        return DetailCategory.USES_NDIF
+        return Category.USES_NDIF
 
     # Strong signals for uses_nnsight
     nnsight_signals = ["import nnsight", "nnsight.trace", "from nnsight", "nnsight backend",
                        "nnsight library", "using nnsight"]
     if any(s in context_lower for s in nnsight_signals):
-        return DetailCategory.USES_NNSIGHT
+        return Category.USES_NNSIGHT
 
-    return DetailCategory.REFERENCING
+    return Category.REFERENCING
 
 
 # ---------------------------------------------------------------------------
@@ -514,6 +564,78 @@ def extract_thumbnail(paper: DiscoveredPaper, output_dir: Path,
 
 
 # ---------------------------------------------------------------------------
+# Bucket decision helpers (US-D2, US-D3)
+# ---------------------------------------------------------------------------
+
+def _decide_bucket(paper: DiscoveredPaper) -> tuple[Bucket, Optional[PaperReason]]:
+    """Return (bucket, reason) for a paper based on ordered demotion rules.
+
+    Rules apply IN ORDER; first match wins:
+    1. openalex_source  — discovered via OpenAlex fulltext (low provenance confidence)
+    2. stub_metadata    — year==0 OR (no abstract AND no pdf_url) OR (no arxiv_id AND no doi)
+    3. unclassified_*   — classify_category returned UNCLASSIFIED
+    4. low_confidence   — category_confidence < 0.7 and not already pending
+
+    Papers that pass all four rules → VERIFIED.
+    """
+    from ndif_citations.models import DiscoverySource
+
+    # Rule 1: OpenAlex source
+    if paper.source == DiscoverySource.OPENALEX_FULLTEXT:
+        return Bucket.PENDING, PaperReason.OPENALEX_SOURCE
+
+    # Rule 2: Stub metadata
+    if (
+        paper.year == 0
+        or (paper.abstract is None and paper.pdf_url is None)
+        or (paper.arxiv_id is None and paper.doi is None)
+    ):
+        return Bucket.PENDING, PaperReason.STUB_METADATA
+
+    # Rule 3: Unclassified outcome
+    if paper.category == Category.UNCLASSIFIED:
+        if paper.unclassified_reason in ("no_keywords_anywhere", "no_evidence_extractable"):
+            return Bucket.PENDING, PaperReason.UNCLASSIFIED_NO_KEYWORDS
+        return Bucket.PENDING, PaperReason.UNCLASSIFIED_LLM
+
+    # Rule 4: Low confidence
+    if paper.category_confidence < 0.7:
+        return Bucket.PENDING, PaperReason.LOW_CONFIDENCE
+
+    return Bucket.VERIFIED, None
+
+
+def _check_discard_zero_pdf_hits(paper: DiscoveredPaper, pdf_path: Optional[Path]) -> bool:
+    """Return True and mutate paper if PDF has ≥1000 chars and zero keyword matches.
+
+    Only fires when a valid PDF was extracted. Short/broken PDFs (< 1000 chars) are
+    not discarded — they may be scan failures, not genuine zero-match papers.
+    """
+    if not pdf_path or not pdf_path.exists():
+        return False
+
+    try:
+        text = extract_text_from_pdf(pdf_path)
+    except Exception:
+        return False
+
+    if len(text) < 1000:
+        return False
+
+    text_lower = text.lower()
+    for kw in config.NDIF_KEYWORDS:
+        if kw.lower() in text_lower:
+            return False
+
+    # All keywords checked, zero matches in a substantial PDF
+    kw_list = ", ".join(config.NDIF_KEYWORDS[:5]) + ("..." if len(config.NDIF_KEYWORDS) > 5 else "")
+    paper.bucket = Bucket.DISCARDED
+    paper.reason = PaperReason.ZERO_PDF_HITS
+    paper.reason_detail = f"Extracted {len(text)} chars; 0 matches for any of [{kw_list}]."
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Process all papers
 # ---------------------------------------------------------------------------
 
@@ -549,14 +671,21 @@ def process_papers(
 
         logger.info(f"[{i+1}/{len(decisions)}] {bucket.value}: {paper.title[:60]}...")
 
-        # SKIP and PROTECTED: just copy as-is
+        # SKIP and PROTECTED: just copy as-is, preserving all override fields
         if bucket in (ProcessingBucket.SKIP, ProcessingBucket.PROTECTED):
             if bucket == ProcessingBucket.PROTECTED and decision.existing_paper:
-                # For protected, merge in any new identifiers but preserve processed fields
-                if decision.existing_paper.s2_paper_id and not paper.s2_paper_id:
-                    paper.s2_paper_id = decision.existing_paper.s2_paper_id
-                if decision.existing_paper.openalex_id and not paper.openalex_id:
-                    paper.openalex_id = decision.existing_paper.openalex_id
+                existing = decision.existing_paper
+                # Carry over new identifiers (safe, non-destructive)
+                if existing.s2_paper_id and not paper.s2_paper_id:
+                    paper.s2_paper_id = existing.s2_paper_id
+                if existing.openalex_id and not paper.openalex_id:
+                    paper.openalex_id = existing.openalex_id
+                # Carry over bucket/category/reason — manual_override freezes these
+                paper.bucket = existing.bucket
+                paper.category = existing.category
+                paper.reason = existing.reason
+                paper.reason_detail = existing.reason_detail
+                paper.description = existing.description
             results.append(paper)
             continue
 
@@ -572,13 +701,23 @@ def process_papers(
             paper.description = generate_summary(paper)
             paper.has_summary = bool(paper.description)
 
+        # Discard check: zero PDF keyword hits (US-D2)
+        if needs.get("classify") and pdf_path:
+            if _check_discard_zero_pdf_hits(paper, pdf_path):
+                logger.info(f"Discarded: {paper.title[:60]} (zero_pdf_hits, {paper.reason_detail})")
+                results.append(paper)
+                continue
+
         # Category classification
         if needs.get("classify") and not skip_llm:
             effective_pdf = pdf_path if pdf_path and pdf_path.exists() else None
             category, confidence = classify_category(paper, output_dir, pdf_path=effective_pdf)
-            paper.detail_category = category
+            paper.category = category
             paper.category_confidence = confidence
-            paper.has_classification = category != DetailCategory.UNCLASSIFIED
+            paper.has_classification = category != Category.UNCLASSIFIED
+
+            # Bucket decision after classification (US-D3)
+            paper.bucket, paper.reason = _decide_bucket(paper)
 
         # Thumbnail extraction
         if needs.get("thumbnail"):
@@ -618,10 +757,10 @@ def classify_repo(repo: "DiscoveredRepo") -> None:
     Upgrade to uses_ndif if README mentions any NDIF_README_KEYWORDS.
     Mutates repo in place.
     """
-    from ndif_citations.models import DetailCategory, DiscoveredRepo
+    from ndif_citations.models import Category, DiscoveredRepo
 
     # Default — all GitHub dependents use nnsight
-    repo.detail_category = DetailCategory.USES_NNSIGHT
+    repo.category = Category.USES_NNSIGHT
     repo.classification_reason = "github_dependent"
 
     # Fetch README and keyword-scan for NDIF usage
@@ -639,7 +778,7 @@ def classify_repo(repo: "DiscoveredRepo") -> None:
                     matched = True
                     break
         if matched:
-            repo.detail_category = DetailCategory.USES_NDIF
+            repo.category = Category.USES_NDIF
             repo.classification_reason = "ndif_keyword_match"
             logger.debug(
                 f"Repo {repo.owner}/{repo.repo} upgraded to uses_ndif (ndif_keyword_match)"

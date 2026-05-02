@@ -12,7 +12,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from ndif_citations import config
-from ndif_citations.models import DetailCategory, DiscoveredPaper, DiscoveredRepo, DiscoverySource
+from ndif_citations.models import Category, DiscoveredPaper, DiscoveredRepo, DiscoverySource
 from ndif_citations.utils import (
     _fetch_repo_readme,
     extract_arxiv_id_from_doi,
@@ -612,10 +612,10 @@ def enrich_repos_from_github_api(
                         break
 
             if real_match_found:
-                repo.detail_category = DetailCategory.USES_NDIF
+                repo.category = Category.USES_NDIF
                 repo.classification_reason = "ndif_keyword_match"
             else:
-                repo.detail_category = DetailCategory.USES_NNSIGHT
+                repo.category = Category.USES_NNSIGHT
                 repo.classification_reason = "github_dependent"
 
             repo.has_classification = True
@@ -625,7 +625,7 @@ def enrich_repos_from_github_api(
             # "all nnsight dependents use the library by definition"), so mark
             # has_classification=True to avoid wasteful FILL_GAPS retries against the
             # same 404.
-            repo.detail_category = DetailCategory.USES_NNSIGHT
+            repo.category = Category.USES_NNSIGHT
             repo.classification_reason = "github_dependent"
             repo.has_classification = True
 
@@ -842,7 +842,7 @@ def _tag_repo_type(repo: DiscoveredRepo, unlinked_set: set[str]) -> str:
       3. Any COURSE_NAME_PATTERNS substring in repo.repo or repo.description → course
 
     RESEARCH — strong signal of legitimate work:
-      4. detail_category == uses_ndif → research
+      4. category == uses_ndif → research
       5. linked_paper_url is set → research
       6. stars >= 6 AND description is non-empty → research
 
@@ -866,7 +866,7 @@ def _tag_repo_type(repo: DiscoveredRepo, unlinked_set: set[str]) -> str:
 
     # --- RESEARCH ---
     # Tier 4: uses NDIF infrastructure
-    if repo.detail_category and repo.detail_category.value == "uses_ndif":
+    if repo.category and repo.category.value == "uses_ndif":
         return "research"
 
     # Tier 5: has a linked paper (survived shared-paper cleanup)

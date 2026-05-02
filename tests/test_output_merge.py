@@ -1,7 +1,7 @@
 """Tests for merge_papers, _update_existing, and serialization contract (US-F11)."""
 import pytest
 
-from ndif_citations.models import DetailCategory, DiscoveredPaper, PipelineRun
+from ndif_citations.models import Bucket, Category, DiscoveredPaper, PaperReason, PipelineRun
 from ndif_citations.output import _update_existing, merge_papers
 from tests.conftest import make_paper
 
@@ -182,10 +182,10 @@ class TestWebsiteContract:
         assert "image" not in d
 
     def test_category_value_is_string(self):
-        p = make_paper(detail_category=DetailCategory.USES_NDIF)
+        p = make_paper(category=Category.USES_NDIF)
         d = p.to_website_dict()
         assert isinstance(d["category"], str)
-        assert d["category"] == "used-ndif"
+        assert d["category"] == "uses_ndif"
 
 
 # ---------------------------------------------------------------------------
@@ -210,11 +210,14 @@ class TestFullDictRoundTrip:
         assert restored.description == p.description
         assert restored.content_hash == p.content_hash
 
-    def test_website_category_in_full_dict(self):
-        p = make_paper(detail_category=DetailCategory.USES_NNSIGHT)
+    def test_category_and_bucket_in_full_dict(self):
+        p = make_paper(category=Category.USES_NNSIGHT)
         d = p.to_full_dict()
-        assert "website_category" in d
-        assert d["website_category"] == "used-nnsight"
+        assert "category" in d
+        assert d["category"] == "uses_nnsight"
+        assert "bucket" in d
+        assert "reason" in d
+        assert "reason_detail" in d
 
     def test_classification_signal_in_full_dict(self):
         p = make_paper()
@@ -241,3 +244,156 @@ class TestFullDictRoundTrip:
         assert p.classification_signal is None
         d = p.to_full_dict()
         assert d["classification_signal"] is None
+
+    def test_bucket_reason_not_in_website_dict(self):
+        from ndif_citations.models import Bucket, PaperReason
+        p = make_paper(bucket=Bucket.PENDING)
+        p.reason = PaperReason.OPENALEX_SOURCE
+        d = p.to_website_dict()
+        assert "bucket" not in d
+        assert "reason" not in d
+        assert "reason_detail" not in d
+
+    def test_bucket_reason_round_trip(self):
+        from ndif_citations.models import Bucket, PaperReason
+        p = make_paper(bucket=Bucket.PENDING)
+        p.reason = PaperReason.STUB_METADATA
+        p.reason_detail = "year=0, no abstract"
+        d = p.to_full_dict()
+        restored = DiscoveredPaper.model_validate(d)
+        assert restored.bucket == Bucket.PENDING
+        assert restored.reason == PaperReason.STUB_METADATA
+        assert restored.reason_detail == "year=0, no abstract"
+
+
+# ---------------------------------------------------------------------------
+# TestManualOverride (US-D5)
+# ---------------------------------------------------------------------------
+
+class TestManualOverride:
+    def test_override_discarded_paper_stays_discarded_on_merge(self):
+        existing = make_paper(
+            arxiv_id="2401.00001",
+            bucket=Bucket.DISCARDED,
+            manual_override=True,
+        )
+        existing.reason = PaperReason.MANUAL_DISCARD
+        new = make_paper(arxiv_id="2401.00001", bucket=Bucket.VERIFIED)
+        merged, _ = merge_papers([existing], [new])
+        assert merged[0].bucket == Bucket.DISCARDED
+        assert merged[0].reason == PaperReason.MANUAL_DISCARD
+
+    def test_override_verified_category_not_changed_on_merge(self):
+        existing = make_paper(
+            arxiv_id="2401.00001",
+            category=Category.USES_NDIF,
+            manual_override=True,
+        )
+        new = make_paper(arxiv_id="2401.00001", category=Category.REFERENCING)
+        merged, _ = merge_papers([existing], [new])
+        assert merged[0].category == Category.USES_NDIF
+
+    def test_override_pending_not_auto_promoted_on_merge(self):
+        existing = make_paper(
+            arxiv_id="2401.00001",
+            bucket=Bucket.PENDING,
+            manual_override=True,
+            year=2024,
+        )
+        existing.reason = PaperReason.STUB_METADATA
+        # New discovery fills in missing data that would clear stub_metadata
+        new = make_paper(arxiv_id="2401.00001", year=2024)
+        merged, _ = merge_papers([existing], [new])
+        # manual_override=True blocks _update_existing, so no promotion
+        assert merged[0].bucket == Bucket.PENDING
+
+
+# ---------------------------------------------------------------------------
+# TestAutoRecovery (US-D4)
+# ---------------------------------------------------------------------------
+
+class TestAutoRecovery:
+    def test_pending_paper_promoted_when_stub_cleared(self, monkeypatch):
+        """Existing pending (stub_metadata) paper with year=0 → new discovery has year=2025 → promoted."""
+        from ndif_citations.models import Category
+        from ndif_citations.process import _decide_bucket
+
+        existing = make_paper(
+            arxiv_id="2401.00001",
+            bucket=Bucket.PENDING,
+            year=0,
+            category=Category.USES_NNSIGHT,
+            category_confidence=0.85,
+        )
+        existing.reason = PaperReason.STUB_METADATA
+
+        # New discovery fills the year gap
+        new = make_paper(
+            arxiv_id="2401.00001",
+            year=2025,
+            authors="Smith, Jones, Brown",  # also longer so _update_existing fires
+            category=Category.USES_NNSIGHT,
+            category_confidence=0.85,
+        )
+
+        merged, run = merge_papers([existing], [new])
+        assert merged[0].bucket == Bucket.VERIFIED
+        assert merged[0].reason is None
+        assert existing.title in run.auto_promoted
+
+    def test_pending_with_manual_override_not_promoted(self):
+        existing = make_paper(
+            arxiv_id="2401.00001",
+            bucket=Bucket.PENDING,
+            manual_override=True,
+            year=0,
+            category_confidence=0.85,
+        )
+        existing.reason = PaperReason.STUB_METADATA
+
+        new = make_paper(
+            arxiv_id="2401.00001",
+            year=2025,
+            authors="Smith, Jones",
+            category_confidence=0.85,
+        )
+
+        merged, run = merge_papers([existing], [new])
+        assert merged[0].bucket == Bucket.PENDING
+        assert existing.title not in run.auto_promoted
+
+    def test_verified_paper_demoted_when_conditions_degrade(self):
+        """Existing verified paper → new discovery returns confidence=0.4 → demoted."""
+        existing = make_paper(
+            arxiv_id="2401.00001",
+            bucket=Bucket.VERIFIED,
+            category_confidence=0.4,  # simulate the merge updating this
+            category=Category.REFERENCING,
+        )
+        existing.year = 2024  # ensure year is set
+        new = make_paper(
+            arxiv_id="2401.00001",
+            year=2024,
+            category=Category.REFERENCING,
+            category_confidence=0.4,
+        )
+
+        merged, run = merge_papers([existing], [new])
+        assert merged[0].bucket == Bucket.PENDING
+        assert merged[0].reason == PaperReason.LOW_CONFIDENCE
+        assert existing.title in run.auto_demoted
+
+    def test_verified_with_manual_override_not_demoted(self):
+        existing = make_paper(
+            arxiv_id="2401.00001",
+            bucket=Bucket.VERIFIED,
+            manual_override=True,
+            category_confidence=0.4,
+            category=Category.REFERENCING,
+        )
+        existing.year = 2024
+        new = make_paper(arxiv_id="2401.00001", year=2024, category_confidence=0.4)
+
+        merged, run = merge_papers([existing], [new])
+        assert merged[0].bucket == Bucket.VERIFIED
+        assert existing.title not in run.auto_demoted

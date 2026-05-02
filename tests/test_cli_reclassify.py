@@ -6,18 +6,18 @@ import pytest
 from click.testing import CliRunner
 
 from ndif_citations.cli import cli
-from ndif_citations.models import DetailCategory, DiscoveredPaper
+from ndif_citations.models import Category, DiscoveredPaper
 from tests.conftest import make_paper
 from tests.helpers.llm import MockLLMClient
 
 
 def _write_full_json(tmp_path: Path, papers: list) -> Path:
-    """Write research-papers-full.json to tmp_path/output/ and return the output dir."""
+    """Write research-papers-full.json (3-bucket format) to tmp_path/output/ and return the output dir."""
+    from ndif_citations.models import PipelineRun
+    from ndif_citations.output import write_outputs
     out = tmp_path / "output"
     out.mkdir(parents=True, exist_ok=True)
-    data = [p.to_full_dict() for p in papers]
-    full_json = out / "research-papers-full.json"
-    full_json.write_text(json.dumps(data, indent=2, default=str))
+    write_outputs(papers, out, PipelineRun())
     return out
 
 
@@ -49,7 +49,7 @@ class TestReclassifyDryRun:
         paper = make_paper(
             arxiv_id="2604.00001",
             title="Test Paper",
-            detail_category=DetailCategory.USES_NNSIGHT,
+            category=Category.USES_NNSIGHT,
         )
         out = _write_full_json(tmp_path, [paper])
         full_json = out / "research-papers-full.json"
@@ -71,7 +71,7 @@ class TestReclassifyDryRun:
         paper = make_paper(
             arxiv_id="2604.00002",
             title="ADAG Paper",
-            detail_category=DetailCategory.USES_NNSIGHT,
+            category=Category.USES_NNSIGHT,
         )
         out = _write_full_json(tmp_path, [paper])
         _inject_mock(monkeypatch, mock := MockLLMClient())
@@ -89,9 +89,9 @@ class TestReclassifyDryRun:
 class TestReclassifyIdsFilter:
     def test_only_specified_paper_is_processed(self, monkeypatch, tmp_path):
         paper_a = make_paper(arxiv_id="2604.00010", title="Paper A",
-                             detail_category=DetailCategory.USES_NNSIGHT)
+                             category=Category.USES_NNSIGHT)
         paper_b = make_paper(arxiv_id="2604.00011", title="Paper B",
-                             detail_category=DetailCategory.USES_NNSIGHT)
+                             category=Category.USES_NNSIGHT)
         out = _write_full_json(tmp_path, [paper_a, paper_b])
 
         mock = MockLLMClient()
@@ -105,14 +105,15 @@ class TestReclassifyIdsFilter:
         assert result.exit_code == 0, result.output
 
         # Only paper_a should change; paper_b should be untouched
-        data = json.loads((out / "research-papers-full.json").read_text())
-        by_id = {d["arxiv_id"]: d for d in data}
-        assert by_id["2604.00010"]["detail_category"] == "referencing"
-        assert by_id["2604.00011"]["detail_category"] == "uses_nnsight"
+        raw = json.loads((out / "research-papers-full.json").read_text())
+        all_papers = raw["pending"] + raw["verified"] + raw["discarded"]
+        by_id = {d["arxiv_id"]: d for d in all_papers}
+        assert by_id["2604.00010"]["category"] == "referencing"
+        assert by_id["2604.00011"]["category"] == "uses_nnsight"
 
     def test_unknown_id_warns_and_continues(self, monkeypatch, tmp_path):
         paper = make_paper(arxiv_id="2604.00020", title="Known Paper",
-                           detail_category=DetailCategory.REFERENCING)
+                           category=Category.REFERENCING)
         out = _write_full_json(tmp_path, [paper])
         _inject_mock(monkeypatch, MockLLMClient())
         _no_pdf(monkeypatch)
@@ -130,7 +131,7 @@ class TestReclassifyManualOverride:
         paper = make_paper(
             arxiv_id="2604.00030",
             title="Protected Paper",
-            detail_category=DetailCategory.USES_NNSIGHT,
+            category=Category.USES_NNSIGHT,
             manual_override=True,
         )
         out = _write_full_json(tmp_path, [paper])
@@ -145,9 +146,10 @@ class TestReclassifyManualOverride:
         assert "SKIP" in result.output or "manual_override" in result.output.lower()
 
         # Paper should be unchanged in the output file
-        data = json.loads((out / "research-papers-full.json").read_text())
-        assert data[0]["detail_category"] == "uses_nnsight"
-        assert data[0]["manual_override"] is True
+        raw = json.loads((out / "research-papers-full.json").read_text())
+        all_papers = raw["pending"] + raw["verified"] + raw["discarded"]
+        assert all_papers[0]["category"] == "uses_nnsight"
+        assert all_papers[0]["manual_override"] is True
 
 
 class TestReclassifyOutputDiff:
@@ -155,7 +157,7 @@ class TestReclassifyOutputDiff:
         paper = make_paper(
             arxiv_id="2604.00040",
             title="Changed Paper",
-            detail_category=DetailCategory.USES_NNSIGHT,
+            category=Category.USES_NNSIGHT,
         )
         out = _write_full_json(tmp_path, [paper])
         _inject_mock(monkeypatch, MockLLMClient())
@@ -173,7 +175,7 @@ class TestReclassifyOutputDiff:
         paper = make_paper(
             arxiv_id="2604.00050",
             title="Already Correct",
-            detail_category=DetailCategory.REFERENCING,
+            category=Category.REFERENCING,
             category_confidence=0.85,
         )
         out = _write_full_json(tmp_path, [paper])
@@ -197,7 +199,7 @@ class TestReclassifyDOIResolution:
             arxiv_id=None,
             doi="10.1234/abc",
             title="DOI Paper",
-            detail_category=DetailCategory.USES_NNSIGHT,
+            category=Category.USES_NNSIGHT,
         )
         out = _write_full_json(tmp_path, [paper])
         _inject_mock(monkeypatch, MockLLMClient())
@@ -209,5 +211,6 @@ class TestReclassifyDOIResolution:
         )
         assert result.exit_code == 0, result.output
 
-        data = json.loads((out / "research-papers-full.json").read_text())
-        assert data[0]["detail_category"] == "referencing"
+        raw = json.loads((out / "research-papers-full.json").read_text())
+        all_papers = raw["pending"] + raw["verified"] + raw["discarded"]
+        assert all_papers[0]["category"] == "referencing"

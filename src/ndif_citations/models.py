@@ -10,19 +10,34 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
-class DetailCategory(str, Enum):
-    """Four-way internal categorization."""
+class Category(str, Enum):
+    """Single 4-way classification (replaces DetailCategory)."""
     USES_NDIF = "uses_ndif"
     USES_NNSIGHT = "uses_nnsight"
     REFERENCING = "referencing"
-    UNCLASSIFIED = "unclassified"  # PDF unavailable or insufficient evidence
+    UNCLASSIFIED = "unclassified"
 
 
-class WebsiteCategory(str, Enum):
-    """Three-way category for the website JSON."""
-    USED_NNSIGHT = "used-nnsight"
-    USED_NDIF = "used-ndif"
-    REFERENCING = "referencing"
+class Bucket(str, Enum):
+    """3-bucket placement for the output pipeline."""
+    PENDING = "pending"
+    VERIFIED = "verified"
+    DISCARDED = "discarded"
+
+
+class PaperReason(str, Enum):
+    """Reason a paper was placed in pending or discarded."""
+    # Pending reasons
+    OPENALEX_SOURCE = "openalex_source"
+    LOW_CONFIDENCE = "low_confidence"
+    UNCLASSIFIED_NO_KEYWORDS = "unclassified_no_keywords"
+    UNCLASSIFIED_LLM = "unclassified_llm"
+    STUB_METADATA = "stub_metadata"
+    # Discarded reasons
+    ZERO_PDF_HITS = "zero_pdf_hits"
+    MANUAL_DISCARD = "manual_discard"
+    # Manual curator override
+    MANUAL_DEMOTE = "manual_demote"
 
 
 class DiscoverySource(str, Enum):
@@ -63,17 +78,22 @@ class DiscoveredPaper(BaseModel):
 
     # Pipeline outputs
     description: str = ""  # LLM-generated summary
-    detail_category: DetailCategory = DetailCategory.REFERENCING
+    category: Category = Category.REFERENCING
     category_confidence: float = 0.0
     image: Optional[str] = None  # Path like "/images/Slug.png"
+
+    # 3-bucket placement
+    bucket: Bucket = Bucket.VERIFIED
+    reason: Optional[PaperReason] = None
+    reason_detail: Optional[str] = None  # free-text supplement to `reason`
 
     # Tracking
     source: DiscoverySource = DiscoverySource.S2_CITATION
     date_discovered: datetime = Field(default_factory=datetime.now)
-    manual_override: bool = False  # If true, preserve description/category on merge
+    manual_override: bool = False  # If true, preserve description/category/bucket on merge
     github_repo_url: Optional[str] = None
 
-    # Change detection 
+    # Change detection
     content_hash: str = ""  # SHA256(title + "::" + abstract)[:16]
 
     # Processing flags
@@ -107,27 +127,21 @@ class DiscoveredPaper(BaseModel):
         """Auto-compute hash on creation if not set."""
         if not self.content_hash:
             self.content_hash = self.compute_hash()
-        # Set processing flags based on existing data
         if not hasattr(self, 'has_summary') or self.has_summary is None:
             self.has_summary = bool(self.description)
         if not hasattr(self, 'has_classification') or self.has_classification is None:
-            self.has_classification = self.detail_category != DetailCategory.REFERENCING or self.category_confidence > 0
+            self.has_classification = self.category != Category.REFERENCING or self.category_confidence > 0
         if not hasattr(self, 'has_thumbnail') or self.has_thumbnail is None:
             self.has_thumbnail = bool(self.image)
         if not hasattr(self, 'has_affiliations') or self.has_affiliations is None:
             self.has_affiliations = bool(self.affiliations)
 
-    @property
-    def website_category(self) -> WebsiteCategory:
-        """Map three-way internal category 1-to-1 to website category."""
-        if self.detail_category == DetailCategory.USES_NNSIGHT:
-            return WebsiteCategory.USED_NNSIGHT
-        if self.detail_category == DetailCategory.USES_NDIF:
-            return WebsiteCategory.USED_NDIF
-        return WebsiteCategory.REFERENCING
-
     def to_website_dict(self) -> dict:
-        """Export as website-compatible dict matching ResearchPaper TS interface."""
+        """Export as website-compatible dict matching ResearchPaper TS interface.
+
+        Returns category as "uses_ndif", "uses_nnsight", or "referencing" (never "unclassified"
+        — unclassified papers belong in pending and must not reach this path).
+        """
         result: dict = {
             "title": self.title,
             "authors": self.authors,
@@ -135,7 +149,7 @@ class DiscoveredPaper(BaseModel):
             "year": self.year,
             "url": self.url,
             "description": self.description,
-            "category": self.website_category.value,
+            "category": self.category.value,
         }
         if self.image:
             result["image"] = self.image
@@ -145,9 +159,7 @@ class DiscoveredPaper(BaseModel):
 
     def to_full_dict(self) -> dict:
         """Export all fields for the full JSON output."""
-        data = self.model_dump(mode="json")
-        data["website_category"] = self.website_category.value
-        return data
+        return self.model_dump(mode="json")
 
     def merge_key(self) -> str:
         """Return best key for deduplication: arxiv_id > doi > normalized title."""
@@ -184,7 +196,7 @@ class DiscoveredRepo(BaseModel):
     linked_paper_url: Optional[str] = None  # bare arXiv URL, e.g. "https://arxiv.org/abs/2407.14561"
 
     # Classification
-    detail_category: DetailCategory = DetailCategory.USES_NNSIGHT
+    category: Category = Category.USES_NNSIGHT
     classification_reason: str = "github_dependent"
 
     # Classification metadata
@@ -227,7 +239,7 @@ class DiscoveredRepo(BaseModel):
             "license": self.license,
             "topics": self.topics,
             "archived": self.archived,
-            "category": self.detail_category.value,
+            "category": self.category.value,
             "linked_paper_url": self.linked_paper_url,
             "repo_type": self.repo_type,
             "parent_full_name": self.parent_full_name,
@@ -236,18 +248,6 @@ class DiscoveredRepo(BaseModel):
     def to_full_dict(self) -> dict:
         """Export all fields."""
         return self.model_dump(mode="json")
-
-
-class ResearchPaper(BaseModel):
-    """Website-facing model matching the TypeScript ResearchPaper interface (3 categories)."""
-    title: str
-    authors: str
-    venue: str
-    year: int
-    url: str
-    image: Optional[str] = None
-    description: str
-    category: WebsiteCategory  # used-nnsight, used-ndif, or referencing
 
 
 class PipelineRun(BaseModel):
@@ -266,10 +266,14 @@ class PipelineRun(BaseModel):
     low_confidence: list[str] = Field(default_factory=list)
     missing_thumbnails: list[str] = Field(default_factory=list)
 
-    # Routing bucket counts 
+    # Routing bucket counts
     bucket_new: int = 0
     bucket_reprocess: int = 0
     bucket_fill_gaps: int = 0
     bucket_skip: int = 0
     bucket_protected: int = 0
     unclassified_count: int = 0  # Papers we couldn't classify (PDF unavailable)
+
+    # Auto-recovery tracking (populated during merge)
+    auto_promoted: list[str] = Field(default_factory=list)   # titles promoted pending→verified
+    auto_demoted: list[str] = Field(default_factory=list)    # titles demoted verified→pending

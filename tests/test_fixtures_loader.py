@@ -4,7 +4,7 @@ from pathlib import Path
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "papers"
 
-VALID_CATEGORIES = {"uses_ndif", "uses_nnsight", "referencing", "unclassified"}
+VALID_CATEGORIES = {"uses_ndif", "uses_nnsight", "referencing", "unclassified", "discarded"}
 
 
 def test_every_txt_has_expected_json():

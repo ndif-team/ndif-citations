@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ndif_citations.models import DetailCategory, DiscoveredPaper
+from ndif_citations.models import Category, DiscoveredPaper
 from ndif_citations.process import classify_category
 from tests.conftest import make_paper
 from tests.helpers.llm import MockLLMClient
@@ -46,7 +46,7 @@ class TestClassifyCategoryMockLLM:
         pdf = _setup_pdf_context(monkeypatch, tmp_path, "We ran experiments on NDIF cluster.")
         paper = make_paper()
         cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
-        assert cat == DetailCategory.USES_NDIF
+        assert cat == Category.USES_NDIF
         assert conf == pytest.approx(0.85)
 
     def test_uses_nnsight_reply(self, monkeypatch, tmp_path):
@@ -56,7 +56,7 @@ class TestClassifyCategoryMockLLM:
         pdf = _setup_pdf_context(monkeypatch, tmp_path, "import nnsight; model = nnsight.LanguageModel(...)")
         paper = make_paper()
         cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
-        assert cat == DetailCategory.USES_NNSIGHT
+        assert cat == Category.USES_NNSIGHT
         assert conf == pytest.approx(0.85)
 
     def test_referencing_reply(self, monkeypatch, tmp_path):
@@ -66,7 +66,7 @@ class TestClassifyCategoryMockLLM:
         pdf = _setup_pdf_context(monkeypatch, tmp_path, "NNsight is listed in related work.")
         paper = make_paper()
         cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
-        assert cat == DetailCategory.REFERENCING
+        assert cat == Category.REFERENCING
         assert conf == pytest.approx(0.85)
 
     def test_unclassified_reply(self, monkeypatch, tmp_path):
@@ -76,7 +76,7 @@ class TestClassifyCategoryMockLLM:
         pdf = _setup_pdf_context(monkeypatch, tmp_path, "nnsight is mentioned somewhere.")
         paper = make_paper()
         cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
-        assert cat == DetailCategory.UNCLASSIFIED
+        assert cat == Category.UNCLASSIFIED
         assert conf == pytest.approx(0.0)
         assert paper.unclassified_reason == "llm_returned_unclassified"
 
@@ -87,7 +87,7 @@ class TestClassifyCategoryMockLLM:
         pdf = _setup_pdf_context(monkeypatch, tmp_path, "nnsight in methods section.")
         paper = make_paper()
         cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
-        assert cat == DetailCategory.UNCLASSIFIED
+        assert cat == Category.UNCLASSIFIED
         assert conf == pytest.approx(0.0)
         assert paper.unclassified_reason == "llm_unparseable"
 
@@ -117,7 +117,7 @@ class TestClassifyCategoryEarlyReturn:
         paper = make_paper(abstract=None)
         # No pdf_path passed → context = "" → enters early-return branch
         cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=None)
-        assert cat == DetailCategory.UNCLASSIFIED
+        assert cat == Category.UNCLASSIFIED
         assert conf == pytest.approx(0.0)
         assert paper.unclassified_reason == "no_evidence_extractable"
         mock.assert_no_calls()
@@ -129,7 +129,7 @@ class TestClassifyCategoryEarlyReturn:
                                  "No direct mentions of NDIF or nnsight found in the paper text.")
         paper = make_paper(abstract="A paper about transformers and attention.")
         cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
-        assert cat == DetailCategory.UNCLASSIFIED
+        assert cat == Category.UNCLASSIFIED
         assert conf == pytest.approx(0.0)
         assert paper.unclassified_reason == "no_keywords_anywhere"
         mock.assert_no_calls()
@@ -141,7 +141,7 @@ class TestClassifyCategoryEarlyReturn:
                                  "No direct mentions of NDIF or nnsight found in the paper text.")
         paper = make_paper(abstract=None)
         cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
-        assert cat == DetailCategory.UNCLASSIFIED
+        assert cat == Category.UNCLASSIFIED
         assert paper.unclassified_reason == "no_evidence_extractable"
         mock.assert_no_calls()
 
@@ -153,7 +153,7 @@ class TestClassifyCategoryEarlyReturn:
             abstract="We hosted models on NDIF cluster for all experiments.",
         )
         cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=None)
-        assert cat == DetailCategory.USES_NDIF
+        assert cat == Category.USES_NDIF
         assert conf == pytest.approx(0.85)
         assert paper.unclassified_reason is None
         assert len(mock.record_calls()) == 1
@@ -171,7 +171,7 @@ class TestClassifyCategoryFallback:
         pdf = _setup_pdf_context(monkeypatch, tmp_path, "We hosted models on ndif cluster.")
         paper = make_paper()
         cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
-        assert cat == DetailCategory.USES_NDIF
+        assert cat == Category.USES_NDIF
         assert conf == pytest.approx(0.4)
 
     def test_no_client_nnsight_fallback(self, monkeypatch, tmp_path):
@@ -179,7 +179,7 @@ class TestClassifyCategoryFallback:
         pdf = _setup_pdf_context(monkeypatch, tmp_path, "import nnsight; nnsight.trace(model)")
         paper = make_paper()
         cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
-        assert cat == DetailCategory.USES_NNSIGHT
+        assert cat == Category.USES_NNSIGHT
         assert conf == pytest.approx(0.4)
 
 
@@ -229,7 +229,7 @@ class TestNegativeEvidencePreFilter:
         pdf = _setup_pdf_context(monkeypatch, tmp_path, context)
         paper = make_paper()
         cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
-        assert cat == DetailCategory.REFERENCING
+        assert cat == Category.REFERENCING
         assert conf == pytest.approx(0.9)
         assert paper.classification_signal == "pre_filter:negative_evidence"
         mock.assert_no_calls()
@@ -241,7 +241,7 @@ class TestNegativeEvidencePreFilter:
         pdf = _setup_pdf_context(monkeypatch, tmp_path, context)
         paper = make_paper()
         cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
-        assert cat == DetailCategory.REFERENCING
+        assert cat == Category.REFERENCING
         mock.assert_no_calls()
 
     def test_mixed_negative_and_positive_window_llm_called_with_positive_only(
@@ -259,7 +259,7 @@ class TestNegativeEvidencePreFilter:
         pdf = _setup_pdf_context(monkeypatch, tmp_path, context)
         paper = make_paper()
         cat, _ = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
-        assert cat == DetailCategory.USES_NNSIGHT
+        assert cat == Category.USES_NNSIGHT
         assert paper.classification_signal is None
         calls = mock.record_calls()
         assert len(calls) == 1
@@ -280,7 +280,7 @@ class TestComparisonTablePreFilter:
         pdf = _setup_pdf_context(monkeypatch, tmp_path, context)
         paper = make_paper()
         cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
-        assert cat == DetailCategory.REFERENCING
+        assert cat == Category.REFERENCING
         assert conf == pytest.approx(0.85)
         assert paper.classification_signal == "pre_filter:comparison_table"
         mock.assert_no_calls()
@@ -295,7 +295,7 @@ class TestComparisonTablePreFilter:
         pdf = _setup_pdf_context(monkeypatch, tmp_path, context)
         paper = make_paper()
         cat, _ = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
-        assert cat == DetailCategory.USES_NNSIGHT
+        assert cat == Category.USES_NNSIGHT
         assert paper.classification_signal is None
         mock.record_calls()  # LLM was called
         assert len(mock.record_calls()) == 1
@@ -313,7 +313,7 @@ class TestAcksOnlyPreFilter:
         pdf = _setup_pdf_context(monkeypatch, tmp_path, context)
         paper = make_paper()
         cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
-        assert cat == DetailCategory.REFERENCING
+        assert cat == Category.REFERENCING
         assert conf == pytest.approx(0.85)
         assert paper.classification_signal == "pre_filter:acks_only_thank_you"
         mock.assert_no_calls()
@@ -326,7 +326,7 @@ class TestAcksOnlyPreFilter:
         pdf = _setup_pdf_context(monkeypatch, tmp_path, context)
         paper = make_paper()
         cat, _ = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
-        assert cat == DetailCategory.USES_NDIF
+        assert cat == Category.USES_NDIF
         assert paper.classification_signal is None
         assert len(mock.record_calls()) == 1
 
@@ -341,7 +341,7 @@ class TestAcksOnlyPreFilter:
         pdf = _setup_pdf_context(monkeypatch, tmp_path, context)
         paper = make_paper()
         cat, _ = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
-        assert cat == DetailCategory.USES_NNSIGHT
+        assert cat == Category.USES_NNSIGHT
         assert paper.classification_signal is None
         assert len(mock.record_calls()) == 1
 
@@ -356,6 +356,6 @@ class TestAcksOnlyPreFilter:
         pdf = _setup_pdf_context(monkeypatch, tmp_path, context)
         paper = make_paper()
         cat, _ = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
-        assert cat == DetailCategory.USES_NNSIGHT
+        assert cat == Category.USES_NNSIGHT
         assert paper.classification_signal is None
         assert len(mock.record_calls()) == 1

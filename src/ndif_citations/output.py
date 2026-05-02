@@ -8,7 +8,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from ndif_citations.models import DiscoveredPaper, DiscoveredRepo, PipelineRun
+from ndif_citations.models import Bucket, Category, DiscoveredPaper, DiscoveredRepo, PipelineRun
 from ndif_citations.utils import is_duplicate
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,11 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def load_existing_papers(output_dir: Path) -> list[DiscoveredPaper]:
-    """Load existing papers from the full JSON file."""
+    """Load existing papers from the full JSON file.
+
+    Expects the 3-bucket structure: {"pending": [...], "verified": [...], "discarded": [...]}.
+    Raises ValueError if the file uses the old flat-list format.
+    """
     full_json = output_dir / "research-papers-full.json"
     if not full_json.exists():
         return []
@@ -28,17 +32,33 @@ def load_existing_papers(output_dir: Path) -> list[DiscoveredPaper]:
         with open(full_json) as f:
             data = json.load(f)
 
-        papers = []
-        for item in data:
-            try:
-                paper = DiscoveredPaper.model_validate(item)
-                papers.append(paper)
-            except Exception as e:
-                logger.warning(f"Failed to parse existing paper: {e}")
+        if isinstance(data, list):
+            raise ValueError(
+                f"{full_json} uses the old flat-list format. "
+                "Delete it or run with --fresh to regenerate in the new 3-bucket format: "
+                '{"pending": [...], "verified": [...], "discarded": [...]}'
+            )
+
+        if not isinstance(data, dict) or not {"pending", "verified", "discarded"}.issubset(data.keys()):
+            raise ValueError(
+                f"{full_json} is missing required top-level keys. "
+                'Expected {"pending": [...], "verified": [...], "discarded": [...]}'
+            )
+
+        papers: list[DiscoveredPaper] = []
+        for bucket_key in ("pending", "verified", "discarded"):
+            for item in data[bucket_key]:
+                try:
+                    paper = DiscoveredPaper.model_validate(item)
+                    papers.append(paper)
+                except Exception as e:
+                    logger.warning(f"Failed to parse existing paper: {e}")
 
         logger.info(f"Loaded {len(papers)} existing papers from {full_json}")
         return papers
 
+    except ValueError:
+        raise
     except Exception as e:
         logger.warning(f"Failed to load existing papers: {e}")
         return []
@@ -130,6 +150,23 @@ def merge_papers(existing: list[DiscoveredPaper],
             was_updated = _update_existing(existing_paper, paper)
             if was_updated:
                 updated_count += 1
+
+            # Auto-recovery / auto-demotion: re-evaluate bucket unless manual_override
+            if not existing_paper.manual_override:
+                from ndif_citations.process import _decide_bucket
+                new_bucket, new_reason = _decide_bucket(existing_paper)
+                old_bucket = existing_paper.bucket
+                if new_bucket != old_bucket:
+                    if new_bucket == Bucket.VERIFIED and old_bucket == Bucket.PENDING:
+                        run.auto_promoted.append(existing_paper.title)
+                        logger.info(f"Auto-promoted: '{existing_paper.title[:60]}' (was: {old_bucket.value} {existing_paper.reason})")
+                    elif new_bucket == Bucket.PENDING and old_bucket == Bucket.VERIFIED:
+                        run.auto_demoted.append(existing_paper.title)
+                        logger.info(f"Auto-demoted: '{existing_paper.title[:60]}' → {new_reason}")
+                    existing_paper.bucket = new_bucket
+                    existing_paper.reason = new_reason
+                    if new_bucket == Bucket.VERIFIED:
+                        existing_paper.reason_detail = None
         else:
             # New paper!
             merged.append(paper)
@@ -239,6 +276,9 @@ def _update_existing(existing: DiscoveredPaper, new: DiscoveredPaper) -> bool:
         changed = True
 
     # Fill missing fields
+    if existing.year == 0 and new.year > 0:
+        existing.year = new.year
+        changed = True
     if not existing.abstract and new.abstract:
         existing.abstract = new.abstract
         changed = True
@@ -291,26 +331,36 @@ def write_outputs(papers: list[DiscoveredPaper], output_dir: Path, run: Pipeline
     run.thumbnails_missing = len(missing)
     run.missing_thumbnails = missing
 
-    from ndif_citations.models import DetailCategory
+    from ndif_citations.models import Category
     run.low_confidence = [
-        f'"{p.title}" -- classified as "{p.detail_category.value}" (confidence: {p.category_confidence:.2f})'
+        f'"{p.title}" -- classified as "{p.category.value}" (confidence: {p.category_confidence:.2f})'
         for p in papers
-        if p.category_confidence < 0.7 and p.detail_category != DetailCategory.UNCLASSIFIED
+        if p.category_confidence < 0.7 and p.category != Category.UNCLASSIFIED
     ]
 
-    # 1. Website JSON (matches ResearchPaper TS interface)
-    website_data = [p.to_website_dict() for p in papers]
+    # 1. Website JSON — verified papers only (matches ResearchPaper TS interface)
+    verified_papers = [p for p in papers if p.bucket == Bucket.VERIFIED]
+    website_data = [p.to_website_dict() for p in verified_papers]
     website_json = output_dir / "research-papers.json"
     with open(website_json, "w") as f:
         json.dump(website_data, f, indent=2, ensure_ascii=False)
-    logger.info(f"Wrote {len(papers)} papers to {website_json}")
+    logger.info(f"Wrote {len(verified_papers)} verified papers to {website_json}")
 
-    # 2. Full JSON (all metadata)
-    full_data = [p.to_full_dict() for p in papers]
+    # 2. Full JSON — 3-bucket structure, all papers
+    pending_papers = [p for p in papers if p.bucket == Bucket.PENDING]
+    discarded_papers = [p for p in papers if p.bucket == Bucket.DISCARDED]
+    full_data = {
+        "pending": [p.to_full_dict() for p in pending_papers],
+        "verified": [p.to_full_dict() for p in verified_papers],
+        "discarded": [p.to_full_dict() for p in discarded_papers],
+    }
     full_json = output_dir / "research-papers-full.json"
     with open(full_json, "w") as f:
         json.dump(full_data, f, indent=2, ensure_ascii=False, default=str)
-    logger.info(f"Wrote {len(papers)} papers to {full_json}")
+    logger.info(
+        f"Wrote {len(papers)} papers to {full_json} "
+        f"({len(pending_papers)} pending, {len(verified_papers)} verified, {len(discarded_papers)} discarded)"
+    )
 
 def _write_repos_outputs(repos: list[DiscoveredRepo], output_dir: Path) -> None:
     """Write github-repos.json, github-repos-full.json."""
@@ -368,7 +418,7 @@ def _write_repos_csv(repos: list[DiscoveredRepo], csv_path: Path) -> None:
                 "topics": "|".join(repo.topics),
                 "repo_type": repo.repo_type,
                 "parent_full_name": repo.parent_full_name or "",
-                "category": repo.detail_category.value,
+                "category": repo.category.value,
                 "classification_reason": repo.classification_reason,
                 "linked_paper_url": repo.linked_paper_url or "",
                 "readme_arxiv_ids": "|".join(repo.readme_arxiv_ids),
@@ -384,7 +434,7 @@ def _write_csv(papers: list[DiscoveredPaper], csv_path: Path) -> None:
     """Write papers to CSV with extended columns."""
     fieldnames = [
         "title", "authors", "affiliations", "venue", "year", "url", "pdf_url",
-        "image", "description", "category", "detail_category",
+        "image", "description", "category", 
         "peer_reviewed", "venue_type", "abstract", "bibtex",
         "arxiv_id", "doi", "s2_paper_id", "openalex_id",
         "date_discovered", "category_confidence", "source",
@@ -406,8 +456,7 @@ def _write_csv(papers: list[DiscoveredPaper], csv_path: Path) -> None:
                 "pdf_url": paper.pdf_url or "",
                 "image": paper.image or "",
                 "description": paper.description,
-                "category": paper.website_category.value,
-                "detail_category": paper.detail_category.value,
+                "category": paper.category.value,
                 "peer_reviewed": paper.peer_reviewed,
                 "venue_type": paper.venue_type or "",
                 "abstract": paper.abstract or "",
@@ -441,25 +490,11 @@ def _write_xlsx(
     # Remove default sheet
     wb.remove(wb.active)
 
-    # --- Papers sheet ---
-    if not skip_papers:
-        ws_papers = wb.create_sheet("Papers")
-        paper_cols = [
-            "title", "authors", "affiliations", "venue", "year",
-            "url", "pdf_url", "github_repo_url",
-            "description", "category", "detail_category",
-            "peer_reviewed", "venue_type",
-            "arxiv_id", "doi", "date_discovered",
-            "category_confidence", "source", "manual_override",
-        ]
-        # Header row
-        for col_idx, col_name in enumerate(paper_cols, 1):
-            cell = ws_papers.cell(row=1, column=col_idx, value=col_name)
+    def _write_paper_rows(ws, paper_list: list, cols: list[str], url_cols: set[str]) -> None:
+        for col_idx, col_name in enumerate(cols, 1):
+            cell = ws.cell(row=1, column=col_idx, value=col_name)
             cell.font = Font(bold=True)
-
-        # Data rows (already sorted year desc by write_outputs before this call)
-        url_columns = {"url", "pdf_url", "github_repo_url"}
-        for row_idx, paper in enumerate(papers, 2):
+        for row_idx, paper in enumerate(paper_list, 2):
             row_data = {
                 "title": paper.title,
                 "authors": paper.authors,
@@ -470,8 +505,10 @@ def _write_xlsx(
                 "pdf_url": paper.pdf_url or "",
                 "github_repo_url": paper.github_repo_url or "",
                 "description": paper.description,
-                "category": paper.website_category.value,
-                "detail_category": paper.detail_category.value,
+                "category": paper.category.value,
+                "bucket": paper.bucket.value,
+                "reason": paper.reason.value if paper.reason else "",
+                "reason_detail": paper.reason_detail or "",
                 "peer_reviewed": paper.peer_reviewed,
                 "venue_type": paper.venue_type or "",
                 "arxiv_id": paper.arxiv_id or "",
@@ -481,13 +518,46 @@ def _write_xlsx(
                 "source": paper.source.value,
                 "manual_override": paper.manual_override,
             }
-            for col_idx, col_name in enumerate(paper_cols, 1):
-                value = row_data[col_name]
-                cell = ws_papers.cell(row=row_idx, column=col_idx, value=value)
-                # Make URL columns hyperlinks
-                if col_name in url_columns and isinstance(value, str) and value.startswith("http"):
+            for col_idx, col_name in enumerate(cols, 1):
+                value = row_data.get(col_name, "")
+                cell = ws.cell(row=row_idx, column=col_idx, value=value)
+                if col_name in url_cols and isinstance(value, str) and value.startswith("http"):
                     cell.hyperlink = value
                     cell.style = "Hyperlink"
+
+    # --- Papers sheet (verified only) ---
+    if not skip_papers:
+        verified_papers = [p for p in papers if p.bucket == Bucket.VERIFIED]
+        ws_papers = wb.create_sheet("Papers")
+        paper_cols = [
+            "title", "authors", "affiliations", "venue", "year",
+            "url", "pdf_url", "github_repo_url",
+            "description", "category",
+            "peer_reviewed", "venue_type",
+            "arxiv_id", "doi", "date_discovered",
+            "category_confidence", "source", "manual_override",
+        ]
+        url_columns = {"url", "pdf_url", "github_repo_url"}
+        _write_paper_rows(ws_papers, verified_papers, paper_cols, url_columns)
+
+        # --- Pending sheet ---
+        pending_papers = [p for p in papers if p.bucket == Bucket.PENDING]
+        ws_pending = wb.create_sheet("Pending")
+        pending_cols = [
+            "title", "authors", "venue", "year", "url",
+            "category", "reason", "reason_detail",
+            "arxiv_id", "doi", "source", "manual_override",
+        ]
+        _write_paper_rows(ws_pending, pending_papers, pending_cols, {"url"})
+
+        # --- Discarded sheet ---
+        discarded_papers = [p for p in papers if p.bucket == Bucket.DISCARDED]
+        ws_discarded = wb.create_sheet("Discarded")
+        discarded_cols = [
+            "title", "authors", "venue", "year", "url",
+            "reason", "reason_detail", "arxiv_id", "doi", "source", "manual_override",
+        ]
+        _write_paper_rows(ws_discarded, discarded_papers, discarded_cols, {"url"})
 
     # --- GitHub sheet ---
     if not skip_github:
@@ -524,7 +594,7 @@ def _write_xlsx(
                 "language": repo.language or "",
                 "license": repo.license or "",
                 "topics": "|".join(repo.topics),
-                "category": repo.detail_category.value,
+                "category": repo.category.value,
                 "classification_reason": repo.classification_reason,
                 "repo_type": repo.repo_type,
                 "parent_full_name": repo.parent_full_name or "",
@@ -597,48 +667,65 @@ def print_report(
         console.print(f"[bold]First run:[/bold] [green]{run.total_unique}[/green] papers cataloged")
     console.print()
 
-    # Category breakdown
-    using_ndif = sum(1 for p in papers if p.detail_category.value == "uses_ndif")
-    unclassified = sum(1 for p in papers if p.detail_category.value == "unclassified")
-    using_nnsight = sum(1 for p in papers if p.detail_category.value == "uses_nnsight")
-    referencing = sum(1 for p in papers if p.detail_category.value == "referencing")
+    # 3-bucket breakdown
+    verified_papers = [p for p in papers if p.bucket == Bucket.VERIFIED]
+    pending_papers = [p for p in papers if p.bucket == Bucket.PENDING]
+    discarded_papers = [p for p in papers if p.bucket == Bucket.DISCARDED]
 
-    console.print("[bold]Results:[/bold]")
-    pre_filter_referencing = sum(
-        1 for p in papers
-        if p.detail_category.value == "referencing" and p.classification_signal
+    n_ndif = sum(1 for p in verified_papers if p.category.value == "uses_ndif")
+    n_nnsight = sum(1 for p in verified_papers if p.category.value == "uses_nnsight")
+    n_ref = sum(1 for p in verified_papers if p.category.value == "referencing")
+
+    def _reason_breakdown(paper_list) -> str:
+        counts: dict[str, int] = {}
+        for p in paper_list:
+            key = p.reason.value if p.reason else "unknown"
+            counts[key] = counts.get(key, 0) + 1
+        return ", ".join(f"{v} {k}" for k, v in sorted(counts.items()))
+
+    console.print("[bold]Buckets:[/bold]")
+    console.print(
+        f"  > [green]{len(verified_papers)} verified[/green] — "
+        f"{n_ndif} uses_ndif, {n_nnsight} uses_nnsight, {n_ref} referencing"
     )
-    console.print(f"  > {using_ndif} papers categorized as [green]\"uses_ndif\"[/green]")
-    console.print(f"  > {using_nnsight} papers categorized as [green]\"uses_nnsight\"[/green]")
-    console.print(f"  > {referencing} papers categorized as [yellow]\"referencing\"[/yellow]")
-    if pre_filter_referencing > 0:
-        console.print(f"    ({pre_filter_referencing} via pre-filter, no LLM call)")
-    if unclassified > 0:
-        console.print(f"  ! {unclassified} papers need manual classification")
+    console.print(
+        f"  > [yellow]{len(pending_papers)} pending[/yellow]"
+        + (f" — {_reason_breakdown(pending_papers)}" if pending_papers else "")
+    )
+    console.print(
+        f"  > [red]{len(discarded_papers)} discarded[/red]"
+        + (f" — {_reason_breakdown(discarded_papers)}" if discarded_papers else "")
+    )
     console.print(f"  > {run.thumbnails_extracted} thumbnails extracted")
     if run.thumbnails_missing > 0:
         console.print(f"  ! {run.thumbnails_missing} papers need manual thumbnails")
     console.print()
 
-    # Unclassified papers with reasons
-    unclassified_papers = [
-        (p.title, p.unclassified_reason or "unknown")
-        for p in papers
-        if p.detail_category.value == "unclassified"
-    ]
-    if unclassified_papers:
-        console.print(f"[bold yellow]UNCLASSIFIED papers ({len(unclassified_papers)}):[/bold yellow]")
-        for title, reason in unclassified_papers[:15]:
-            console.print(f' - "{title}" ({reason})')
-        if len(unclassified_papers) > 15:
-            console.print(f" ... and {len(unclassified_papers) - 15} more")
+    # Auto-promoted this run
+    if run.auto_promoted:
+        console.print(f"[bold green]Auto-promoted this run ({len(run.auto_promoted)}):[/bold green]")
+        for title in run.auto_promoted[:15]:
+            console.print(f'  - "{title}" (was: pending → verified)')
+        if len(run.auto_promoted) > 15:
+            console.print(f"  ... and {len(run.auto_promoted) - 15} more")
         console.print()
 
-    # Low confidence
-    if run.low_confidence:
-        console.print("[bold yellow]Category classifications with low confidence:[/bold yellow]")
-        for i, msg in enumerate(run.low_confidence[:10], 1):
-            console.print(f"  {i}. {msg}")
+    # Auto-demoted this run
+    if run.auto_demoted:
+        console.print(f"[bold yellow]Auto-demoted this run ({len(run.auto_demoted)}):[/bold yellow]")
+        for title in run.auto_demoted[:15]:
+            console.print(f'  - "{title}" (was: verified → pending)')
+        if len(run.auto_demoted) > 15:
+            console.print(f"  ... and {len(run.auto_demoted) - 15} more")
+        console.print()
+
+    # Discarded breakdown
+    if discarded_papers:
+        console.print(f"[bold red]Discarded ({len(discarded_papers)}):[/bold red]")
+        for p in discarded_papers[:15]:
+            console.print(f'  - "{p.title}" ({p.reason.value if p.reason else "unknown"})')
+        if len(discarded_papers) > 15:
+            console.print(f"  ... and {len(discarded_papers) - 15} more")
         console.print()
 
     # Missing thumbnails
@@ -660,7 +747,7 @@ def print_report(
         console.print()
 
         total_repos = len(repos)
-        ndif_repos = sum(1 for r in repos if r.detail_category.value == "uses_ndif")
+        ndif_repos = sum(1 for r in repos if r.category.value == "uses_ndif")
         nnsight_repos = total_repos - ndif_repos
 
         # Bucket breakdown from processing_bucket field

@@ -1,7 +1,7 @@
 """Integration tests for process_papers no-PDF bypass fix (US-B2)."""
 import pytest
 
-from ndif_citations.models import DetailCategory
+from ndif_citations.models import Category
 from ndif_citations.process import process_papers
 from ndif_citations.router import ProcessingBucket, RoutingDecision
 from tests.conftest import make_paper
@@ -38,8 +38,8 @@ def test_no_pdf_abstract_with_keywords_reaches_llm(monkeypatch, tmp_path):
 
     assert len(results) == 1
     result = results[0]
-    assert result.detail_category == DetailCategory.USES_NNSIGHT
-    assert result.detail_category != DetailCategory.UNCLASSIFIED
+    assert result.category == Category.USES_NNSIGHT
+    assert result.category != Category.UNCLASSIFIED
     assert len(mock.record_calls()) == 1
 
 
@@ -59,6 +59,6 @@ def test_no_pdf_no_keywords_in_abstract_returns_unclassified_with_reason(monkeyp
 
     assert len(results) == 1
     result = results[0]
-    assert result.detail_category == DetailCategory.UNCLASSIFIED
+    assert result.category == Category.UNCLASSIFIED
     assert result.unclassified_reason == "no_keywords_anywhere"
     mock.assert_no_calls()

@@ -1,0 +1,25 @@
+This paper presents a novel approach to optimizing transformer architectures through
+knowledge distillation and quantization. We evaluate on standard benchmarks including
+GLUE and SuperGLUE, demonstrating competitive performance with significantly reduced
+model size. Our method leverages structured pruning combined with post-training
+quantization to achieve a 4x compression ratio while retaining 98% of the original
+model's accuracy.
+
+We conduct experiments on three major model families and compare against existing
+compression baselines including structured magnitude pruning, unstructured pruning,
+and standard knowledge distillation. Our approach consistently outperforms these
+baselines on downstream task performance while achieving faster inference times.
+
+The key insight is that attention heads in large language models exhibit significant
+redundancy, particularly in the middle layers. By selectively removing redundant
+attention heads and applying layer-wise quantization calibrated on a small calibration
+set, we achieve impressive compression with minimal performance degradation.
+
+We additionally demonstrate that our compressed models generalize well to new domains
+not seen during calibration, which is an important practical consideration for
+deployment in real-world applications. The compressed models maintain strong
+few-shot learning capabilities despite the significant parameter reduction.
+
+Future work will explore applying our compression framework to multimodal architectures
+and investigating combinations with speculative decoding for further inference speedups.
+We release code and compressed model checkpoints to facilitate reproducibility.

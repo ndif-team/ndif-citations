@@ -7,7 +7,7 @@ import pytest
 from click.testing import CliRunner
 
 from ndif_citations.cli import cli
-from ndif_citations.models import DetailCategory
+from ndif_citations.models import Category
 from tests.conftest import make_paper
 
 SECTION_HEADERS = [
@@ -22,12 +22,12 @@ SECTION_HEADERS = [
 
 
 def _write_full_json(tmp_path: Path, papers: list) -> Path:
-    """Write a research-papers-full.json to tmp_path/output/."""
+    """Write a research-papers-full.json (3-bucket format) to tmp_path/output/."""
+    from ndif_citations.models import PipelineRun
+    from ndif_citations.output import write_outputs
     out = tmp_path / "output"
     out.mkdir(parents=True, exist_ok=True)
-    data = [p.to_full_dict() for p in papers]
-    full_json = out / "research-papers-full.json"
-    full_json.write_text(json.dumps(data, indent=2, default=str))
+    write_outputs(papers, out, PipelineRun())
     return out
 
 
@@ -36,7 +36,7 @@ class TestDebugCommand:
         paper = make_paper(
             title="Test Debug Paper",
             arxiv_id="2407.99999",
-            detail_category=DetailCategory.USES_NNSIGHT,
+            category=Category.USES_NNSIGHT,
             category_confidence=0.85,
         )
         out = _write_full_json(tmp_path, [paper])

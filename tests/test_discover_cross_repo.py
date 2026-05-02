@@ -2,7 +2,7 @@
 import pytest
 
 from ndif_citations.discover import _tag_repo_type, _unlink_shared_template_papers
-from ndif_citations.models import DetailCategory
+from ndif_citations.models import Category
 from tests.conftest import make_repo
 
 
@@ -81,7 +81,7 @@ class TestTagRepoType:
         assert _tag_repo_type(repo, set()) == "course"
 
     def test_tier4_uses_ndif_is_research(self):
-        repo = make_repo(detail_category=DetailCategory.USES_NDIF)
+        repo = make_repo(category=Category.USES_NDIF)
         assert _tag_repo_type(repo, set()) == "research"
 
     def test_tier5_linked_paper_is_research(self):
