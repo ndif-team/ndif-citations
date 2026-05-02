@@ -99,3 +99,76 @@ class TestTagRepoType:
     def test_tier7_default_experiment(self):
         repo = make_repo(stars=0, description=None)
         assert _tag_repo_type(repo, set()) == "experiment"
+
+
+# ---------------------------------------------------------------------------
+# TestTierPropagation (US-T3)
+# ---------------------------------------------------------------------------
+
+class TestTierPropagation:
+    def _run_link(self, repos, papers):
+        from ndif_citations.discover import link_repos_to_papers
+        link_repos_to_papers(repos, papers)
+
+    def test_tier1_repo_sets_paper_tier_to_1(self):
+        from tests.conftest import make_paper
+        paper = make_paper(arxiv_id="2407.00001", year=2024)
+        repo = make_repo(
+            linked_paper_url="https://arxiv.org/abs/2407.00001",
+            linked_paper_tier=1,
+        )
+        self._run_link([repo], [paper])
+        assert paper.linked_paper_tier == 1
+
+    def test_strongest_tier_wins_when_two_repos_link_same_paper(self):
+        from tests.conftest import make_paper
+        paper = make_paper(arxiv_id="2407.00001", year=2024)
+        repo1 = make_repo(
+            owner="user1", repo="repo1",
+            linked_paper_url="https://arxiv.org/abs/2407.00001",
+            linked_paper_tier=1,
+        )
+        repo2 = make_repo(
+            owner="user2", repo="repo2",
+            linked_paper_url="https://arxiv.org/abs/2407.00001",
+            linked_paper_tier=3,
+        )
+        self._run_link([repo1, repo2], [paper])
+        assert paper.linked_paper_tier == 1
+
+    def test_strongest_tier_wins_when_weaker_comes_first(self):
+        from tests.conftest import make_paper
+        paper = make_paper(arxiv_id="2407.00001", year=2024)
+        repo_weak = make_repo(
+            owner="user1", repo="repo1",
+            linked_paper_url="https://arxiv.org/abs/2407.00001",
+            linked_paper_tier=4,
+        )
+        repo_strong = make_repo(
+            owner="user2", repo="repo2",
+            linked_paper_url="https://arxiv.org/abs/2407.00001",
+            linked_paper_tier=2,
+        )
+        self._run_link([repo_weak, repo_strong], [paper])
+        assert paper.linked_paper_tier == 2
+
+    def test_three_repos_tiers_4_4_2_paper_gets_2(self):
+        from tests.conftest import make_paper
+        paper = make_paper(arxiv_id="2407.00001", year=2024)
+        repos = [
+            make_repo(owner="u1", repo="r1", linked_paper_url="https://arxiv.org/abs/2407.00001", linked_paper_tier=4),
+            make_repo(owner="u2", repo="r2", linked_paper_url="https://arxiv.org/abs/2407.00001", linked_paper_tier=4),
+            make_repo(owner="u3", repo="r3", linked_paper_url="https://arxiv.org/abs/2407.00001", linked_paper_tier=2),
+        ]
+        self._run_link(repos, [paper])
+        assert paper.linked_paper_tier == 2
+
+    def test_repo_with_no_tier_does_not_set_paper_tier(self):
+        from tests.conftest import make_paper
+        paper = make_paper(arxiv_id="2407.00001", year=2024)
+        repo = make_repo(
+            linked_paper_url="https://arxiv.org/abs/2407.00001",
+            linked_paper_tier=None,
+        )
+        self._run_link([repo], [paper])
+        assert paper.linked_paper_tier is None

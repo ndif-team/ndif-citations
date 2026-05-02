@@ -464,11 +464,17 @@ def debug(paper_id: str, output_dir: str | None, out_file: str | None) -> None:
         return
 
     _print("## 1. Identifiers")
-    _print(f"   Title:     {paper.title}")
-    _print(f"   arXiv ID:  {paper.arxiv_id}")
-    _print(f"   DOI:       {paper.doi}")
-    _print(f"   URL:       {paper.url}")
-    _print(f"   GitHub:    {paper.github_repo_url}")
+    _print(f"   Title:               {paper.title}")
+    _print(f"   arXiv ID:            {paper.arxiv_id}")
+    _print(f"   DOI:                 {paper.doi}")
+    _print(f"   URL:                 {paper.url}")
+    _print(f"   GitHub:              {paper.github_repo_url}")
+    tier_desc = {1: "BibTeX block", 2: "Citation section", 3: "single post-2020 ID", 4: "most-recent of many"}
+    tier_str = (
+        f"{paper.linked_paper_tier}  ({tier_desc.get(paper.linked_paper_tier, 'unknown')})"
+        if paper.linked_paper_tier is not None else "None"
+    )
+    _print(f"   Linked paper tier:   {tier_str}  (1=BibTeX, 2=Citation, 3=single, 4=multiple)")
     _print()
 
     # --- 2. PDF cache check ---
@@ -539,6 +545,13 @@ def debug(paper_id: str, output_dir: str | None, out_file: str | None) -> None:
     _print(f"   category:             {paper.category.value}")
     _print(f"   category_confidence:  {paper.category_confidence}")
     _print(f"   [Re-classification skipped in debug mode — use process_papers to re-run]")
+    if paper.linked_paper_tier is not None and paper.linked_paper_tier <= 2:
+        from ndif_citations.process import _augment_prompt_with_tier, UNIFIED_PROMPT
+        aug_block = _augment_prompt_with_tier("", paper.linked_paper_tier)
+        _print(f"   Tier-aware prompt augmentation: yes (tier {paper.linked_paper_tier})")
+        _print(f"   Augmentation block: {aug_block.strip()!r}")
+    else:
+        _print(f"   Tier-aware prompt augmentation: no")
     _print()
 
     # --- 7. Final verdict ---

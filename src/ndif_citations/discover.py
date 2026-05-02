@@ -634,7 +634,9 @@ def enrich_repos_from_github_api(
         if parent:
             repo.parent_full_name = parent.get("full_name")
 
-        repo.linked_paper_url = _detect_linked_paper(readme_text, repo.readme_arxiv_ids)
+        url, tier = _detect_linked_paper(readme_text, repo.readme_arxiv_ids)
+        repo.linked_paper_url = url
+        repo.linked_paper_tier = tier
 
         repo.content_hash = repo.compute_content_hash()
         kept.append(repo)
@@ -650,27 +652,29 @@ def _arxiv_id_year(arxiv_id: str) -> int:
         return 0
 
 
-def _detect_linked_paper(readme_text: str, all_arxiv_ids: list[str]) -> Optional[str]:
-    """Detect the repo's own linked paper from README using 5-tier priority.
+def _detect_linked_paper(
+    readme_text: str, all_arxiv_ids: list[str]
+) -> tuple[Optional[str], Optional[int]]:
+    """Detect the repo's own linked paper from README using 4-tier priority.
 
-    Priority (first match wins):
-    1. BibTeX block → first arXiv ID found in any BibTeX entry
-    2. arXiv ID under a Citation/Paper/Reference/How-to-cite section header
-    3. Exactly one arXiv ID in the entire README → return it
-    4. Multiple IDs → most recent post-2020 (highest YYMM prefix where year >= 20)
-    5. Otherwise → None
+    Returns (url, tier) where:
+      tier 1 = BibTeX block (strongest — explicit citation entry)
+      tier 2 = Citation/Paper/Reference section heading
+      tier 3 = Exactly one post-2020 arXiv ID in the README
+      tier 4 = Multiple post-2020 IDs → most recent (highest YYMM prefix)
+      (None, None) = no eligible candidates (pre-2020 only, or empty README)
 
     Pre-2020 IDs (YYMM < 2001) are only eligible if no later candidate exists.
     """
     from ndif_citations.utils import parse_readme_sections, extract_bibtex_arxiv_ids
 
     if not readme_text or not all_arxiv_ids:
-        return None
+        return None, None
 
     # Tier 1: BibTeX block
     bibtex_ids = extract_bibtex_arxiv_ids(readme_text)
     if bibtex_ids:
-        return f"https://arxiv.org/abs/{bibtex_ids[0]}"
+        return f"https://arxiv.org/abs/{bibtex_ids[0]}", 1
 
     # Tier 2: Citation/Paper/Reference section
     sections = parse_readme_sections(readme_text)
@@ -681,20 +685,20 @@ def _detect_linked_paper(readme_text: str, all_arxiv_ids: list[str]) -> Optional
         if any(ch in header for ch in citation_headers):
             ids_in_section = arxiv_id_pattern.findall(body)
             if ids_in_section:
-                return f"https://arxiv.org/abs/{normalize_arxiv_id(ids_in_section[0])}"
+                return f"https://arxiv.org/abs/{normalize_arxiv_id(ids_in_section[0])}", 2
 
     # Tier 3: Exactly one post-2020 arXiv ID in the entire README
     post_2020_all = [aid for aid in all_arxiv_ids if _arxiv_id_year(aid) >= 20]
     if len(post_2020_all) == 1:
-        return f"https://arxiv.org/abs/{post_2020_all[0]}"
+        return f"https://arxiv.org/abs/{post_2020_all[0]}", 3
 
     # Tier 4: Multiple post-2020 IDs → most recent (highest YYMM prefix)
     if len(post_2020_all) > 1:
         best = max(post_2020_all, key=lambda aid: aid.split('.')[0])
-        return f"https://arxiv.org/abs/{best}"
+        return f"https://arxiv.org/abs/{best}", 4
 
-    # Tier 5: None (no post-2020 candidates)
-    return None
+    # No eligible candidates
+    return None, None
 
 
 # ---------------------------------------------------------------------------
@@ -910,9 +914,21 @@ def link_repos_to_papers(
 
         # Set paper.github_repo_url if this arXiv ID matches a known paper
         matched_paper = by_arxiv.get(matched_id)
-        if matched_paper and not matched_paper.github_repo_url:
-            matched_paper.github_repo_url = repo.url
-            logger.debug(
-                f"Cross-linked: paper '{matched_paper.title[:50]}' "
-                f"<-> repo {repo.owner}/{repo.repo}"
-            )
+        if matched_paper:
+            if not matched_paper.github_repo_url:
+                matched_paper.github_repo_url = repo.url
+                logger.debug(
+                    f"Cross-linked: paper '{matched_paper.title[:50]}' "
+                    f"<-> repo {repo.owner}/{repo.repo}"
+                )
+            # Propagate the strongest (lowest-numbered) tier
+            if repo.linked_paper_tier is not None:
+                if (
+                    matched_paper.linked_paper_tier is None
+                    or repo.linked_paper_tier < matched_paper.linked_paper_tier
+                ):
+                    matched_paper.linked_paper_tier = repo.linked_paper_tier
+                    logger.debug(
+                        f"Tier {repo.linked_paper_tier} propagated to paper "
+                        f"'{matched_paper.title[:50]}'"
+                    )

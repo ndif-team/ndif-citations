@@ -85,3 +85,20 @@ class TestDebugCommand:
         assert trace_file.exists()
         content = trace_file.read_text()
         assert "2407.33333" in content or "Out File Paper" in content
+
+    def test_tier1_paper_shows_tier_in_output(self, monkeypatch, tmp_path):
+        paper = make_paper(
+            title="Tier 1 Paper",
+            arxiv_id="2407.55555",
+            category=Category.USES_NNSIGHT,
+        )
+        paper.linked_paper_tier = 1
+        out = _write_full_json(tmp_path, [paper])
+        monkeypatch.setattr("ndif_citations.pdf_cache.get_cached_pdf", lambda p, d: None)
+        runner = CliRunner()
+        result = runner.invoke(cli, ["debug", "2407.55555", "--output-dir", str(out)])
+        assert result.exit_code == 0, result.output
+        assert "Linked paper tier" in result.output
+        assert "1" in result.output
+        assert "BibTeX" in result.output
+        assert "Tier-aware prompt augmentation: yes" in result.output

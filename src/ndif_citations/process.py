@@ -240,6 +240,28 @@ def _select_classification_prompt(context: str) -> str:
     return UNIFIED_PROMPT
 
 
+_TIER_DESCRIPTORS = {
+    1: "BibTeX block in README",
+    2: "Citation/Paper section heading",
+}
+
+_TIER_AUGMENTATION_TEMPLATE = """
+TIER {tier} CROSS-LINK EVIDENCE:
+This paper is the declared paper of a GitHub repository (via {descriptor}).
+Repositories that nnsight is a dependency of and that explicitly cite a paper
+overwhelmingly use that library. Weight this evidence heavily. The classification
+should be uses_nnsight or uses_ndif (whichever the keyword evidence supports);
+referencing is rare in this case."""
+
+
+def _augment_prompt_with_tier(prompt: str, tier: Optional[int]) -> str:
+    """Append a tier-context block for Tier 1/2 cross-links. Returns prompt unchanged otherwise."""
+    if tier is None or tier > 2:
+        return prompt
+    descriptor = _TIER_DESCRIPTORS.get(tier, f"tier {tier} link")
+    return prompt + _TIER_AUGMENTATION_TEMPLATE.format(tier=tier, descriptor=descriptor)
+
+
 def classify_category(paper: DiscoveredPaper, output_dir: Path,
                       pdf_path: Path | None = None) -> tuple[Category, float]:
     """Classify a paper's relationship to NDIF/NNsight.
@@ -311,7 +333,10 @@ def classify_category(paper: DiscoveredPaper, output_dir: Path,
         return _fallback_classification(context), 0.4
 
     try:
-        system_prompt = _select_classification_prompt(context)
+        system_prompt = _augment_prompt_with_tier(
+            _select_classification_prompt(context),
+            paper.linked_paper_tier,
+        )
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": (
