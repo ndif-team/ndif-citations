@@ -51,10 +51,22 @@ Keep it accessible to a technical but non-specialist audience. \
 Do not start with "This paper" — vary your openings."""
 
 
+def _has_usable_abstract(paper: DiscoveredPaper) -> bool:
+    """Return True if the paper has a non-trivial abstract suitable for LLM summarization."""
+    if not paper.abstract:
+        return False
+    return len(paper.abstract.strip().strip(",").strip()) >= 20
+
+
 def generate_summary(paper: DiscoveredPaper) -> str:
     """Generate an LLM summary from the paper's abstract."""
-    if not paper.abstract:
-        logger.warning(f"No abstract for '{paper.title}' — skipping summary")
+    if not _has_usable_abstract(paper):
+        raw = (paper.abstract or "")[:40]
+        logger.warning(
+            f"Skipping LLM summary for '{paper.title}' — "
+            f"abstract is {'missing' if not paper.abstract else 'too short or malformed'} "
+            f"(value: {raw!r})"
+        )
         return ""
 
     client = _get_llm_client()
@@ -596,34 +608,27 @@ def _decide_bucket(paper: DiscoveredPaper) -> tuple[Bucket, Optional[PaperReason
     """Return (bucket, reason) for a paper based on ordered demotion rules.
 
     Rules apply IN ORDER; first match wins:
-    1. openalex_source  — discovered via OpenAlex fulltext (low provenance confidence)
-    2. stub_metadata    — year==0 OR (no abstract AND no pdf_url) OR (no arxiv_id AND no doi)
-    3. unclassified_*   — classify_category returned UNCLASSIFIED
-    4. low_confidence   — category_confidence < 0.7 and not already pending
+    1. stub_metadata  — year==0 OR no usable abstract OR (no arxiv_id AND no doi)
+    2. unclassified_* — classify_category returned UNCLASSIFIED
+    3. low_confidence — category_confidence < 0.7
 
-    Papers that pass all four rules → VERIFIED.
+    Papers that pass all three rules → VERIFIED, regardless of discovery source.
     """
-    from ndif_citations.models import DiscoverySource
-
-    # Rule 1: OpenAlex source
-    if paper.source == DiscoverySource.OPENALEX_FULLTEXT:
-        return Bucket.PENDING, PaperReason.OPENALEX_SOURCE
-
-    # Rule 2: Stub metadata
+    # Rule 1: Stub metadata (missing or malformed content fields)
     if (
         paper.year == 0
-        or (paper.abstract is None and paper.pdf_url is None)
+        or not _has_usable_abstract(paper)
         or (paper.arxiv_id is None and paper.doi is None)
     ):
         return Bucket.PENDING, PaperReason.STUB_METADATA
 
-    # Rule 3: Unclassified outcome
+    # Rule 2: Unclassified outcome
     if paper.category == Category.UNCLASSIFIED:
         if paper.unclassified_reason in ("no_keywords_anywhere", "no_evidence_extractable"):
             return Bucket.PENDING, PaperReason.UNCLASSIFIED_NO_KEYWORDS
         return Bucket.PENDING, PaperReason.UNCLASSIFIED_LLM
 
-    # Rule 4: Low confidence
+    # Rule 3: Low confidence
     if paper.category_confidence < 0.7:
         return Bucket.PENDING, PaperReason.LOW_CONFIDENCE
 

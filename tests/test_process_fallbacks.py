@@ -62,3 +62,64 @@ class TestFallbackSummary:
     def test_empty_string(self):
         result = _fallback_summary("")
         assert result == ""
+
+
+# ---------------------------------------------------------------------------
+# generate_summary LLM gate (no bad-abstract LLM calls)
+# ---------------------------------------------------------------------------
+
+class TestGenerateSummaryGate:
+    def _inject_mock(self, monkeypatch, mock):
+        monkeypatch.setattr("ndif_citations.process._get_llm_client", lambda: mock)
+
+    def test_none_abstract_skips_llm_logs_warning(self, monkeypatch, caplog):
+        import logging
+        from ndif_citations.process import generate_summary
+        from tests.helpers.llm import MockLLMClient
+        from tests.conftest import make_paper
+        mock = MockLLMClient()
+        self._inject_mock(monkeypatch, mock)
+        paper = make_paper(abstract=None)
+        with caplog.at_level(logging.WARNING, logger="ndif_citations.process"):
+            result = generate_summary(paper)
+        assert result == ""
+        mock.assert_no_calls()
+        assert any("missing" in r.message for r in caplog.records)
+
+    def test_comma_abstract_skips_llm_logs_warning(self, monkeypatch, caplog):
+        import logging
+        from ndif_citations.process import generate_summary
+        from tests.helpers.llm import MockLLMClient
+        from tests.conftest import make_paper
+        mock = MockLLMClient()
+        self._inject_mock(monkeypatch, mock)
+        paper = make_paper(abstract=",")
+        with caplog.at_level(logging.WARNING, logger="ndif_citations.process"):
+            result = generate_summary(paper)
+        assert result == ""
+        mock.assert_no_calls()
+        assert any("malformed" in r.message or "short" in r.message for r in caplog.records)
+
+    def test_good_abstract_calls_llm(self, monkeypatch):
+        from ndif_citations.process import generate_summary
+        from tests.helpers.llm import MockLLMClient
+        from tests.conftest import make_paper
+        mock = MockLLMClient()
+        mock.expect("A good summary of the paper.")
+        self._inject_mock(monkeypatch, mock)
+        paper = make_paper(abstract="We propose a new method for interpreting language models using activation patching.")
+        result = generate_summary(paper)
+        assert result == "A good summary of the paper."
+        assert len(mock.record_calls()) == 1
+
+    def test_warning_includes_paper_title(self, monkeypatch, caplog):
+        import logging
+        from ndif_citations.process import generate_summary
+        from tests.helpers.llm import MockLLMClient
+        from tests.conftest import make_paper
+        mock = MockLLMClient()
+        self._inject_mock(monkeypatch, mock)
+        paper = make_paper(title="My Important Paper", abstract=None)
+        with caplog.at_level(logging.WARNING, logger="ndif_citations.process"):
+            generate_summary(paper)
+        assert any("My Important Paper" in r.message for r in caplog.records)

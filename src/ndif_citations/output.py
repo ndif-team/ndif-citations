@@ -794,8 +794,8 @@ def print_report(
 
     # Output files
     console.print("[bold]Output files:[/bold]")
-    console.print(f"  -> {output_dir / 'research-papers.json'}  ({run.total_unique} papers)")
-    console.print(f"  -> {output_dir / 'research-papers-full.json'}  ({run.total_unique} papers, all metadata)")
+    console.print(f"  -> {output_dir / 'research-papers.json'}  ({len(verified_papers)} verified papers)")
+    console.print(f"  -> {output_dir / 'research-papers-full.json'}  ({run.total_unique} total, {len(pending_papers)} pending, {len(discarded_papers)} discarded)")
     console.print(f"  -> {output_dir / 'images/'}  ({run.thumbnails_extracted} thumbnails)")
     if not skip_github:
         console.print(f"  -> {output_dir / 'github-repos.json'}  ({len(repos) if repos else 0} repos)")

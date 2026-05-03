@@ -24,7 +24,7 @@ def make_paper(
     arxiv_id: str | None = "2401.00001",
     doi: str | None = None,
     venue: str = "arXiv 2024",
-    abstract: str | None = "A test abstract.",
+    abstract: str | None = "A test abstract for the unit test suite.",
     description: str = "",
     category: Category = Category.REFERENCING,
     bucket: Bucket = Bucket.VERIFIED,
