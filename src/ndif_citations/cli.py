@@ -140,8 +140,17 @@ def run(output_dir: str | None, fresh: bool, skip_github: bool, skip_papers: boo
             console.print(f"  Shared-paper cleanup: {len(unlinked_set)} template links unlinked")
 
         # Tag every repo (runs on the merged set for consistent cross-repo state)
+        course_cleared = 0
         for repo in all_for_cross:
             repo.repo_type = _tag_repo_type(repo, unlinked_set)
+            # Course repos cite many papers — none is canonical. Clear the link
+            # so they neither display a 📄 badge nor cross-link to any paper.
+            if repo.repo_type == "course" and repo.linked_paper_url:
+                repo.linked_paper_url = None
+                repo.linked_paper_tier = None
+                course_cleared += 1
+        if course_cleared:
+            console.print(f"  Cleared linked_paper_url on {course_cleared} course repo(s)")
 
         # Cross-link repos <-> papers (minimal URL fields)
         if not skip_papers:

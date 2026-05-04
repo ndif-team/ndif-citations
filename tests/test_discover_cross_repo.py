@@ -172,3 +172,26 @@ class TestTierPropagation:
         )
         self._run_link([repo], [paper])
         assert paper.linked_paper_tier is None
+
+
+# ---------------------------------------------------------------------------
+# Course repos do NOT cross-link to papers
+# ---------------------------------------------------------------------------
+
+class TestCourseReposNotCrossLinked:
+    def test_link_repos_to_papers_skips_repos_with_no_url(self):
+        """Course repos enter link_repos_to_papers with linked_paper_url=None
+        because the run pipeline cleared it after _tag_repo_type. Verify the
+        cross-link step is then a no-op for them."""
+        from ndif_citations.discover import link_repos_to_papers
+        from tests.conftest import make_paper
+
+        paper = make_paper(arxiv_id="2212.09251", year=2022)
+        course_repo = make_repo(
+            owner="callummcdougall", repo="ARENA_3.0",
+            linked_paper_url=None,  # already cleared by the run pipeline
+            linked_paper_tier=None,
+        )
+        link_repos_to_papers([course_repo], [paper])
+        assert paper.github_repo_url is None
+        assert paper.linked_paper_tier is None
