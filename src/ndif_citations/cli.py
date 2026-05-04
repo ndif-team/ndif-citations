@@ -50,6 +50,7 @@ def run(output_dir: str | None, fresh: bool, skip_github: bool, skip_papers: boo
         discover_github_dependents,
         discover_openalex,
         discover_s2_citations,
+        discover_scholar,
         enrich_repos_from_github_api,
         link_repos_to_papers,
         _tag_repo_type,
@@ -88,12 +89,19 @@ def run(output_dir: str | None, fresh: bool, skip_github: bool, skip_papers: boo
         openalex_papers = discover_openalex(raw_dir)
         run_stats.openalex_found = len(openalex_papers)
 
-        all_papers = s2_papers + openalex_papers
+        scholar_papers = discover_scholar(raw_dir, force_refresh=fresh)
+        run_stats.scholar_found = len(scholar_papers)
+
+        all_papers = s2_papers + openalex_papers + scholar_papers
         unique_papers = deduplicate_papers(all_papers)
-        console.print(f"  Papers — S2: {run_stats.s2_citations_found}, OpenAlex: {run_stats.openalex_found}")
+        console.print(
+            f"  Papers — S2: {run_stats.s2_citations_found}, "
+            f"OpenAlex: {run_stats.openalex_found}, "
+            f"Scholar: {run_stats.scholar_found}"
+        )
         console.print(f"  After deduplication: [cyan]{len(unique_papers)}[/cyan] unique papers")
     else:
-        console.print("  [dim]--skip-papers: skipping S2/OpenAlex discovery[/dim]")
+        console.print("  [dim]--skip-papers: skipping S2/OpenAlex/Scholar discovery[/dim]")
 
     discovered_repos = []
     if not skip_github:
@@ -248,13 +256,15 @@ def run(output_dir: str | None, fresh: bool, skip_github: bool, skip_papers: boo
 
 @cli.command()
 @click.option("--output-dir", "-o", default=None, help="Custom output directory")
-def discover(output_dir: str | None) -> None:
+@click.option("--fresh", is_flag=True, help="Force-refresh Scholar cache")
+def discover(output_dir: str | None, fresh: bool) -> None:
     """Discovery only — show what papers exist without LLM processing."""
     from ndif_citations.discover import (
         deduplicate_papers,
         discover_github_dependents,
         discover_openalex,
         discover_s2_citations,
+        discover_scholar,
     )
     from ndif_citations.extract import enrich_papers
 
@@ -270,11 +280,14 @@ def discover(output_dir: str | None) -> None:
     openalex_papers = discover_openalex(raw_dir)
     console.print(f"  OpenAlex: [green]{len(openalex_papers)}[/green] papers")
 
+    scholar_papers = discover_scholar(raw_dir, force_refresh=fresh)
+    console.print(f"  Google Scholar: [green]{len(scholar_papers)}[/green] papers")
+
     github_repos = discover_github_dependents(raw_dir)
     run_stats_github = len(github_repos)
     console.print(f"  GitHub: [green]{run_stats_github}[/green] repos discovered")
 
-    all_papers = s2_papers + openalex_papers
+    all_papers = s2_papers + openalex_papers + scholar_papers
     unique_papers = deduplicate_papers(all_papers)
 
     # Basic enrichment (no LLM)

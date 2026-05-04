@@ -1,10 +1,11 @@
-"""Phase 1: Paper Discovery via Semantic Scholar, OpenAlex, and GitHub dependents."""
+"""Phase 1: Paper Discovery via Semantic Scholar, OpenAlex, GitHub dependents, and Google Scholar."""
 
 from __future__ import annotations
 
 import json
 import logging
 import re
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -31,7 +32,12 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def discover_s2_citations(raw_dir: Path | None = None) -> list[DiscoveredPaper]:
-    """Fetch all papers that cite the NDIF/NNsight seed paper via Semantic Scholar."""
+    """Fetch all papers that cite any of the NDIF/NNsight seed records via Semantic Scholar.
+
+    The seed paper has two distinct S2 records (ICLR 2025 + 2024 preprint) with
+    mostly disjoint citer sets. We query both and let _deduplicate_papers() merge
+    the small overlap.
+    """
     from semanticscholar import SemanticScholar
 
     logger.info("Discovering papers via Semantic Scholar...")
@@ -42,46 +48,43 @@ def discover_s2_citations(raw_dir: Path | None = None) -> list[DiscoveredPaper]:
 
     sch = SemanticScholar(**kwargs)
     papers: list[DiscoveredPaper] = []
+    raw_data: list[dict] = []
 
-    try:
-        # Get citations with pagination — consume iterator ONCE
-        citations = sch.get_paper_citations(
-            config.SEED_S2_ID,
-            fields=config.S2_FIELDS,
-        )
+    for seed_id in config.SEED_S2_IDS:
+        try:
+            citations = sch.get_paper_citations(seed_id, fields=config.S2_FIELDS)
 
-        # Collect all citation objects into a list (single API traversal)
-        citation_objects = []
-        for c in citations:
-            cp = getattr(c, "paper", None)
-            if cp:
-                citation_objects.append(cp)
-            rate_limit_sleep(config.S2_RATE_LIMIT_SLEEP if not config.S2_API_KEY else 0.5,
-                             "S2")
+            citation_objects = []
+            for c in citations:
+                cp = getattr(c, "paper", None)
+                if cp:
+                    citation_objects.append(cp)
+                rate_limit_sleep(config.S2_RATE_LIMIT_SLEEP if not config.S2_API_KEY else 0.5,
+                                 "S2")
 
-        # Save raw response
-        if raw_dir:
-            raw_dir.mkdir(parents=True, exist_ok=True)
-            raw_data = [
-                {"paperId": getattr(cp, "paperId", None), "title": getattr(cp, "title", None)}
-                for cp in citation_objects
-            ]
-            with open(raw_dir / "s2_citations_raw.json", "w") as f:
-                json.dump(raw_data, f, indent=2, default=str)
+            for cp in citation_objects:
+                raw_data.append({
+                    "seed": seed_id,
+                    "paperId": getattr(cp, "paperId", None),
+                    "title": getattr(cp, "title", None),
+                })
+                if not getattr(cp, "title", None):
+                    continue
+                paper = _s2_paper_to_discovered(cp)
+                if paper:
+                    papers.append(paper)
 
-        # Parse papers from the collected objects (no second API call)
-        for cp in citation_objects:
-            if not getattr(cp, "title", None):
-                continue
+            logger.info(f"  S2 seed {seed_id[:16]}...: {len(citation_objects)} citers")
 
-            paper = _s2_paper_to_discovered(cp)
-            if paper:
-                papers.append(paper)
+        except Exception as e:
+            logger.error(f"Semantic Scholar discovery failed for seed {seed_id}: {e}")
 
-    except Exception as e:
-        logger.error(f"Semantic Scholar discovery failed: {e}")
+    if raw_dir:
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        with open(raw_dir / "s2_citations_raw.json", "w") as f:
+            json.dump(raw_data, f, indent=2, default=str)
 
-    logger.info(f"Semantic Scholar: found {len(papers)} citing papers")
+    logger.info(f"Semantic Scholar: {len(papers)} citing papers across {len(config.SEED_S2_IDS)} seed records")
     return papers
 
 
@@ -336,7 +339,232 @@ def _openalex_work_to_discovered(work: dict) -> Optional[DiscoveredPaper]:
 
 
 # ---------------------------------------------------------------------------
-# Source C: GitHub Dependents
+# Source C: SerpAPI / Google Scholar
+# ---------------------------------------------------------------------------
+
+def discover_scholar(
+    raw_dir: Path | None = None,
+    force_refresh: bool = False,
+) -> list[DiscoveredPaper]:
+    """Discover papers via Google Scholar (SerpAPI).
+
+    Uses two query strategies that proved complementary in testing:
+      1. cited-by traversal of the seed paper's Scholar cluster_id
+      2. keyword search for "nnsight"
+
+    Together they recover ~85% of papers that S2/OpenAlex bibliography parsers
+    fail to link to the seed (typically because the citation in the bibtex used
+    an abbreviated/hyphenated title that wasn't normalized).
+
+    Silent-skip if SERPAPI_API_KEY is unset. Cached for 24h in raw_dir to
+    conserve the 250-call/month free-tier budget; --fresh forces refresh.
+    """
+    if not config.SERPAPI_API_KEY:
+        logger.warning("SERPAPI_API_KEY not set — skipping Google Scholar discovery")
+        return []
+
+    logger.info("Discovering papers via Google Scholar (SerpAPI)...")
+    papers: list[DiscoveredPaper] = []
+
+    # 1. Cited-by traversal
+    citedby_results = _scholar_paginate(
+        cache_path=(raw_dir / "scholar_citedby_raw.json") if raw_dir else None,
+        force_refresh=force_refresh,
+        params={"engine": "google_scholar", "cites": config.SCHOLAR_SEED_CLUSTER_ID, "hl": "en"},
+        label=f"cited-by({config.SCHOLAR_SEED_CLUSTER_ID})",
+    )
+    for r in citedby_results:
+        p = _scholar_result_to_discovered(r)
+        if p:
+            papers.append(p)
+
+    # 2. Keyword queries
+    for q in config.SCHOLAR_KEYWORD_QUERIES:
+        kw_results = _scholar_paginate(
+            cache_path=(raw_dir / f"scholar_keyword_{_slug(q)}_raw.json") if raw_dir else None,
+            force_refresh=force_refresh,
+            params={"engine": "google_scholar", "q": q, "hl": "en"},
+            label=f"keyword({q!r})",
+        )
+        for r in kw_results:
+            p = _scholar_result_to_discovered(r)
+            if p:
+                papers.append(p)
+
+    logger.info(f"Google Scholar: found {len(papers)} papers")
+    return papers
+
+
+def _scholar_paginate(
+    cache_path: Path | None,
+    force_refresh: bool,
+    params: dict,
+    label: str,
+) -> list[dict]:
+    """Page through SerpAPI Google Scholar results, with 24h disk cache.
+
+    Returns the list of organic_results across all pages. On rate-limit/error
+    mid-traversal, returns whatever has been collected so far.
+    """
+    if cache_path and cache_path.exists() and not force_refresh:
+        age = time.time() - cache_path.stat().st_mtime
+        if age < config.SCHOLAR_CACHE_TTL_SECONDS:
+            try:
+                cached = json.loads(cache_path.read_text())
+                logger.info(f"  scholar {label}: cache hit ({len(cached)} results, age={int(age)}s)")
+                return cached
+            except Exception as e:
+                logger.warning(f"  scholar {label}: cache unreadable, refetching: {e}")
+
+    all_results: list[dict] = []
+    start = 0
+    pages = 0
+    while pages < config.SCHOLAR_MAX_PAGES_PER_QUERY:
+        try:
+            resp = requests.get(
+                config.SERPAPI_BASE_URL,
+                params={**params,
+                        "api_key": config.SERPAPI_API_KEY,
+                        "num": config.SCHOLAR_PAGE_SIZE,
+                        "start": start},
+                timeout=60,
+            )
+        except Exception as e:
+            logger.warning(f"  scholar {label}: request error at start={start}: {e}")
+            break
+
+        if resp.status_code == 429:
+            logger.warning(f"  scholar {label}: rate-limited at start={start}, stopping")
+            break
+        if resp.status_code != 200:
+            logger.warning(f"  scholar {label}: HTTP {resp.status_code} at start={start}: {resp.text[:200]}")
+            break
+
+        try:
+            j = resp.json()
+        except Exception as e:
+            logger.warning(f"  scholar {label}: non-JSON response: {e}")
+            break
+
+        if "error" in j:
+            logger.warning(f"  scholar {label}: SerpAPI error: {j['error']}")
+            break
+
+        page_results = j.get("organic_results", []) or []
+        all_results.extend(page_results)
+        pages += 1
+
+        if len(page_results) < config.SCHOLAR_PAGE_SIZE:
+            break
+        if not (j.get("serpapi_pagination") or {}).get("next"):
+            break
+
+        start += config.SCHOLAR_PAGE_SIZE
+        rate_limit_sleep(config.SCHOLAR_RATE_LIMIT_SLEEP, "SerpAPI")
+
+    logger.info(f"  scholar {label}: {len(all_results)} results in {pages} call(s)")
+
+    if cache_path and all_results:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(all_results, indent=2, default=str))
+
+    return all_results
+
+
+def _scholar_result_to_discovered(result: dict) -> Optional[DiscoveredPaper]:
+    """Convert a SerpAPI Scholar organic_result into a DiscoveredPaper.
+
+    Field extraction is best-effort: Scholar metadata is HTML-scraped and
+    inconsistent. Enrichment will fill gaps via OpenAlex/CrossRef once we
+    have an arxiv_id, doi, or title to look up.
+    """
+    try:
+        title = (result.get("title") or "").strip()
+        if not title:
+            return None
+
+        link = result.get("link") or ""
+        snippet = result.get("snippet") or ""
+        pub_summary = (result.get("publication_info") or {}).get("summary", "") or ""
+
+        # Identifiers — search every field for an arxiv ID
+        arxiv_id = None
+        for field in (link, snippet, pub_summary, title):
+            arxiv_id = extract_arxiv_id_from_url(field) or _arxiv_id_in_text(field)
+            if arxiv_id:
+                break
+        if arxiv_id:
+            arxiv_id = normalize_arxiv_id(arxiv_id)
+
+        # DOI from link if it's a doi.org URL
+        doi = None
+        m = re.search(r"doi\.org/(10\.[^/\s]+/[^\s?#]+)", link)
+        if m:
+            doi = m.group(1)
+
+        # Authors and year — parse "S Author, T Author - Venue, 2025 - publisher.com"
+        authors, year, venue = _parse_scholar_pub_summary(pub_summary)
+
+        # Prefer arXiv URL if we have an arxiv ID, else the Scholar link
+        url = f"https://arxiv.org/abs/{arxiv_id}" if arxiv_id else link
+
+        return DiscoveredPaper(
+            title=title,
+            arxiv_id=arxiv_id,
+            doi=doi,
+            authors=authors,
+            venue=venue,
+            year=year,
+            url=url,
+            abstract=snippet or None,   # Scholar snippet is a partial abstract
+            source=DiscoverySource.SCHOLAR,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to parse Scholar result: {e}")
+        return None
+
+
+def _arxiv_id_in_text(text: str) -> Optional[str]:
+    """Extract a bare 'YYMM.NNNNN' arXiv ID from arbitrary text."""
+    if not text:
+        return None
+    m = re.search(r"\b(\d{4}\.\d{4,5})\b", text)
+    return m.group(1) if m else None
+
+
+def _parse_scholar_pub_summary(summary: str) -> tuple[str, int, str]:
+    """Parse Scholar's `publication_info.summary` into (authors, year, venue).
+
+    Format examples:
+      "S Author, T Other - arXiv preprint arXiv:2501.12345, 2025 - arxiv.org"
+      "A Lee, B Wong - Proc. of NeurIPS, 2024 - proceedings.neurips.cc"
+      "C Kim - 2025 - openreview.net"
+    """
+    if not summary:
+        return "", 0, ""
+    parts = [p.strip() for p in summary.split(" - ")]
+    authors = parts[0] if parts else ""
+    year = 0
+    venue = ""
+    if len(parts) >= 2:
+        # Second part contains venue + year (or just year)
+        middle = parts[1]
+        ym = re.search(r"\b(19|20)\d{2}\b", middle)
+        if ym:
+            year = int(ym.group(0))
+            venue = re.sub(r",?\s*\b(19|20)\d{2}\b", "", middle).strip(" ,")
+        else:
+            venue = middle
+    return authors, year, venue
+
+
+def _slug(text: str) -> str:
+    """Filesystem-safe slug for cache filenames."""
+    return re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_") or "q"
+
+
+# ---------------------------------------------------------------------------
+# Source D: GitHub Dependents
 # ---------------------------------------------------------------------------
 
 def discover_github_dependents(raw_dir: Path | None = None) -> list[DiscoveredRepo]:
@@ -716,14 +944,18 @@ def deduplicate_papers(all_papers: list[DiscoveredPaper]) -> list[DiscoveredPape
     seen_doi: dict[str, int] = {}    # doi -> index in result
     result: list[DiscoveredPaper] = []
 
-    # Sort by source priority: S2 first, then OpenAlex, then GitHub
+    # Sort by source priority: S2 first, then OpenAlex, then GitHub, then Scholar.
+    # Scholar metadata comes from HTML scraping and is the messiest, so it
+    # yields to all other sources when papers overlap. Papers UNIQUE to
+    # Scholar still enter the pipeline; enrichment fills in the gaps.
     source_priority = {
         DiscoverySource.S2_CITATION: 0,
         DiscoverySource.OPENALEX_FULLTEXT: 1,
         DiscoverySource.GITHUB_DEPENDENT: 2,
+        DiscoverySource.SCHOLAR: 3,
         DiscoverySource.MANUAL_ADD: 0,
     }
-    all_papers.sort(key=lambda p: source_priority.get(p.source, 3))
+    all_papers.sort(key=lambda p: source_priority.get(p.source, 4))
 
     for paper in all_papers:
         # Ignore exactly excluded seed papers

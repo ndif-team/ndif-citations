@@ -15,7 +15,13 @@ load_dotenv(_PROJECT_ROOT / ".env")
 # ---------------------------------------------------------------------------
 # Seed papers -- the NDIF/NNsight papers we track citations of
 # ---------------------------------------------------------------------------
-SEED_S2_ID = "ARXIV:2407.14561"  # NNsight & NDIF paper
+# S2 has two distinct records of the seed paper (ICLR 2025 + 2024 preprint), each
+# with a different set of citers (~6-paper overlap of ~30+ each). Querying both
+# and unioning is required for full citation recall.
+SEED_S2_IDS = [
+    "ARXIV:2407.14561",                              # ICLR 2025 record
+    "23b6a2c856a8f610b37e9534970fc49327df902e",      # 2024 preprint record (DOI-only externalIds)
+]
 SEED_ARXIV_ID = "2407.14561"
 SEED_OPENREVIEW_ID = "MxbEiFRf39"  # ICLR 2025
 
@@ -53,6 +59,21 @@ OPENALEX_SEARCH_QUERIES = [
     "ndif.us",                            # the project URL
 ]
 OPENALEX_RATE_LIMIT_SLEEP = 0.15  # ~6-7 req/sec with polite pool
+
+# ---------------------------------------------------------------------------
+# SerpAPI (Google Scholar discovery)
+# ---------------------------------------------------------------------------
+# Recovers papers whose nnsight/NDIF citation S2 and OpenAlex bibliography
+# parsers fail to link to the seed record. Free tier = 250 calls/month.
+# Per-run usage: 3 calls for cited-by traversal + 6 calls for q="nnsight" = 9 calls.
+SERPAPI_API_KEY: str | None = os.environ.get("SERPAPI_API_KEY") or None
+SERPAPI_BASE_URL = "https://serpapi.com/search.json"
+SCHOLAR_SEED_CLUSTER_ID = "8983123837757913252"  # Google Scholar cluster_id of the seed paper
+SCHOLAR_KEYWORD_QUERIES = ["nnsight"]            # NDIF query confirmed redundant in testing
+SCHOLAR_PAGE_SIZE = 20                           # Scholar SERP per-page max
+SCHOLAR_MAX_PAGES_PER_QUERY = 8                  # safety cap (~160 results / ~8 calls per query)
+SCHOLAR_CACHE_TTL_SECONDS = 86400                # 24h cache; --fresh forces refresh
+SCHOLAR_RATE_LIMIT_SLEEP = 1.0                   # SerpAPI is generous, but be polite
 
 # ---------------------------------------------------------------------------
 # Unpaywall API (free, no key required, just need email)

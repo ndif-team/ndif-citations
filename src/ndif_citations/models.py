@@ -45,6 +45,7 @@ class DiscoverySource(str, Enum):
     S2_CITATION = "s2_citation"
     OPENALEX_FULLTEXT = "openalex_fulltext"
     GITHUB_DEPENDENT = "github_dependent"
+    SCHOLAR = "scholar"
     MANUAL_ADD = "manual_add"
     # Note: arXiv API is used for enrichment, not discovery
 
@@ -260,6 +261,7 @@ class PipelineRun(BaseModel):
     run_date: datetime = Field(default_factory=datetime.now)
     s2_citations_found: int = 0
     openalex_found: int = 0
+    scholar_found: int = 0
     github_dependents_found: int = 0
     total_unique: int = 0
     new_papers: int = 0

@@ -647,6 +647,7 @@ def print_report(
     console.print("[bold]Sources checked:[/bold]")
     console.print(f"  > Semantic Scholar citations: [green]{run.s2_citations_found}[/green] found")
     console.print(f"  > OpenAlex fulltext search: [green]{run.openalex_found}[/green] found")
+    console.print(f"  > Google Scholar (SerpAPI): [green]{run.scholar_found}[/green] found")
     console.print(f"  > GitHub dependents: [green]{run.github_dependents_found}[/green] repos with papers")
     console.print()
 
