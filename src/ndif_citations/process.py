@@ -608,17 +608,24 @@ def _decide_bucket(paper: DiscoveredPaper) -> tuple[Bucket, Optional[PaperReason
     """Return (bucket, reason) for a paper based on ordered demotion rules.
 
     Rules apply IN ORDER; first match wins:
-    1. stub_metadata  — year==0 OR no usable abstract OR (no arxiv_id AND no doi)
+    1. stub_metadata  — year==0 OR no usable abstract OR no identifier of any kind
     2. unclassified_* — classify_category returned UNCLASSIFIED
     3. low_confidence — category_confidence < 0.7
 
     Papers that pass all three rules → VERIFIED, regardless of discovery source.
     """
-    # Rule 1: Stub metadata (missing or malformed content fields)
+    # Rule 1: Stub metadata. "Any identifier" means arxiv_id, doi, s2_paper_id,
+    # openalex_id, or a non-empty url — enough for a human reviewer to look
+    # the paper up. OpenReview/dissertation/ACM papers without arxiv_id/doi
+    # but with a working URL still pass.
+    has_any_identifier = bool(
+        paper.arxiv_id or paper.doi or paper.s2_paper_id
+        or paper.openalex_id or paper.url
+    )
     if (
         paper.year == 0
         or not _has_usable_abstract(paper)
-        or (paper.arxiv_id is None and paper.doi is None)
+        or not has_any_identifier
     ):
         return Bucket.PENDING, PaperReason.STUB_METADATA
 

@@ -25,6 +25,13 @@ SEED_S2_IDS = [
 SEED_ARXIV_ID = "2407.14561"
 SEED_OPENREVIEW_ID = "MxbEiFRf39"  # ICLR 2025
 
+# Papers published before this year cannot legitimately cite/use NDIF (the seed
+# was released July 2024). Applied to ALL discovery sources to suppress noise
+# (Scholar substring matches like "CNNsite", old physics papers, etc.).
+# Papers with year=0 (unknown) are NOT filtered here — they fall through to
+# the stub_metadata bucket where a human can review them.
+MIN_PAPER_YEAR = 2024
+
 # Exactly match these full lowercase titles to drop them from discovery (the origin papers themselves)
 EXCLUDED_PAPER_TITLES = {
     "nnsight and ndif: democratizing access to open-weight foundation model internals",

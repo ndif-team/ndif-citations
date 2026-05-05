@@ -378,7 +378,10 @@ def discover_scholar(
         if p:
             papers.append(p)
 
-    # 2. Keyword queries
+    # 2. Keyword queries — require word-boundary keyword match in title/snippet
+    # to suppress substring noise (e.g. "CNNsite" matching "nnsight").
+    # Cited-by results above are skipped this filter because they're already
+    # curated by Scholar's citation graph.
     for q in config.SCHOLAR_KEYWORD_QUERIES:
         kw_results = _scholar_paginate(
             cache_path=(raw_dir / f"scholar_keyword_{_slug(q)}_raw.json") if raw_dir else None,
@@ -386,13 +389,52 @@ def discover_scholar(
             params={"engine": "google_scholar", "q": q, "hl": "en"},
             label=f"keyword({q!r})",
         )
+        kept = 0
         for r in kw_results:
+            if not _has_word_boundary_keyword(r):
+                continue
             p = _scholar_result_to_discovered(r)
             if p:
                 papers.append(p)
+                kept += 1
+        logger.info(f"  scholar keyword({q!r}): {kept}/{len(kw_results)} passed word-boundary filter")
 
     logger.info(f"Google Scholar: found {len(papers)} papers")
     return papers
+
+
+_KEYWORD_WORD_RE = re.compile(r"\b(?:nnsight|ndif)\b", re.IGNORECASE)
+
+
+def _has_word_boundary_keyword(result: dict) -> bool:
+    """Return True if 'nnsight' or 'ndif' appears as a whole word in title/snippet/pub_info.
+
+    Filters substring false positives: 'CNNsite', 'cnnsite', 'tnsight', etc.
+    """
+    fields = [
+        result.get("title") or "",
+        result.get("snippet") or "",
+        (result.get("publication_info") or {}).get("summary", "") or "",
+    ]
+    return any(_KEYWORD_WORD_RE.search(f) for f in fields)
+
+
+def filter_by_min_year(papers: list[DiscoveredPaper], min_year: int) -> list[DiscoveredPaper]:
+    """Drop papers with a known publication year strictly older than min_year.
+
+    Papers with year==0 (unknown) are kept; they get sorted into stub_metadata
+    later in the pipeline so a human can review them.
+    """
+    kept: list[DiscoveredPaper] = []
+    dropped = 0
+    for p in papers:
+        if p.year and p.year < min_year:
+            dropped += 1
+            continue
+        kept.append(p)
+    if dropped:
+        logger.info(f"Year filter (min_year={min_year}): dropped {dropped} pre-{min_year} papers")
+    return kept
 
 
 def _scholar_paginate(

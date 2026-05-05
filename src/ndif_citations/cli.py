@@ -52,6 +52,7 @@ def run(output_dir: str | None, fresh: bool, skip_github: bool, skip_papers: boo
         discover_s2_citations,
         discover_scholar,
         enrich_repos_from_github_api,
+        filter_by_min_year,
         link_repos_to_papers,
         _tag_repo_type,
         _unlink_shared_template_papers,
@@ -94,12 +95,17 @@ def run(output_dir: str | None, fresh: bool, skip_github: bool, skip_papers: boo
 
         all_papers = s2_papers + openalex_papers + scholar_papers
         unique_papers = deduplicate_papers(all_papers)
+        before_year = len(unique_papers)
+        unique_papers = filter_by_min_year(unique_papers, config.MIN_PAPER_YEAR)
+        dropped_old = before_year - len(unique_papers)
         console.print(
             f"  Papers — S2: {run_stats.s2_citations_found}, "
             f"OpenAlex: {run_stats.openalex_found}, "
             f"Scholar: {run_stats.scholar_found}"
         )
-        console.print(f"  After deduplication: [cyan]{len(unique_papers)}[/cyan] unique papers")
+        console.print(f"  After deduplication: [cyan]{before_year}[/cyan] unique papers")
+        if dropped_old:
+            console.print(f"  After year filter (>= {config.MIN_PAPER_YEAR}): [cyan]{len(unique_papers)}[/cyan] (dropped {dropped_old} pre-{config.MIN_PAPER_YEAR})")
     else:
         console.print("  [dim]--skip-papers: skipping S2/OpenAlex/Scholar discovery[/dim]")
 
@@ -265,6 +271,7 @@ def discover(output_dir: str | None, fresh: bool) -> None:
         discover_openalex,
         discover_s2_citations,
         discover_scholar,
+        filter_by_min_year,
     )
     from ndif_citations.extract import enrich_papers
 
@@ -289,6 +296,7 @@ def discover(output_dir: str | None, fresh: bool) -> None:
 
     all_papers = s2_papers + openalex_papers + scholar_papers
     unique_papers = deduplicate_papers(all_papers)
+    unique_papers = filter_by_min_year(unique_papers, config.MIN_PAPER_YEAR)
 
     # Basic enrichment (no LLM)
     unique_papers = enrich_papers(unique_papers, raw_dir)
