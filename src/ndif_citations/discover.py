@@ -378,10 +378,14 @@ def discover_scholar(
         if p:
             papers.append(p)
 
-    # 2. Keyword queries — require word-boundary keyword match in title/snippet
-    # to suppress substring noise (e.g. "CNNsite" matching "nnsight").
-    # Cited-by results above are skipped this filter because they're already
-    # curated by Scholar's citation graph.
+    # 2. Keyword queries. Don't word-boundary-filter on title/snippet/pub_info:
+    # SerpAPI's snippet is just an auto-extracted paragraph, not the full text.
+    # When Scholar returns a result for q="nnsight", the keyword IS in the body
+    # somewhere — Scholar's full-text index already verified that. Filtering
+    # on the SerpAPI-visible fields would drop ~107/160 real matches whose
+    # snippet happens to feature a different paragraph. The substring noise
+    # (CNNsite, etc.) is suppressed by the year filter (MIN_PAPER_YEAR=2024)
+    # downstream instead.
     for q in config.SCHOLAR_KEYWORD_QUERIES:
         kw_results = _scholar_paginate(
             cache_path=(raw_dir / f"scholar_keyword_{_slug(q)}_raw.json") if raw_dir else None,
@@ -389,34 +393,13 @@ def discover_scholar(
             params={"engine": "google_scholar", "q": q, "hl": "en"},
             label=f"keyword({q!r})",
         )
-        kept = 0
         for r in kw_results:
-            if not _has_word_boundary_keyword(r):
-                continue
             p = _scholar_result_to_discovered(r)
             if p:
                 papers.append(p)
-                kept += 1
-        logger.info(f"  scholar keyword({q!r}): {kept}/{len(kw_results)} passed word-boundary filter")
 
     logger.info(f"Google Scholar: found {len(papers)} papers")
     return papers
-
-
-_KEYWORD_WORD_RE = re.compile(r"\b(?:nnsight|ndif)\b", re.IGNORECASE)
-
-
-def _has_word_boundary_keyword(result: dict) -> bool:
-    """Return True if 'nnsight' or 'ndif' appears as a whole word in title/snippet/pub_info.
-
-    Filters substring false positives: 'CNNsite', 'cnnsite', 'tnsight', etc.
-    """
-    fields = [
-        result.get("title") or "",
-        result.get("snippet") or "",
-        (result.get("publication_info") or {}).get("summary", "") or "",
-    ]
-    return any(_KEYWORD_WORD_RE.search(f) for f in fields)
 
 
 def filter_by_min_year(papers: list[DiscoveredPaper], min_year: int) -> list[DiscoveredPaper]:
