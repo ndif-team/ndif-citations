@@ -667,8 +667,11 @@ def query_arxiv_api(arxiv_ids: list[str]) -> dict[str, dict]:
     """Batch-query the arXiv Atom API for author names and affiliations.
 
     Sends requests in groups of 100 IDs (arXiv's recommended batch size).
-    Returns a mapping of arxiv_id -> {"authors": [...], "affiliations": [...], "categories": [...]}.
-    Affiliations are only populated when <arxiv:affiliation> tags are present.
+    Returns a mapping of arxiv_id -> {
+        "authors": [...], "affiliations": [...], "categories": [...],
+        "journal_ref": str, "comment": str,
+    }. Affiliations are only populated when <arxiv:affiliation> tags are present.
+    `journal_ref` and `comment` are empty strings when the corresponding tag is absent.
     """
     from ndif_citations import config
     import xml.etree.ElementTree as ET
@@ -721,10 +724,18 @@ def query_arxiv_api(arxiv_ids: list[str]) -> dict[str, dict]:
                     if term:
                         cats.append(term)
 
+                jref_el = entry.find("arxiv:journal_ref", ns)
+                journal_ref = jref_el.text.strip() if jref_el is not None and jref_el.text else ""
+
+                cmt_el = entry.find("arxiv:comment", ns)
+                comment = cmt_el.text.strip() if cmt_el is not None and cmt_el.text else ""
+
                 results[arxiv_id] = {
                     "authors": authors,
                     "affiliations": affiliations,
                     "categories": cats,
+                    "journal_ref": journal_ref,
+                    "comment": comment,
                 }
 
         except Exception as e:

@@ -15,6 +15,11 @@ from ndif_citations.utils import (
     query_s2_publication_venue,
     rate_limit_sleep,
 )
+from ndif_citations.venue import (
+    is_preprint_sentinel,
+    normalize_venue,
+    resolve_venue,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,15 +28,20 @@ def enrich_papers(papers: list[DiscoveredPaper], raw_dir: Path | None = None) ->
     """Enrich papers with formatted venues, peer-review status, BibTeX, and image paths."""
     logger.info(f"Enriching metadata for {len(papers)} papers...")
 
-    for paper in papers:
-        # Format venue
-        paper.venue = format_venue(paper.venue, paper.year)
+    # Step 1: Collect raw venue strings from all upstream APIs into a per-paper
+    # dict, then resolve each paper's canonical venue in one pass. This replaces
+    # the old "first non-placeholder wins" logic that locked in long-form names.
+    enrich_via_external_apis(papers)
 
-        # Detect peer-review status
+    # Step 2: Fill remaining affiliation gaps using OpenAlex (also opportunistically
+    # enriches venue from OpenAlex's primary_location.source.display_name).
+    _enrich_affiliations_from_openalex(papers, raw_dir)
+
+    # Step 3: Per-paper post-processing — peer-review, venue_type, bibtex, URL.
+    for paper in papers:
         paper.peer_reviewed = detect_peer_review(paper.venue)
         paper.venue_type = detect_venue_type(paper.venue)
 
-        # Generate BibTeX if missing
         if not paper.bibtex:
             paper.bibtex = generate_bibtex(
                 title=paper.title,
@@ -43,63 +53,10 @@ def enrich_papers(papers: list[DiscoveredPaper], raw_dir: Path | None = None) ->
                 doi=paper.doi,
             )
 
-        # Determine best URL (prefer OpenReview > arXiv > DOI)
         paper.url = _best_url(paper)
-
-    # Enrich venue + author names + affiliations via external APIs
-    enrich_via_external_apis(papers)
-
-    # Fill remaining affiliation gaps using OpenAlex
-    _enrich_affiliations_from_openalex(papers, raw_dir)
 
     logger.info("Metadata enrichment complete")
     return papers
-
-
-def format_venue(venue_raw: str, year: int) -> str:
-    """Format venue string to match the website convention.
-
-    Rules:
-      - Conference papers: "ICLR 2025", "NeurIPS 2024"
-      - Workshop papers: "NeurIPS 2024 Workshop on Scientific Methods..."
-      - ArXiv only: "ArXiv 2025"
-      - Journal: "COLM 2024"
-    """
-    if not venue_raw or venue_raw.strip() == "":
-        return f"ArXiv {year}" if year else "ArXiv"
-
-    venue = venue_raw.strip()
-
-    # Already has a year at the end?
-    import re
-    has_year = bool(re.search(r'\b20\d{2}\b', venue))
-
-    # Check for arXiv
-    if venue.lower() in ("arxiv", "arxiv.org", ""):
-        return f"ArXiv {year}" if year else "ArXiv"
-
-    # Check for bioRxiv
-    if "biorxiv" in venue.lower():
-        return f"BiorXiv {year}" if year else "BiorXiv"
-
-    # Workshop — keep full name, don't append year if already present
-    if "workshop" in venue.lower():
-        return venue if has_year else f"{venue} {year}" if year else venue
-
-    # Known conferences — abbreviate if we recognize them
-    known_conferences = config.KNOWN_VENUES.get("conferences", [])
-    for conf in known_conferences:
-        if conf.lower() in venue.lower():
-            # Use the abbreviation + year
-            if not has_year and year:
-                return f"{venue} {year}"
-            return venue
-
-    # Default: append year if missing
-    if not has_year and year:
-        return f"{venue} {year}"
-
-    return venue
 
 
 def detect_peer_review(venue: str) -> bool:
@@ -174,32 +131,21 @@ def _best_url(paper: DiscoveredPaper) -> str:
     return url or ""
 
 
-_PREPRINT_VENUE_HINTS = (
-    "arxiv", "biorxiv", "medrxiv", "ssrn", "dspace", "hal archives",
-    "repository", "openreview"  # plain "OpenReview" is the preprint host, not a venue
-)
-
-
-def _is_placeholder_venue(venue: str) -> bool:
-    """True if `venue` is empty or matches a preprint/repository placeholder."""
-    if not venue or not venue.strip():
-        return True
-    v = venue.lower()
-    return any(hint in v for hint in _PREPRINT_VENUE_HINTS)
-
-
 def enrich_via_external_apis(papers: list[DiscoveredPaper]) -> None:
-    """Enrich venue, author names, and affiliations via CrossRef, S2, OpenReview, arXiv.
+    """Collect raw venue signals from CrossRef/S2/OpenReview/arXiv, resolve, normalize.
 
-    Step A — CrossRef: for papers with non-arXiv DOIs, fetch venue + affiliations.
-    Step B — S2 publicationVenue: universal lookup by arxiv_id or doi for any paper
-             whose venue is still preprint-flavoured (regardless of discovery source).
-    Step C — OpenReview: catches ICLR/ICML/NeurIPS papers that S2 hasn't yet updated.
-    Step D — arXiv API: batch-fetch clean author names + affiliation fallback.
+    Pass 1: hit each upstream API once per paper, accumulating raw venue strings
+    into a per-paper sources dict. Affiliations and author-name refresh ride along.
+    Pass 2: feed all signals to `venue.resolve_venue()` which applies the priority
+    cascade (DOI prefix → arXiv comment → OpenAlex → S2 → CrossRef → OpenReview →
+    existing → ArXiv fallback) and `normalize_venue()` (acronym map, suffix strip).
     """
-    logger.info("Enriching papers via CrossRef and arXiv APIs...")
+    logger.info("Enriching papers via CrossRef, S2, OpenReview, arXiv...")
 
-    # Step A: CrossRef — venue resolution + affiliations for published papers
+    # Per-paper raw venue dict, keyed by id(paper) so we don't depend on a hashable model
+    sources_by_id: dict[int, dict[str, str]] = {id(p): {} for p in papers}
+
+    # ---- CrossRef: venue + affiliations for non-arXiv DOIs --------------------
     for paper in papers:
         doi = paper.doi or ""
         if not doi or "arxiv" in doi.lower():
@@ -211,11 +157,7 @@ def enrich_via_external_apis(papers: list[DiscoveredPaper]) -> None:
 
             container = data.get("container_title") or ""
             event = data.get("event_name") or ""
-            best_venue = container or event
-            # Override when the current venue is a preprint/repository placeholder
-            if best_venue and _is_placeholder_venue(paper.venue):
-                logger.debug(f"CrossRef venue update: '{paper.title[:40]}' -> {best_venue}")
-                paper.venue = best_venue
+            sources_by_id[id(paper)]["crossref"] = container or event
 
             if not paper.affiliations:
                 aff_set: set[str] = set()
@@ -233,22 +175,18 @@ def enrich_via_external_apis(papers: list[DiscoveredPaper]) -> None:
         except Exception as e:
             logger.debug(f"CrossRef enrichment failed for '{paper.title[:40]}': {e}")
 
-    # Step B: Universal S2 publicationVenue lookup
-    # Catches papers like pyvene that S2 has the conference for, but were
-    # discovered via OpenAlex (so the discovery-time S2 parse never ran).
+    # ---- S2 publicationVenue (only when current venue is a placeholder) -------
     logger.info("Querying S2 publicationVenue for papers with placeholder venues...")
     for paper in papers:
-        if not _is_placeholder_venue(paper.venue):
+        if not is_preprint_sentinel(paper.venue):
             continue
         if not paper.arxiv_id and not paper.doi:
             continue
         try:
             pv = query_s2_publication_venue(paper.arxiv_id, paper.doi)
             name = pv.get("name") or ""
-            # Skip if S2 also says it's just on arXiv
-            if name and not _is_placeholder_venue(name):
-                logger.debug(f"S2 publicationVenue update: '{paper.title[:40]}' -> {name}")
-                paper.venue = name
+            if name:
+                sources_by_id[id(paper)]["s2"] = name
             rate_limit_sleep(
                 config.S2_RATE_LIMIT_SLEEP if not config.S2_API_KEY else 0.5,
                 "S2 publicationVenue",
@@ -256,10 +194,10 @@ def enrich_via_external_apis(papers: list[DiscoveredPaper]) -> None:
         except Exception as e:
             logger.debug(f"S2 venue lookup failed for '{paper.title[:40]}': {e}")
 
-    # Step C: OpenReview — for papers still without a real venue, fuzzy-match by title
+    # ---- OpenReview (still gated on placeholder, since search is title-fuzzy) -
     logger.info("Querying OpenReview for venue resolution...")
     for paper in papers:
-        if not _is_placeholder_venue(paper.venue):
+        if not is_preprint_sentinel(paper.venue):
             continue
         if not paper.title:
             continue
@@ -267,30 +205,42 @@ def enrich_via_external_apis(papers: list[DiscoveredPaper]) -> None:
             data = query_openreview_venue(paper.title)
             venue_name = data.get("venue") or ""
             if venue_name:
-                logger.debug(f"OpenReview venue update: '{paper.title[:40]}' -> {venue_name}")
-                paper.venue = venue_name
+                sources_by_id[id(paper)]["openreview"] = venue_name
             rate_limit_sleep(0.3, "OpenReview")
         except Exception as e:
             logger.debug(f"OpenReview lookup failed for '{paper.title[:40]}': {e}")
 
-    # Step D: arXiv API batch fetch — clean author names + affiliation fallback
+    # ---- arXiv API: authors, affiliations, journal_ref, comment ---------------
     arxiv_ids = [p.arxiv_id for p in papers if p.arxiv_id]
-    if not arxiv_ids:
-        return
+    if arxiv_ids:
+        logger.info(f"Fetching arXiv metadata for {len(arxiv_ids)} papers...")
+        arxiv_data = query_arxiv_api(arxiv_ids)
 
-    logger.info(f"Fetching arXiv metadata for {len(arxiv_ids)} papers...")
-    arxiv_data = query_arxiv_api(arxiv_ids)
+        for paper in papers:
+            if not paper.arxiv_id or paper.arxiv_id not in arxiv_data:
+                continue
+            d = arxiv_data[paper.arxiv_id]
+            # Refresh author names from arXiv (authoritative, clean Unicode)
+            if d.get("authors"):
+                paper.authors = ", ".join(d["authors"])
+            if not paper.affiliations and d.get("affiliations"):
+                paper.affiliations = ", ".join(d["affiliations"])
+            # Stash venue signals from arXiv comment / journal-ref
+            if d.get("journal_ref"):
+                sources_by_id[id(paper)]["arxiv_journal_ref"] = d["journal_ref"]
+            if d.get("comment"):
+                sources_by_id[id(paper)]["arxiv_comment"] = d["comment"]
 
+    # ---- Pass 2: resolve canonical venue per paper ---------------------------
     for paper in papers:
-        if not paper.arxiv_id or paper.arxiv_id not in arxiv_data:
-            continue
-        d = arxiv_data[paper.arxiv_id]
-        # Always refresh author names from arXiv (authoritative, clean Unicode)
-        if d.get("authors"):
-            paper.authors = ", ".join(d["authors"])
-        # Fill affiliations if still missing (arXiv tags rarely populated, but try)
-        if not paper.affiliations and d.get("affiliations"):
-            paper.affiliations = ", ".join(d["affiliations"])
+        old = paper.venue
+        new = resolve_venue(paper, sources_by_id[id(paper)])
+        if new != old:
+            logger.debug(
+                f"venue: '{paper.title[:50]}' | {old!r} -> {new!r} "
+                f"(sources={list(sources_by_id[id(paper)].keys())})"
+            )
+        paper.venue = new
 
 
 def _extract_affiliations_from_authorships(authorships: list[dict]) -> str:

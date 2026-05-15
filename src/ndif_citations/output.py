@@ -265,15 +265,36 @@ def _update_existing(existing: DiscoveredPaper, new: DiscoveredPaper) -> bool:
         existing.affiliations = new.affiliations
         changed = True
 
-    # Venue upgrade (arXiv -> conference)
+    # Venue: prefer the freshly-enriched (post-resolve_venue) value, but DO NOT
+    # downgrade a CONFIDENTLY-RECOGNIZED existing venue to a preprint fallback.
+    # The merge cases we care about:
+    #   1. new=ArXiv fallback, existing=confident (e.g. "ICML 2025") → keep existing,
+    #      re-normalize so any stale long-form gets cleaned up
+    #   2. new=ArXiv fallback, existing=junk/truncated ("Handbook of Human 2025") →
+    #      take new — ArXiv is cleaner than an unrecognized stub
+    #   3. new=confident, anything → take new (it's the latest authoritative resolution)
     from ndif_citations.extract import detect_venue_type
-    old_type = detect_venue_type(existing.venue)
-    new_type = detect_venue_type(new.venue)
-    if old_type == "preprint" and new_type in ("conference", "workshop", "journal"):
-        existing.venue = new.venue
-        existing.peer_reviewed = True
-        existing.venue_type = new_type
-        changed = True
+    from ndif_citations.venue import (
+        is_confident_venue, is_preprint_sentinel, normalize_venue,
+    )
+    if new.venue and new.venue != existing.venue:
+        new_is_fallback = is_preprint_sentinel(new.venue)
+        existing_is_confident = is_confident_venue(existing.venue)
+        if new_is_fallback and existing_is_confident:
+            # Case 1: don't downgrade — re-normalize existing in case it was
+            # a pre-cleanup long-form name.
+            normalized = normalize_venue(existing.venue, existing.year)
+            if normalized and normalized != existing.venue:
+                existing.venue = normalized
+                existing.venue_type = detect_venue_type(existing.venue)
+                changed = True
+        else:
+            # Cases 2 + 3: take new.
+            existing.venue = new.venue
+            existing.venue_type = detect_venue_type(new.venue)
+            if existing.venue_type in ("conference", "workshop", "journal"):
+                existing.peer_reviewed = True
+            changed = True
 
     # Fill missing fields
     if existing.year == 0 and new.year > 0:

@@ -23,5 +23,19 @@
   "preprint_servers": [
     "ArXiv", "BiorXiv", "MedRxiv", "SSRN", "OpenReview",
     "arXiv (Cornell University)"
-  ]
+  ],
+  "acronym_map": {
+    "International Conference on Machine Learning": "ICML",
+    "Neural Information Processing Systems": "NeurIPS",
+    "Advances in Neural Information Processing Systems": "NeurIPS",
+    "International Conference on Learning Representations": "ICLR",
+    "Annual Meeting of the Association for Computational Linguistics": "ACL",
+    "North American Chapter of the Association for Computational Linguistics": "NAACL",
+    "Conference of the European Chapter of the Association for Computational Linguistics": "EACL",
+    "Conference on Empirical Methods in Natural Language Processing": "EMNLP",
+    "Conference on Fairness, Accountability and Transparency": "FAccT",
+    "Conference on Fairness, Accountability, and Transparency": "FAccT",
+    "AAAI Conference on Artificial Intelligence": "AAAI",
+    "International Joint Conference on Artificial Intelligence": "IJCAI"
+  }
 }

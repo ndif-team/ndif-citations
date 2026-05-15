@@ -58,11 +58,43 @@ class TestUpdateExisting:
         assert existing.venue == "NeurIPS 2025"
         assert existing.peer_reviewed is True
 
-    def test_venue_conference_to_conference_no_change(self):
+    def test_venue_conference_to_conference_replaces(self):
+        # The new venue is post-resolve_venue, so it's authoritative — always
+        # prefer it when it differs from the existing string. (Manual overrides
+        # are protected one level up via existing.manual_override.)
         existing = make_paper(venue="ICLR 2024")
         new = make_paper(venue="NeurIPS 2025")
+        changed = _update_existing(existing, new)
+        assert changed is True
+        assert existing.venue == "NeurIPS 2025"
+
+    def test_venue_arxiv_does_not_downgrade_confident_existing(self):
+        # Confident existing venue must NOT be replaced by an ArXiv fallback
+        # when the new pipeline run had no better source.
+        existing = make_paper(venue="ICML 2024", year=2024)
+        new = make_paper(venue="ArXiv 2024", year=2024)
         _update_existing(existing, new)
-        assert existing.venue == "ICLR 2024"
+        assert existing.venue == "ICML 2024"
+
+    def test_venue_arxiv_replaces_junk_existing(self):
+        # Existing venue that doesn't contain any known acronym/journal is
+        # treated as junk and replaced by the ArXiv fallback.
+        existing = make_paper(venue="Handbook of Human 2025", year=2025)
+        new = make_paper(venue="ArXiv 2025", year=2025)
+        changed = _update_existing(existing, new)
+        assert changed is True
+        assert existing.venue == "ArXiv 2025"
+
+    def test_venue_long_form_existing_renormalized(self):
+        # Pre-cleanup long-form existing gets re-normalized on merge even when
+        # the new paper had no better source. (This is the cleanup-on-merge path.)
+        existing = make_paper(
+            venue="International Conference on Machine Learning 2024", year=2024
+        )
+        new = make_paper(venue="ArXiv 2024", year=2024)
+        changed = _update_existing(existing, new)
+        assert changed is True
+        assert existing.venue == "ICML 2024"
 
     def test_fills_missing_doi(self):
         existing = make_paper(arxiv_id=None, doi=None)
