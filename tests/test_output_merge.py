@@ -105,8 +105,10 @@ class TestUpdateExisting:
         assert existing.venue_source == "doi_prefix"
 
     def test_venue_source_not_overwritten_when_existing_protected(self):
-        # When the ArXiv fallback would downgrade a confident existing, both
-        # venue AND venue_source stay as the previously-resolved values.
+        # When the ArXiv fallback would downgrade a confident existing, the
+        # venue stays as the previously-resolved value. venue_source backfills
+        # to whatever the new run produced — it's audit metadata, not a content
+        # signal, and the new label reflects the cascade path on this run.
         existing = make_paper(
             venue="ICML 2024", year=2024, venue_source="openalex"
         )
@@ -115,7 +117,44 @@ class TestUpdateExisting:
         )
         _update_existing(existing, new)
         assert existing.venue == "ICML 2024"
-        assert existing.venue_source == "openalex"
+        # Source backfill happens regardless of which venue we kept.
+        assert existing.venue_source == "fallback"
+
+    def test_venue_source_backfilled_when_venue_unchanged(self):
+        # Stable paper across runs: venue is identical, but the new pass labels
+        # its cascade path. The existing record gets the source label so the
+        # field doesn't stay None for legacy papers.
+        existing = make_paper(venue="ICML 2025", year=2025, venue_source=None)
+        new = make_paper(
+            venue="ICML 2025", year=2025, venue_source="doi_prefix"
+        )
+        _update_existing(existing, new)
+        assert existing.venue == "ICML 2025"
+        assert existing.venue_source == "doi_prefix"
+
+    def test_year_reconciles_across_runs_for_high_confidence_source(self):
+        # arXiv upload-year staleness: existing.year is the upload year (2024)
+        # but the new run's DOI-prefix decode tied it to the 2025 proceedings.
+        existing = make_paper(
+            venue="ACL 2025", year=2024, venue_source=None
+        )
+        new = make_paper(
+            venue="ACL 2025", year=2025, venue_source="doi_prefix"
+        )
+        changed = _update_existing(existing, new)
+        assert changed is True
+        assert existing.year == 2025
+
+    def test_year_not_reconciled_for_low_confidence_source(self):
+        # OpenAlex source doesn't embed a year — must not move the year.
+        existing = make_paper(
+            venue="ICML 2025", year=2024, venue_source=None
+        )
+        new = make_paper(
+            venue="ICML 2025", year=2025, venue_source="openalex"
+        )
+        _update_existing(existing, new)
+        assert existing.year == 2024  # unchanged
 
     def test_fills_missing_doi(self):
         existing = make_paper(arxiv_id=None, doi=None)
