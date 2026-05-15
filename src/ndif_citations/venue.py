@@ -7,7 +7,7 @@ Produces canonical venue strings for the website's research-page listing:
     - Posters/Spotlights: stripped to bare venue (no "Poster" suffix)
 
 Public surface:
-    - resolve_venue(paper, sources) -> str
+    - resolve_venue(paper, sources) -> (str, str)  # (venue, source label)
     - normalize_venue(venue, year) -> str
     - decode_doi_prefix(doi) -> str        # exposed for testing
 """
@@ -15,7 +15,20 @@ Public surface:
 from __future__ import annotations
 
 import re
-from typing import Optional
+from typing import Literal, Optional, Tuple
+
+
+VenueSource = Literal[
+    "doi_prefix",
+    "arxiv_comment_parsed",
+    "openalex",
+    "s2",
+    "crossref",
+    "openreview",
+    "existing",
+    "title_search",
+    "fallback",
+]
 
 from ndif_citations import config
 
@@ -324,20 +337,23 @@ def resolve_venue(
     sources: Optional[dict] = None,
     *,
     title_search_fn=None,
-) -> str:
+) -> Tuple[str, VenueSource]:
     """Pick the canonical venue for `paper` from all available sources.
 
+    Returns (venue, source_label). The label identifies which step in the
+    cascade produced the result — see `VenueSource` for the closed set.
+
     Priority cascade — first source whose normalized output is non-empty wins:
-        1. DOI prefix decode (deterministic, no API)
-        2. arXiv <journal-ref> parsed via _parse_arxiv_comment
-        3. arXiv <comment> parsed via _parse_arxiv_comment
-        4. OpenAlex primary_location.source.display_name (sources["openalex"])
-        5. S2 publicationVenue.name (sources["s2"])
-        6. CrossRef container_title (sources["crossref"])
-        7. OpenReview venue (sources["openreview"])
-        8. Existing paper.venue if non-placeholder
-        9. title_search_fn(paper.title) if provided and 1-8 produced nothing
-       10. Final fallback: "ArXiv {year}"
+        1. DOI prefix decode (deterministic, no API)             -> "doi_prefix"
+        2. arXiv <journal-ref> parsed via _parse_arxiv_comment   -> "arxiv_comment_parsed"
+        3. arXiv <comment> parsed via _parse_arxiv_comment       -> "arxiv_comment_parsed"
+        4. OpenAlex display_name (sources["openalex"])           -> "openalex"
+        5. S2 publicationVenue.name (sources["s2"])              -> "s2"
+        6. CrossRef container_title (sources["crossref"])        -> "crossref"
+        7. OpenReview venue (sources["openreview"])              -> "openreview"
+        8. Existing paper.venue if non-placeholder               -> "existing"
+        9. title_search_fn(paper.title) if provided              -> "title_search"
+       10. Final fallback: "ArXiv {year}"                        -> "fallback"
 
     `sources` is an optional dict with the raw venue strings each upstream
     source returned (already extracted by the enrichment pass). Each key is
@@ -357,7 +373,7 @@ def resolve_venue(
         if decoded:
             normalized = normalize_venue(decoded, year)
             if normalized:
-                return normalized
+                return normalized, "doi_prefix"
 
     # 2. arXiv journal-ref — only trust the structured "Accepted at X YYYY" form.
     # The raw journal_ref is free-form bibliographic text (e.g.,
@@ -369,7 +385,7 @@ def resolve_venue(
         if parsed:
             normalized = normalize_venue(parsed, year)
             if _is_confident_venue(normalized):
-                return normalized
+                return normalized, "arxiv_comment_parsed"
 
     # 3. arXiv comment
     cmt = sources.get("arxiv_comment") or ""
@@ -378,7 +394,7 @@ def resolve_venue(
         if parsed:
             normalized = normalize_venue(parsed, year)
             if _is_confident_venue(normalized):
-                return normalized
+                return normalized, "arxiv_comment_parsed"
 
     # 4-7. External-source venue strings, in priority order
     for key in ("openalex", "s2", "crossref", "openreview"):
@@ -387,14 +403,14 @@ def resolve_venue(
             continue
         normalized = normalize_venue(raw, year)
         if _is_confident_venue(normalized):
-            return normalized
+            return normalized, key  # type: ignore[return-value]
 
     # 8. Existing paper.venue
     existing = paper.venue or ""
     if existing:
         normalized = normalize_venue(existing, year)
         if _is_confident_venue(normalized):
-            return normalized
+            return normalized, "existing"
 
     # 9. Title-search fallback — only when we have NO identifiers to retry with
     has_id = bool(paper.arxiv_id or paper.doi or paper.openalex_id)
@@ -403,8 +419,8 @@ def resolve_venue(
         if searched:
             normalized = normalize_venue(searched, year)
             if _is_confident_venue(normalized):
-                return normalized
+                return normalized, "title_search"
 
     # 10. Final fallback — display as preprint; the paper goes to pending for
     # human review where the venue can be set via manual_override.
-    return f"ArXiv {year}" if year > 0 else "ArXiv"
+    return (f"ArXiv {year}" if year > 0 else "ArXiv"), "fallback"
