@@ -64,6 +64,19 @@ class DiscoveredPaper(BaseModel):
     authors: str = ""  # Comma-separated
     affiliations: str = ""  # Comma-separated institutions
     venue: str = ""
+    venue_source: Optional[
+        Literal[
+            "doi_prefix",            # deterministic DOI prefix decode
+            "arxiv_comment_parsed",  # _parse_arxiv_comment matched journal_ref/comment
+            "openalex",              # OpenAlex display_name
+            "s2",                    # S2 publicationVenue.name
+            "crossref",              # CrossRef container_title
+            "openreview",            # OpenReview venue
+            "existing",              # carried over from paper.venue
+            "title_search",          # title-search fallback (no identifiers)
+            "fallback",              # "ArXiv {year}" default
+        ]
+    ] = None
     year: int = 0
     publication_date: Optional[date] = None
     peer_reviewed: Optional[bool] = None

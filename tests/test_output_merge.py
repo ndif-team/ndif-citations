@@ -96,6 +96,27 @@ class TestUpdateExisting:
         assert changed is True
         assert existing.venue == "ICML 2024"
 
+    def test_venue_source_propagates_on_take_new(self):
+        # When new venue replaces existing, venue_source is mirrored alongside.
+        existing = make_paper(venue="arXiv 2024", venue_source=None)
+        new = make_paper(venue="NeurIPS 2025", venue_source="doi_prefix")
+        _update_existing(existing, new)
+        assert existing.venue == "NeurIPS 2025"
+        assert existing.venue_source == "doi_prefix"
+
+    def test_venue_source_not_overwritten_when_existing_protected(self):
+        # When the ArXiv fallback would downgrade a confident existing, both
+        # venue AND venue_source stay as the previously-resolved values.
+        existing = make_paper(
+            venue="ICML 2024", year=2024, venue_source="openalex"
+        )
+        new = make_paper(
+            venue="ArXiv 2024", year=2024, venue_source="fallback"
+        )
+        _update_existing(existing, new)
+        assert existing.venue == "ICML 2024"
+        assert existing.venue_source == "openalex"
+
     def test_fills_missing_doi(self):
         existing = make_paper(arxiv_id=None, doi=None)
         new = make_paper(arxiv_id=None, doi="10.1234/test")
@@ -200,6 +221,13 @@ class TestWebsiteContract:
         d = p.to_website_dict()
         assert "unclassified_reason" not in d
 
+    def test_venue_source_not_in_website_dict(self):
+        # Provenance label is internal/audit-only — must not surface on the
+        # public website schema until a UI design decision is made.
+        p = make_paper(venue_source="doi_prefix")
+        d = p.to_website_dict()
+        assert "venue_source" not in d
+
     def test_image_included_when_present(self):
         p = make_paper()
         p.image = "/images/Test-Paper.png"
@@ -270,6 +298,14 @@ class TestFullDictRoundTrip:
         d = p.to_full_dict()
         restored = DiscoveredPaper.model_validate(d)
         assert restored.classification_signal == "pre_filter:acks_only_thank_you"
+
+    def test_venue_source_in_full_dict_round_trip(self):
+        p = make_paper(venue_source="doi_prefix")
+        d = p.to_full_dict()
+        assert "venue_source" in d
+        assert d["venue_source"] == "doi_prefix"
+        restored = DiscoveredPaper.model_validate(d)
+        assert restored.venue_source == "doi_prefix"
 
     def test_classification_signal_none_by_default(self):
         p = make_paper()

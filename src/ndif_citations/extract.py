@@ -256,6 +256,7 @@ def enrich_via_external_apis(papers: list[DiscoveredPaper]) -> None:
                     )
                     paper.year = venue_year
         paper.venue = new
+        paper.venue_source = source
 
 
 def _extract_affiliations_from_authorships(authorships: list[dict]) -> str:

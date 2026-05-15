@@ -291,6 +291,7 @@ def _update_existing(existing: DiscoveredPaper, new: DiscoveredPaper) -> bool:
         else:
             # Cases 2 + 3: take new.
             existing.venue = new.venue
+            existing.venue_source = new.venue_source
             existing.venue_type = detect_venue_type(new.venue)
             if existing.venue_type in ("conference", "workshop", "journal"):
                 existing.peer_reviewed = True
