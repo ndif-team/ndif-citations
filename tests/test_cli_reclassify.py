@@ -172,11 +172,14 @@ class TestReclassifyOutputDiff:
         assert "referencing" in result.output
 
     def test_unchanged_paper_shows_no_changes(self, monkeypatch, tmp_path):
+        # Paper already at MEDIUM band (single-window LLM verdict outcome).
+        # Reclassify with a single-window context returns REFERENCING / MEDIUM —
+        # band unchanged, so no diff should be reported.
         paper = make_paper(
             arxiv_id="2604.00050",
             title="Already Correct",
             category=Category.REFERENCING,
-            category_confidence=0.85,
+            category_confidence=0.55,
         )
         out = _write_full_json(tmp_path, [paper])
         mock = MockLLMClient()

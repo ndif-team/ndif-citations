@@ -71,7 +71,7 @@ class TestClassifyCategoryTierIntegration:
         paper = make_paper(abstract="We use nnsight.")
         paper.linked_paper_tier = 1
 
-        cat, _ = classify_category(paper, Path("/tmp"), pdf_path=pdf)
+        cat, _conf, _band = classify_category(paper, Path("/tmp"), pdf_path=pdf)
         assert cat == Category.USES_NNSIGHT
 
         calls = mock.record_calls()

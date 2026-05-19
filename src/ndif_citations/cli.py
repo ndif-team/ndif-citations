@@ -680,14 +680,15 @@ def reclassify(ids: str | None, output_dir: str | None, dry_run: bool) -> None:
         old_cat = paper.category.value
         pdf_path = get_cached_pdf(paper, out)
 
-        new_cat, new_conf = classify_category(paper, out, pdf_path=pdf_path)
+        new_cat, new_conf, new_band = classify_category(paper, out, pdf_path=pdf_path)
 
-        if new_cat != paper.category or new_conf != paper.category_confidence:
+        if new_cat != paper.category or new_band != paper.category_confidence_band:
             signal = paper.classification_signal
             changes.append((paper.title, old_cat, new_cat.value, signal))
             if not dry_run:
                 paper.category = new_cat
                 paper.category_confidence = new_conf
+                paper.category_confidence_band = new_band
                 paper.has_classification = new_cat != Category.UNCLASSIFIED
 
     # Print diff
@@ -839,6 +840,145 @@ def discard(paper_id: str, output_dir: str | None, detail: str | None, dry_run: 
     run = PipelineRun()
     write_outputs(papers, out, run)
     console.print("  [green]✓ Discarded and saved.[/green]")
+
+
+@cli.command()
+@click.argument("paper_id")
+@click.option("--output-dir", "-o", default=None, help="Custom output directory")
+@click.option("--set", "set_pairs", multiple=True,
+              help="One-shot field=value (repeatable). Bypasses the interactive prompt.")
+@click.option("--dry-run", is_flag=True, help="Preview changes without writing files")
+@click.option("--yes", "auto_confirm", is_flag=True,
+              help="Skip the final 'Save? [Y/n]' confirmation (for scripting)")
+def edit(paper_id: str, output_dir: str | None,
+         set_pairs: tuple[str, ...], dry_run: bool, auto_confirm: bool) -> None:
+    """Interactively edit a paper's fields. Sets manual_override=True on save.
+
+    Two modes:
+      Interactive: `edit <id>` — menu-driven prompt loop.
+      One-shot:    `edit <id> --set field=value --set field2=value2 --yes`
+
+    PAPER_ID can be an arXiv ID, DOI, or full URL.
+    """
+    from ndif_citations.edit_schema import EDITABLE_FIELDS, get_field
+    from ndif_citations.models import Category, PipelineRun
+    from ndif_citations.output import load_existing_papers, write_outputs
+    from ndif_citations.process import _decide_bucket
+
+    out = config.get_output_dir(output_dir)
+    papers = load_existing_papers(out)
+    idx, paper = _resolve_paper(papers, paper_id)
+    if paper is None:
+        console.print(f"[bold yellow]WARNING:[/bold yellow] Paper not found for ID {paper_id!r}")
+        return
+
+    console.print(f"\n[bold cyan]Edit paper:[/bold cyan] {paper.title[:80]}\n")
+
+    changes: list[tuple[str, str, str]] = []  # (field_name, old, new)
+
+    if set_pairs:
+        # One-shot mode: parse --set entries
+        for pair in set_pairs:
+            if "=" not in pair:
+                console.print(f"  [red]Bad --set value (need 'field=value'): {pair!r}[/red]")
+                raise SystemExit(1)
+            name, _, raw_value = pair.partition("=")
+            field = get_field(name.strip())
+            if field is None:
+                console.print(f"  [red]Unknown field: {name!r}[/red]")
+                raise SystemExit(1)
+            try:
+                new_value = field.parse(raw_value)
+            except Exception as e:
+                console.print(f"  [red]Failed to parse {name}={raw_value!r}: {e}[/red]")
+                raise SystemExit(1)
+            old_value = getattr(paper, field.name)
+            if new_value != old_value:
+                setattr(paper, field.name, new_value)
+                changes.append((field.name, str(old_value), str(new_value)))
+    else:
+        # Interactive mode
+        while True:
+            console.print("\nEditable fields:")
+            for i, f in enumerate(EDITABLE_FIELDS, 1):
+                current = getattr(paper, f.name)
+                if current in (None, "", 0):
+                    display = "[dim](none)[/dim]"
+                else:
+                    display = str(current)
+                if len(display) > 60:
+                    display = display[:57] + "..."
+                console.print(f"  [{i:2}] {f.label:<16} {display}")
+            choice = click.prompt(
+                "\nChoose field number (q=save+quit, a=abort)",
+                default="q", show_default=False,
+            )
+            choice = choice.strip().lower()
+            if choice == "a":
+                console.print("[yellow]Aborted, no changes saved.[/yellow]")
+                return
+            if choice == "q":
+                break
+            try:
+                n = int(choice)
+                if not 1 <= n <= len(EDITABLE_FIELDS):
+                    raise ValueError
+            except ValueError:
+                console.print("  [red]Bad choice — pick a number, q, or a.[/red]")
+                continue
+            field = EDITABLE_FIELDS[n - 1]
+            current = getattr(paper, field.name)
+            console.print(f"\n  Current {field.label}: [cyan]{current!r}[/cyan]")
+            console.print(f"  Hint: {field.description}")
+            raw = click.prompt("  New value (empty=keep)", default="", show_default=False)
+            if not raw:
+                continue
+            try:
+                new_value = field.parse(raw)
+            except Exception as e:
+                console.print(f"  [red]Failed to parse: {e}[/red]")
+                continue
+            old_value = current
+            setattr(paper, field.name, new_value)
+            changes.append((field.name, str(old_value), str(new_value)))
+            console.print(f"  [green][updated] {field.label}: {old_value} -> {new_value}[/green]")
+
+    if not changes:
+        console.print("\n[dim]No changes made.[/dim]")
+        return
+
+    # Re-derive has_* flags from the edited fields
+    paper.has_summary = bool(paper.description)
+    paper.has_classification = paper.category != Category.UNCLASSIFIED
+    paper.has_thumbnail = bool(paper.image)
+    paper.has_affiliations = bool(paper.affiliations)
+    paper.manual_override = True
+
+    # Re-run _decide_bucket if user didn't explicitly set bucket
+    if not any(name == "bucket" for name, _, _ in changes):
+        new_bucket, new_reason = _decide_bucket(paper)
+        if new_bucket != paper.bucket:
+            paper.bucket = new_bucket
+            paper.reason = new_reason
+
+    # Print diff
+    console.print("\n[bold]Summary of changes:[/bold]")
+    for name, old, new in changes:
+        console.print(f"  {name}: [yellow]{old}[/yellow] -> [green]{new}[/green]")
+    console.print(f"\nmanual_override will be set to True.")
+
+    if dry_run:
+        console.print("\n[dim]Dry run — no files written.[/dim]")
+        return
+
+    if not auto_confirm:
+        if not click.confirm("Save?", default=True):
+            console.print("[yellow]Aborted, no changes saved.[/yellow]")
+            return
+
+    run = PipelineRun()
+    write_outputs(papers, out, run)
+    console.print("\n[green][OK] Saved.[/green]")
 
 
 if __name__ == "__main__":

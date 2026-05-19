@@ -22,3 +22,8 @@ Thumbs.db
 docs/CI_CD_NOTES.md
 docs/CODEBASE_CONTEXT.md
 docs/github_actions_template.yml
+docs/FINALE_MERGER_NOTES.md
+docs/PAPERS_NEEDING_BETTER_SUMMARIES.md
+scripts/validate_venues_against_manual.py
+scripts/merger/
+/tasks

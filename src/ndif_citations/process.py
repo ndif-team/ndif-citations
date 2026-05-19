@@ -8,7 +8,9 @@ from pathlib import Path
 from typing import Optional
 
 from ndif_citations import config
-from ndif_citations.models import Bucket, Category, DiscoveredPaper, DiscoveredRepo, PaperReason
+from ndif_citations.models import (
+    Bucket, Category, Confidence, DiscoveredPaper, DiscoveredRepo, PaperReason,
+)
 from ndif_citations.router import ProcessingBucket, RepoRoutingDecision, RoutingDecision
 from ndif_citations.utils import (
     _fetch_repo_readme,
@@ -38,6 +40,51 @@ def _get_llm_client():
         base_url=config.LLM_BASE_URL,
         api_key=config.LLM_API_KEY,
     )
+
+
+# ---------------------------------------------------------------------------
+# Confidence band derivation (pure function)
+# ---------------------------------------------------------------------------
+
+def _compute_confidence_band(
+    *,
+    signal: str,
+    linked_paper_tier: Optional[int],
+    surviving_window_count: int,
+    context_source: str,
+    category: Category,
+) -> Confidence:
+    """Map classification metadata to a Confidence band.
+
+    Rules (first match wins):
+      1. UNCLASSIFIED                                          -> NONE
+      2. signal == pre_filter:negative_evidence                -> CERTAIN
+      3. signal in (pre_filter:comparison_table,
+                    pre_filter:acks_only_thank_you)            -> MEDIUM
+      4. signal == keyword_fallback                            -> LOW
+      5. signal == llm AND (linked_paper_tier <= 2
+                            OR surviving_window_count >= 2)    -> HIGH
+      6. signal == llm AND (single window OR abstract-only)    -> MEDIUM
+      7. anything else                                         -> LOW (defensive)
+    """
+    if category == Category.UNCLASSIFIED:
+        return Confidence.NONE
+    if signal == "pre_filter:negative_evidence":
+        return Confidence.CERTAIN
+    if signal in (
+        "pre_filter:comparison_table",
+        "pre_filter:acks_only_thank_you",
+    ):
+        return Confidence.MEDIUM
+    if signal == "keyword_fallback":
+        return Confidence.LOW
+    if signal == "llm":
+        if linked_paper_tier is not None and linked_paper_tier <= 2:
+            return Confidence.HIGH
+        if surviving_window_count >= 2:
+            return Confidence.HIGH
+        return Confidence.MEDIUM
+    return Confidence.LOW
 
 
 # ---------------------------------------------------------------------------
@@ -274,21 +321,22 @@ def _augment_prompt_with_tier(prompt: str, tier: Optional[int]) -> str:
     return prompt + _TIER_AUGMENTATION_TEMPLATE.format(tier=tier, descriptor=descriptor)
 
 
-def classify_category(paper: DiscoveredPaper, output_dir: Path,
-                      pdf_path: Path | None = None) -> tuple[Category, float]:
+def classify_category(
+    paper: DiscoveredPaper, output_dir: Path,
+    pdf_path: Path | None = None,
+) -> tuple[Category, float, Confidence]:
     """Classify a paper's relationship to NDIF/NNsight.
 
-    Args:
-        paper: The paper to classify.
-        output_dir: Working directory for temp files.
-        pdf_path: Pre-downloaded PDF path (avoids re-downloading).
-
-    Returns (category, confidence) where confidence is 0.0-1.0.
-    Sets paper.unclassified_reason when returning UNCLASSIFIED.
+    Returns (category, float_confidence, band). The float is derived from
+    the band via _BAND_TO_FLOAT for backwards-compat callers. Sets
+    paper.unclassified_reason on UNCLASSIFIED outcomes and
+    paper.classification_signal to the label used by _compute_confidence_band.
     """
-    # Try to extract context from PDF (use pre-downloaded if available)
+    from ndif_citations.models import _BAND_TO_FLOAT  # local import to avoid cycle
+
     context = ""
     context_source = "none"
+
     if pdf_path and pdf_path.exists():
         context = extract_ndif_context(pdf_path, window=config.CONTEXT_WINDOW)
         logger.debug(f"PDF text extracted for '{paper.title}': context length={len(context)}")
@@ -296,7 +344,6 @@ def classify_category(paper: DiscoveredPaper, output_dir: Path,
     # If no PDF context, try using abstract
     if not context or "No direct mentions" in context:
         if paper.abstract:
-            # Check abstract for keywords
             abstract_lower = paper.abstract.lower()
             has_mention = any(kw.lower() in abstract_lower for kw in config.NDIF_KEYWORDS)
             if has_mention:
@@ -304,17 +351,17 @@ def classify_category(paper: DiscoveredPaper, output_dir: Path,
                 context_source = "abstract"
                 logger.debug(f"Using abstract as context for '{paper.title}'")
             else:
-                # No mentions anywhere — abstract checked, no keywords
-                logger.info(f"No NDIF/nnsight mentions found for '{paper.title}' — marking as UNCLASSIFIED")
-                logger.debug(f"Context source: {'pdf (no mentions)' if pdf_path else 'none'} + abstract (no keywords)")
+                logger.info(f"No NDIF/nnsight mentions found for '{paper.title}' — UNCLASSIFIED")
                 paper.unclassified_reason = "no_keywords_anywhere"
-                return Category.UNCLASSIFIED, 0.0
+                paper.classification_signal = "no_keywords"
+                band = Confidence.NONE
+                return Category.UNCLASSIFIED, _BAND_TO_FLOAT[band], band
         else:
-            # No usable PDF context and no abstract
-            logger.info(f"No extractable evidence for '{paper.title}' — marking as UNCLASSIFIED")
-            logger.debug(f"Context source: none (pdf_path={pdf_path}, abstract={paper.abstract!r})")
+            logger.info(f"No extractable evidence for '{paper.title}' — UNCLASSIFIED")
             paper.unclassified_reason = "no_evidence_extractable"
-            return Category.UNCLASSIFIED, 0.0
+            paper.classification_signal = "no_evidence"
+            band = Confidence.NONE
+            return Category.UNCLASSIFIED, _BAND_TO_FLOAT[band], band
     else:
         context_source = "pdf"
 
@@ -325,15 +372,23 @@ def classify_category(paper: DiscoveredPaper, output_dir: Path,
 
     # Pre-filters: split context into windows and filter each one
     windows = context.split("\n---\n")
-    surviving_windows, signal = _apply_prefilters(windows, paper)
+    surviving_windows, prefilter_signal = _apply_prefilters(windows, paper)
+    surviving_window_count = len(surviving_windows)
+
     if not surviving_windows:
         # All windows eliminated by pre-filter — classify without LLM
-        confidence = 0.9 if signal == "pre_filter:negative_evidence" else 0.85
-        paper.classification_signal = signal
+        paper.classification_signal = prefilter_signal
         logger.debug(
-            f"Pre-filter '{signal}' matched all windows for '{paper.title}' — REFERENCING"
+            f"Pre-filter '{prefilter_signal}' matched all windows for '{paper.title}' — REFERENCING"
         )
-        return Category.REFERENCING, confidence
+        band = _compute_confidence_band(
+            signal=prefilter_signal or "pre_filter:unknown",
+            linked_paper_tier=paper.linked_paper_tier,
+            surviving_window_count=0,
+            context_source=context_source,
+            category=Category.REFERENCING,
+        )
+        return Category.REFERENCING, _BAND_TO_FLOAT[band], band
 
     # Some or all windows survived — rebuild context for LLM
     context = "\n---\n".join(surviving_windows)
@@ -342,7 +397,16 @@ def classify_category(paper: DiscoveredPaper, output_dir: Path,
     client = _get_llm_client()
     if not client:
         logger.debug(f"No LLM client — using fallback keyword rules for '{paper.title}'")
-        return _fallback_classification(context), 0.4
+        cat = _fallback_classification(context)
+        paper.classification_signal = "keyword_fallback"
+        band = _compute_confidence_band(
+            signal="keyword_fallback",
+            linked_paper_tier=paper.linked_paper_tier,
+            surviving_window_count=surviving_window_count,
+            context_source=context_source,
+            category=cat,
+        )
+        return cat, _BAND_TO_FLOAT[band], band
 
     try:
         system_prompt = _augment_prompt_with_tier(
@@ -369,22 +433,45 @@ def classify_category(paper: DiscoveredPaper, output_dir: Path,
 
         # Parse response
         if "uses_ndif" in raw:
-            return Category.USES_NDIF, 0.85
+            cat = Category.USES_NDIF
         elif "uses_nnsight" in raw:
-            return Category.USES_NNSIGHT, 0.85
+            cat = Category.USES_NNSIGHT
         elif "referencing" in raw:
-            return Category.REFERENCING, 0.85
+            cat = Category.REFERENCING
         elif "unclassified" in raw:
             paper.unclassified_reason = "llm_returned_unclassified"
-            return Category.UNCLASSIFIED, 0.0
+            paper.classification_signal = "llm"
+            band = Confidence.NONE
+            return Category.UNCLASSIFIED, _BAND_TO_FLOAT[band], band
         else:
-            logger.warning(f"Unexpected LLM classification '{raw}' for '{paper.title}' — defaulting to unclassified")
+            logger.warning(f"Unexpected LLM classification '{raw}' for '{paper.title}' — UNCLASSIFIED")
             paper.unclassified_reason = "llm_unparseable"
-            return Category.UNCLASSIFIED, 0.0
+            paper.classification_signal = "llm"
+            band = Confidence.NONE
+            return Category.UNCLASSIFIED, _BAND_TO_FLOAT[band], band
+
+        paper.classification_signal = "llm"
+        band = _compute_confidence_band(
+            signal="llm",
+            linked_paper_tier=paper.linked_paper_tier,
+            surviving_window_count=surviving_window_count,
+            context_source=context_source,
+            category=cat,
+        )
+        return cat, _BAND_TO_FLOAT[band], band
 
     except Exception as e:
         logger.warning(f"LLM classification failed for '{paper.title}': {e}")
-        return _fallback_classification(context), 0.4
+        cat = _fallback_classification(context)
+        paper.classification_signal = "keyword_fallback"
+        band = _compute_confidence_band(
+            signal="keyword_fallback",
+            linked_paper_tier=paper.linked_paper_tier,
+            surviving_window_count=surviving_window_count,
+            context_source=context_source,
+            category=cat,
+        )
+        return cat, _BAND_TO_FLOAT[band], band
 
 
 def _fallback_classification(context: str) -> Category:
@@ -608,16 +695,13 @@ def _decide_bucket(paper: DiscoveredPaper) -> tuple[Bucket, Optional[PaperReason
     """Return (bucket, reason) for a paper based on ordered demotion rules.
 
     Rules apply IN ORDER; first match wins:
-    1. stub_metadata  — year==0 OR no usable abstract OR no identifier of any kind
-    2. unclassified_* — classify_category returned UNCLASSIFIED
-    3. low_confidence — category_confidence < 0.7
+    1. stub_metadata     — year==0 OR no usable abstract OR no identifier
+    2. unclassified_*    — Category.UNCLASSIFIED
+    3. medium_confidence — band == MEDIUM
+    4. low_confidence    — band == LOW
 
-    Papers that pass all three rules → VERIFIED, regardless of discovery source.
+    Papers with band CERTAIN or HIGH pass through to VERIFIED.
     """
-    # Rule 1: Stub metadata. "Any identifier" means arxiv_id, doi, s2_paper_id,
-    # openalex_id, or a non-empty url — enough for a human reviewer to look
-    # the paper up. OpenReview/dissertation/ACM papers without arxiv_id/doi
-    # but with a working URL still pass.
     has_any_identifier = bool(
         paper.arxiv_id or paper.doi or paper.s2_paper_id
         or paper.openalex_id or paper.url
@@ -629,14 +713,15 @@ def _decide_bucket(paper: DiscoveredPaper) -> tuple[Bucket, Optional[PaperReason
     ):
         return Bucket.PENDING, PaperReason.STUB_METADATA
 
-    # Rule 2: Unclassified outcome
     if paper.category == Category.UNCLASSIFIED:
         if paper.unclassified_reason in ("no_keywords_anywhere", "no_evidence_extractable"):
             return Bucket.PENDING, PaperReason.UNCLASSIFIED_NO_KEYWORDS
         return Bucket.PENDING, PaperReason.UNCLASSIFIED_LLM
 
-    # Rule 3: Low confidence
-    if paper.category_confidence < 0.7:
+    if paper.category_confidence_band == Confidence.MEDIUM:
+        return Bucket.PENDING, PaperReason.MEDIUM_CONFIDENCE
+
+    if paper.category_confidence_band == Confidence.LOW:
         return Bucket.PENDING, PaperReason.LOW_CONFIDENCE
 
     return Bucket.VERIFIED, None
@@ -726,6 +811,34 @@ def process_papers(
             results.append(paper)
             continue
 
+        # FILL_GAPS on a manual_override paper: hydrate the discovered paper
+        # with the curated existing state so the fields we don't refill
+        # (everything except has_* gaps) persist across runs.
+        is_protected_manual = (
+            bucket == ProcessingBucket.FILL_GAPS
+            and decision.existing_paper is not None
+            and decision.existing_paper.manual_override
+        )
+        if is_protected_manual:
+            existing = decision.existing_paper
+            paper.title = existing.title or paper.title
+            paper.authors = existing.authors or paper.authors
+            paper.affiliations = existing.affiliations or paper.affiliations
+            paper.venue = existing.venue or paper.venue
+            paper.year = existing.year or paper.year
+            paper.description = existing.description or paper.description
+            paper.category = existing.category
+            paper.category_confidence = existing.category_confidence
+            paper.category_confidence_band = existing.category_confidence_band
+            paper.bucket = existing.bucket
+            paper.reason = existing.reason
+            paper.reason_detail = existing.reason_detail
+            paper.image = existing.image or paper.image
+            paper.project_url = existing.project_url or paper.project_url
+            paper.url = existing.url or paper.url
+            paper.pdf_url = existing.pdf_url or paper.pdf_url
+            paper.manual_override = True
+
         # Get PDF path if needed for classification, thumbnail, or affiliations
         pdf_path = None
         if needs.get("classify") or needs.get("thumbnail") or needs.get("affiliations"):
@@ -733,10 +846,13 @@ def process_papers(
             if not pdf_path:
                 logger.warning(f"Could not get PDF for '{paper.title[:50]}...'")
 
-        # Summary generation
+        # Summary generation — guarded for manual_override
         if needs.get("summary") and not skip_llm:
-            paper.description = generate_summary(paper)
-            paper.has_summary = bool(paper.description)
+            if is_protected_manual and paper.description:
+                logger.debug(f"FILL_GAPS guard: keeping curated description for '{paper.title[:50]}'")
+            else:
+                paper.description = generate_summary(paper)
+        paper.has_summary = bool(paper.description)
 
         # Discard check: zero PDF keyword hits (US-D2)
         if needs.get("classify") and pdf_path:
@@ -745,29 +861,31 @@ def process_papers(
                 results.append(paper)
                 continue
 
-        # Category classification
+        # Category classification — guarded for manual_override
         if needs.get("classify") and not skip_llm:
-            effective_pdf = pdf_path if pdf_path and pdf_path.exists() else None
-            category, confidence = classify_category(paper, output_dir, pdf_path=effective_pdf)
-            paper.category = category
-            paper.category_confidence = confidence
-            paper.has_classification = category != Category.UNCLASSIFIED
+            if is_protected_manual and paper.category != Category.UNCLASSIFIED:
+                logger.debug(f"FILL_GAPS guard: keeping curated category for '{paper.title[:50]}'")
+            else:
+                effective_pdf = pdf_path if pdf_path and pdf_path.exists() else None
+                category, confidence, band = classify_category(paper, output_dir, pdf_path=effective_pdf)
+                paper.category = category
+                paper.category_confidence = confidence
+                paper.category_confidence_band = band
+                paper.has_classification = category != Category.UNCLASSIFIED
+                paper.bucket, paper.reason = _decide_bucket(paper)
 
-            # Bucket decision after classification (US-D3)
-            paper.bucket, paper.reason = _decide_bucket(paper)
-
-        # Thumbnail extraction
+        # Thumbnail extraction — guarded for manual_override
         if needs.get("thumbnail"):
-            if pdf_path and pdf_path.exists():
+            if is_protected_manual and paper.image:
+                logger.debug(f"FILL_GAPS guard: keeping curated image for '{paper.title[:50]}'")
+            elif pdf_path and pdf_path.exists():
                 image_filename = f"{slugify(paper.title)}.png"
                 image_path = output_dir / "images" / image_filename
-
                 if not image_path.exists():
                     extracted = extract_thumbnail(paper, output_dir, pdf_path=pdf_path)
                     if extracted:
                         paper.image = extracted
-
-            paper.has_thumbnail = bool(paper.image)
+        paper.has_thumbnail = bool(paper.image)
 
         # Affiliation extraction from PDF (heuristic, no LLM)
         if needs.get("affiliations") and not paper.affiliations and pdf_path and pdf_path.exists():
