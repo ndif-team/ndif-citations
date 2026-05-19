@@ -84,9 +84,18 @@ class TestRoutePapers:
         assert all(decisions[0].processing_needed.values())
 
     def test_protected_paper_ignores_hash_change(self):
-        existing_p = make_paper(arxiv_id="2407.00001", manual_override=True)
+        # manual_override + all has_* flags set → PROTECTED even when hash changes.
+        # (manual_override with missing flags now routes to FILL_GAPS — see
+        # tests/test_router_protected_fill_gaps.py)
+        existing_p = make_paper(
+            arxiv_id="2407.00001",
+            manual_override=True,
+            has_summary=True,
+            has_classification=True,
+            has_thumbnail=True,
+            has_affiliations=True,
+        )
         discovered_p = make_paper(arxiv_id="2407.00001", abstract="different abstract")
-        # Force a different hash
         discovered_p.content_hash = "aabbccddeeff0011"
         decisions = route_papers([discovered_p], [existing_p])
         assert decisions[0].bucket == ProcessingBucket.PROTECTED
