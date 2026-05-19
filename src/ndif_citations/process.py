@@ -8,7 +8,9 @@ from pathlib import Path
 from typing import Optional
 
 from ndif_citations import config
-from ndif_citations.models import Bucket, Category, DiscoveredPaper, DiscoveredRepo, PaperReason
+from ndif_citations.models import (
+    Bucket, Category, Confidence, DiscoveredPaper, DiscoveredRepo, PaperReason,
+)
 from ndif_citations.router import ProcessingBucket, RepoRoutingDecision, RoutingDecision
 from ndif_citations.utils import (
     _fetch_repo_readme,
@@ -38,6 +40,51 @@ def _get_llm_client():
         base_url=config.LLM_BASE_URL,
         api_key=config.LLM_API_KEY,
     )
+
+
+# ---------------------------------------------------------------------------
+# Confidence band derivation (pure function)
+# ---------------------------------------------------------------------------
+
+def _compute_confidence_band(
+    *,
+    signal: str,
+    linked_paper_tier: Optional[int],
+    surviving_window_count: int,
+    context_source: str,
+    category: Category,
+) -> Confidence:
+    """Map classification metadata to a Confidence band.
+
+    Rules (first match wins):
+      1. UNCLASSIFIED                                          -> NONE
+      2. signal == pre_filter:negative_evidence                -> CERTAIN
+      3. signal in (pre_filter:comparison_table,
+                    pre_filter:acks_only_thank_you)            -> MEDIUM
+      4. signal == keyword_fallback                            -> LOW
+      5. signal == llm AND (linked_paper_tier <= 2
+                            OR surviving_window_count >= 2)    -> HIGH
+      6. signal == llm AND (single window OR abstract-only)    -> MEDIUM
+      7. anything else                                         -> LOW (defensive)
+    """
+    if category == Category.UNCLASSIFIED:
+        return Confidence.NONE
+    if signal == "pre_filter:negative_evidence":
+        return Confidence.CERTAIN
+    if signal in (
+        "pre_filter:comparison_table",
+        "pre_filter:acks_only_thank_you",
+    ):
+        return Confidence.MEDIUM
+    if signal == "keyword_fallback":
+        return Confidence.LOW
+    if signal == "llm":
+        if linked_paper_tier is not None and linked_paper_tier <= 2:
+            return Confidence.HIGH
+        if surviving_window_count >= 2:
+            return Confidence.HIGH
+        return Confidence.MEDIUM
+    return Confidence.LOW
 
 
 # ---------------------------------------------------------------------------
