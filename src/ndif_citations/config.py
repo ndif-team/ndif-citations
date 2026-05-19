@@ -160,7 +160,33 @@ _VENUES_FILE = _PROJECT_ROOT / "data" / "known_venues.json"
 KNOWN_VENUES: dict = {}
 if _VENUES_FILE.exists():
     with open(_VENUES_FILE) as f:
-        KNOWN_VENUES = json.load(f)
+        _raw = json.load(f)
+    # New unified schema: {"venues": {canonical: {type, aliases?, parent?}}}.
+    # Derive the legacy accessor keys consumed by venue.py / extract.py so the
+    # rest of the codebase keeps working without per-call-site edits.
+    if "venues" in _raw:
+        _venues = _raw["venues"]
+        KNOWN_VENUES = {
+            "venues": _venues,
+            "conferences": [
+                k for k, v in _venues.items()
+                if v.get("type") in ("conference", "workshop")
+            ],
+            "journals": [
+                k for k, v in _venues.items() if v.get("type") == "journal"
+            ],
+            "preprint_servers": [
+                k for k, v in _venues.items() if v.get("type") == "preprint"
+            ],
+            "acronym_map": {
+                alias: k
+                for k, v in _venues.items()
+                for alias in v.get("aliases", [])
+            },
+        }
+    else:
+        # Legacy flat-list schema (pre-migration). Kept for safety.
+        KNOWN_VENUES = _raw
 
 
 def get_output_dir(custom: str | None = None) -> Path:

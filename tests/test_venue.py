@@ -242,7 +242,7 @@ class TestResolveVenue:
             year=2025,
         )
         sources = {"s2": "Annual Meeting of the Association for Computational Linguistics"}
-        assert resolve_venue(paper, sources) == "ACL 2025"
+        assert resolve_venue(paper, sources) == ("ACL 2025", "doi_prefix")
 
     def test_arxiv_comment_acceptance(self):
         # No DOI; arXiv comment names the venue
@@ -251,7 +251,7 @@ class TestResolveVenue:
             venue="arXiv 2024", year=2024,
         )
         sources = {"arxiv_comment": "10 pages, accepted at NeurIPS 2024"}
-        assert resolve_venue(paper, sources) == "NeurIPS 2024"
+        assert resolve_venue(paper, sources) == ("NeurIPS 2024", "arxiv_comment_parsed")
 
     def test_openalex_long_form_normalized(self):
         # OpenAlex returns the long form; we normalize to acronym
@@ -260,14 +260,14 @@ class TestResolveVenue:
             venue="", year=2024,
         )
         sources = {"openalex": "International Conference on Machine Learning"}
-        assert resolve_venue(paper, sources) == "ICML 2024"
+        assert resolve_venue(paper, sources) == ("ICML 2024", "openalex")
 
     def test_existing_venue_used_if_clean(self):
         paper = make_paper(
             title="X", doi=None, arxiv_id=None,
             venue="ICML 2025", year=2025,
         )
-        assert resolve_venue(paper, {}) == "ICML 2025"
+        assert resolve_venue(paper, {}) == ("ICML 2025", "existing")
 
     def test_fallback_to_arxiv_when_all_empty(self):
         paper = make_paper(
@@ -275,14 +275,14 @@ class TestResolveVenue:
             venue="arXiv preprint arXiv … 2026", year=2026,
         )
         # No external sources, existing venue is a sentinel after normalization
-        assert resolve_venue(paper, {}) == "ArXiv 2026"
+        assert resolve_venue(paper, {}) == ("ArXiv 2026", "fallback")
 
     def test_fallback_to_arxiv_when_no_year(self):
         paper = make_paper(
             title="X", doi=None, arxiv_id=None,
             venue="openreview.net", year=0,
         )
-        assert resolve_venue(paper, {}) == "ArXiv"
+        assert resolve_venue(paper, {}) == ("ArXiv", "fallback")
 
     def test_title_search_only_when_no_identifiers(self):
         # No DOI, no arxiv_id, no openalex_id, and existing venue is a sentinel
@@ -300,7 +300,7 @@ class TestResolveVenue:
 
         result = resolve_venue(paper, {}, title_search_fn=fake_title_search)
         assert called == ["Some Truncated Paper"]
-        assert result == "NeurIPS 2024 Workshop on Foo"
+        assert result == ("NeurIPS 2024 Workshop on Foo", "title_search")
 
     def test_title_search_skipped_when_arxiv_id_present(self):
         # arxiv_id present → don't bother with title search; fall back to ArXiv
@@ -313,7 +313,7 @@ class TestResolveVenue:
             paper, {}, title_search_fn=lambda t: called.append(t) or "X 2024"
         )
         assert called == []
-        assert result == "ArXiv 2024"
+        assert result == ("ArXiv 2024", "fallback")
 
     def test_priority_order_doi_beats_arxiv_comment(self):
         # DOI prefix → ACL 2025; arxiv comment says NeurIPS 2025
@@ -324,7 +324,7 @@ class TestResolveVenue:
             venue="", year=2025,
         )
         sources = {"arxiv_comment": "Accepted at NeurIPS 2025"}
-        assert resolve_venue(paper, sources) == "ACL 2025"
+        assert resolve_venue(paper, sources) == ("ACL 2025", "doi_prefix")
 
     def test_repository_leak_falls_back(self):
         # Existing venue is "UvA-DARE…" (institutional repo); paper has DOI → NAACL
@@ -334,7 +334,7 @@ class TestResolveVenue:
             arxiv_id="2412.05353",
             venue="UvA-DARE (University of Amsterdam) 2025", year=2025,
         )
-        assert resolve_venue(paper, {}) == "NAACL 2025"
+        assert resolve_venue(paper, {}) == ("NAACL 2025", "doi_prefix")
 
     def test_journal_ref_freeform_text_rejected(self):
         # arXiv journal_ref is often free-form bibliographic text. Without a
@@ -351,7 +351,7 @@ class TestResolveVenue:
         # Should fall through journal_ref (no "Accepted at" prefix) and use existing
         # paper.venue, which normalizes cleanly.
         result = resolve_venue(paper, sources)
-        assert result == "Workshop at NeurIPS 2025"
+        assert result == ("Workshop at NeurIPS 2025", "existing")
 
     def test_mangled_normalize_output_falls_through(self):
         # OpenAlex returns "39th Conference on Neural Information Processing Systems"
@@ -366,7 +366,7 @@ class TestResolveVenue:
         }
         result = resolve_venue(paper, sources)
         # Fell through every source; should fall back to ArXiv 2025.
-        assert result == "ArXiv 2025"
+        assert result == ("ArXiv 2025", "fallback")
 
     def test_truncated_existing_venue_rejected(self):
         # Scholar-truncated existing venue ("Advances in Neural… 2025" → after
@@ -377,7 +377,7 @@ class TestResolveVenue:
             venue="Advances in Neural 2025", year=2025,
         )
         result = resolve_venue(paper, sources={})
-        assert result == "ArXiv 2025"
+        assert result == ("ArXiv 2025", "fallback")
 
     def test_unknown_venue_with_year_rejected(self):
         # Random unrecognized venue string falls through, regardless of having a year.
@@ -385,7 +385,7 @@ class TestResolveVenue:
             title="X", arxiv_id="2510.X", doi=None,
             venue="Handbook of Human 2025", year=2025,
         )
-        assert resolve_venue(paper, sources={}) == "ArXiv 2025"
+        assert resolve_venue(paper, sources={}) == ("ArXiv 2025", "fallback")
 
     def test_known_workshop_kept_via_parent_acronym(self):
         # Workshop named after a parent venue ("Workshop at NeurIPS 2025") passes
@@ -394,7 +394,7 @@ class TestResolveVenue:
             title="X", arxiv_id="2510.X", doi=None,
             venue="Workshop at NeurIPS 2025", year=2025,
         )
-        assert resolve_venue(paper, sources={}) == "Workshop at NeurIPS 2025"
+        assert resolve_venue(paper, sources={}) == ("Workshop at NeurIPS 2025", "existing")
 
     def test_known_journal_kept(self):
         # "Nature Methods 2024" passes because "Nature" is in the known journals list.
@@ -402,7 +402,7 @@ class TestResolveVenue:
             title="X", arxiv_id="2510.X", doi="10.1038/something",
             venue="Nature Methods 2024", year=2024,
         )
-        assert resolve_venue(paper, sources={}) == "Nature Methods 2024"
+        assert resolve_venue(paper, sources={}) == ("Nature Methods 2024", "existing")
 
     def test_double_year_collapse(self):
         paper = make_paper(
@@ -410,4 +410,4 @@ class TestResolveVenue:
             arxiv_id=None, venue="2025 2025", year=2025,
         )
         # DOI prefix wins anyway, but exercise the path
-        assert resolve_venue(paper, {}) == "EMNLP 2025"
+        assert resolve_venue(paper, {}) == ("EMNLP 2025", "doi_prefix")

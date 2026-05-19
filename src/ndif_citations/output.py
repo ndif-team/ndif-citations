@@ -291,10 +291,29 @@ def _update_existing(existing: DiscoveredPaper, new: DiscoveredPaper) -> bool:
         else:
             # Cases 2 + 3: take new.
             existing.venue = new.venue
+            existing.venue_source = new.venue_source
             existing.venue_type = detect_venue_type(new.venue)
             if existing.venue_type in ("conference", "workshop", "journal"):
                 existing.peer_reviewed = True
             changed = True
+
+    # Backfill venue_source whenever the new run produced a label — this is
+    # internal/audit metadata, not a content change, so don't flip `changed`.
+    if new.venue_source and new.venue_source != existing.venue_source:
+        existing.venue_source = new.venue_source
+
+    # Year reconciliation across runs: when the new pass resolved a venue via
+    # a high-confidence source whose label embeds an explicit year (DOI prefix
+    # decode, parsed arXiv comment), trust the new year over existing. Without
+    # this, the year fix from enrich_via_external_apis only lands on truly new
+    # papers, not on stable papers whose existing.year was the arXiv upload year.
+    if (
+        new.venue_source in ("doi_prefix", "arxiv_comment_parsed")
+        and new.year > 0
+        and new.year != existing.year
+    ):
+        existing.year = new.year
+        changed = True
 
     # Fill missing fields
     if existing.year == 0 and new.year > 0:

@@ -67,6 +67,40 @@ class TestMergePaperData:
         _merge_paper_data(primary, secondary)
         assert primary.venue == "ICLR 2025"
 
+    def test_confident_secondary_overrides_non_confident_primary(self):
+        # S2 returns "ArXiv.org" (junk); OpenAlex returns the real venue.
+        # Without this override, the junk value blocked the better data.
+        primary = make_paper(venue="ArXiv.org")
+        secondary = make_paper(venue="International Conference on Machine Learning")
+        _merge_paper_data(primary, secondary)
+        assert primary.venue == "International Conference on Machine Learning"
+
+    def test_confident_primary_protected_from_non_confident_secondary(self):
+        primary = make_paper(venue="ICML 2025")
+        secondary = make_paper(venue="ArXiv.org")
+        _merge_paper_data(primary, secondary)
+        assert primary.venue == "ICML 2025"
+
+    def test_both_confident_primary_wins(self):
+        # If both sources return confident venues, primary (S2 by source priority)
+        # is preserved — no cross-source voting beyond confidence.
+        primary = make_paper(venue="ICML 2025")
+        secondary = make_paper(venue="International Conference on Machine Learning")
+        _merge_paper_data(primary, secondary)
+        assert primary.venue == "ICML 2025"
+
+    def test_both_non_confident_primary_stays(self):
+        primary = make_paper(venue="arXiv preprint")
+        secondary = make_paper(venue="arXiv.org")
+        _merge_paper_data(primary, secondary)
+        assert primary.venue == "arXiv preprint"
+
+    def test_both_empty_stays_empty(self):
+        primary = make_paper(venue="")
+        secondary = make_paper(venue="")
+        _merge_paper_data(primary, secondary)
+        assert primary.venue == ""
+
     def test_fills_missing_year(self):
         primary = make_paper(year=0)
         secondary = make_paper(year=2024)

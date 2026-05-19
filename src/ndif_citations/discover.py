@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 
 from ndif_citations import config
 from ndif_citations.models import Category, DiscoveredPaper, DiscoveredRepo, DiscoverySource
+from ndif_citations.venue import is_confident_venue
 from ndif_citations.utils import (
     _fetch_repo_readme,
     extract_arxiv_id_from_doi,
@@ -1044,8 +1045,15 @@ def _merge_paper_data(primary: DiscoveredPaper, secondary: DiscoveredPaper) -> N
         primary.url = secondary.url
     if not primary.authors and secondary.authors:
         primary.authors = secondary.authors
-    if not primary.venue and secondary.venue:
-        primary.venue = secondary.venue
+    # Venue: prefer the confidently-recognized one across sources. S2 routinely
+    # returns "ArXiv.org" for papers OpenAlex has correctly indexed as the
+    # publication venue — without this check, primary's non-empty junk venue
+    # blocks OpenAlex's superior data from reaching enrichment.
+    if secondary.venue:
+        if not primary.venue:
+            primary.venue = secondary.venue
+        elif not is_confident_venue(primary.venue) and is_confident_venue(secondary.venue):
+            primary.venue = secondary.venue
     if not primary.year and secondary.year:
         primary.year = secondary.year
     if not primary.publication_date and secondary.publication_date:

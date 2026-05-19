@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 
 from ndif_citations import config
@@ -234,13 +235,28 @@ def enrich_via_external_apis(papers: list[DiscoveredPaper]) -> None:
     # ---- Pass 2: resolve canonical venue per paper ---------------------------
     for paper in papers:
         old = paper.venue
-        new = resolve_venue(paper, sources_by_id[id(paper)])
+        new, source = resolve_venue(paper, sources_by_id[id(paper)])
         if new != old:
             logger.debug(
                 f"venue: '{paper.title[:50]}' | {old!r} -> {new!r} "
-                f"(sources={list(sources_by_id[id(paper)].keys())})"
+                f"(source={source}, signals={list(sources_by_id[id(paper)].keys())})"
             )
+        # Year reconciliation: when a high-confidence source produced an
+        # explicit year (e.g. "ACL 2025" from a 2025.acl-long.X DOI), trust
+        # the venue year over paper.year (which is often the arXiv upload
+        # year, 6-12 months ahead of the conference proceedings).
+        if source in ("doi_prefix", "arxiv_comment_parsed") and new:
+            m = re.search(r"\b(20\d{2})\b", new)
+            if m:
+                venue_year = int(m.group(1))
+                if venue_year != paper.year:
+                    logger.info(
+                        f"year reconciled: '{paper.title[:40]}' "
+                        f"{paper.year} -> {venue_year} (via {source})"
+                    )
+                    paper.year = venue_year
         paper.venue = new
+        paper.venue_source = source
 
 
 def _extract_affiliations_from_authorships(authorships: list[dict]) -> str:

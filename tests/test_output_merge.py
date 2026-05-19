@@ -96,6 +96,66 @@ class TestUpdateExisting:
         assert changed is True
         assert existing.venue == "ICML 2024"
 
+    def test_venue_source_propagates_on_take_new(self):
+        # When new venue replaces existing, venue_source is mirrored alongside.
+        existing = make_paper(venue="arXiv 2024", venue_source=None)
+        new = make_paper(venue="NeurIPS 2025", venue_source="doi_prefix")
+        _update_existing(existing, new)
+        assert existing.venue == "NeurIPS 2025"
+        assert existing.venue_source == "doi_prefix"
+
+    def test_venue_source_not_overwritten_when_existing_protected(self):
+        # When the ArXiv fallback would downgrade a confident existing, the
+        # venue stays as the previously-resolved value. venue_source backfills
+        # to whatever the new run produced — it's audit metadata, not a content
+        # signal, and the new label reflects the cascade path on this run.
+        existing = make_paper(
+            venue="ICML 2024", year=2024, venue_source="openalex"
+        )
+        new = make_paper(
+            venue="ArXiv 2024", year=2024, venue_source="fallback"
+        )
+        _update_existing(existing, new)
+        assert existing.venue == "ICML 2024"
+        # Source backfill happens regardless of which venue we kept.
+        assert existing.venue_source == "fallback"
+
+    def test_venue_source_backfilled_when_venue_unchanged(self):
+        # Stable paper across runs: venue is identical, but the new pass labels
+        # its cascade path. The existing record gets the source label so the
+        # field doesn't stay None for legacy papers.
+        existing = make_paper(venue="ICML 2025", year=2025, venue_source=None)
+        new = make_paper(
+            venue="ICML 2025", year=2025, venue_source="doi_prefix"
+        )
+        _update_existing(existing, new)
+        assert existing.venue == "ICML 2025"
+        assert existing.venue_source == "doi_prefix"
+
+    def test_year_reconciles_across_runs_for_high_confidence_source(self):
+        # arXiv upload-year staleness: existing.year is the upload year (2024)
+        # but the new run's DOI-prefix decode tied it to the 2025 proceedings.
+        existing = make_paper(
+            venue="ACL 2025", year=2024, venue_source=None
+        )
+        new = make_paper(
+            venue="ACL 2025", year=2025, venue_source="doi_prefix"
+        )
+        changed = _update_existing(existing, new)
+        assert changed is True
+        assert existing.year == 2025
+
+    def test_year_not_reconciled_for_low_confidence_source(self):
+        # OpenAlex source doesn't embed a year — must not move the year.
+        existing = make_paper(
+            venue="ICML 2025", year=2024, venue_source=None
+        )
+        new = make_paper(
+            venue="ICML 2025", year=2025, venue_source="openalex"
+        )
+        _update_existing(existing, new)
+        assert existing.year == 2024  # unchanged
+
     def test_fills_missing_doi(self):
         existing = make_paper(arxiv_id=None, doi=None)
         new = make_paper(arxiv_id=None, doi="10.1234/test")
@@ -200,6 +260,13 @@ class TestWebsiteContract:
         d = p.to_website_dict()
         assert "unclassified_reason" not in d
 
+    def test_venue_source_not_in_website_dict(self):
+        # Provenance label is internal/audit-only — must not surface on the
+        # public website schema until a UI design decision is made.
+        p = make_paper(venue_source="doi_prefix")
+        d = p.to_website_dict()
+        assert "venue_source" not in d
+
     def test_image_included_when_present(self):
         p = make_paper()
         p.image = "/images/Test-Paper.png"
@@ -270,6 +337,14 @@ class TestFullDictRoundTrip:
         d = p.to_full_dict()
         restored = DiscoveredPaper.model_validate(d)
         assert restored.classification_signal == "pre_filter:acks_only_thank_you"
+
+    def test_venue_source_in_full_dict_round_trip(self):
+        p = make_paper(venue_source="doi_prefix")
+        d = p.to_full_dict()
+        assert "venue_source" in d
+        assert d["venue_source"] == "doi_prefix"
+        restored = DiscoveredPaper.model_validate(d)
+        assert restored.venue_source == "doi_prefix"
 
     def test_classification_signal_none_by_default(self):
         p = make_paper()
