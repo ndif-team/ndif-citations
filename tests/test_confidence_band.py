@@ -70,3 +70,97 @@ class TestNewPaperReason:
     def test_medium_confidence_reason_exists(self):
         from ndif_citations.models import PaperReason
         assert PaperReason.MEDIUM_CONFIDENCE.value == "medium_confidence"
+
+
+class TestComputeBand:
+    """Pure-function rule: signal + tier + window_count + context_source -> band."""
+
+    def test_pre_filter_negative_is_certain(self):
+        from ndif_citations.process import _compute_confidence_band
+        band = _compute_confidence_band(
+            signal="pre_filter:negative_evidence",
+            linked_paper_tier=None,
+            surviving_window_count=0,
+            context_source="pdf",
+            category=Category.REFERENCING,
+        )
+        assert band == Confidence.CERTAIN
+
+    def test_pre_filter_table_or_acks_is_medium(self):
+        from ndif_citations.process import _compute_confidence_band
+        for signal in ("pre_filter:comparison_table", "pre_filter:acks_only_thank_you"):
+            band = _compute_confidence_band(
+                signal=signal,
+                linked_paper_tier=None,
+                surviving_window_count=0,
+                context_source="pdf",
+                category=Category.REFERENCING,
+            )
+            assert band == Confidence.MEDIUM, f"{signal!r} → {band}"
+
+    def test_llm_with_tier_1_or_2_cross_link_is_high(self):
+        from ndif_citations.process import _compute_confidence_band
+        for tier in (1, 2):
+            band = _compute_confidence_band(
+                signal="llm",
+                linked_paper_tier=tier,
+                surviving_window_count=1,
+                context_source="abstract",
+                category=Category.USES_NNSIGHT,
+            )
+            assert band == Confidence.HIGH, f"tier={tier} → {band}"
+
+    def test_llm_with_multi_window_pdf_is_high(self):
+        from ndif_citations.process import _compute_confidence_band
+        band = _compute_confidence_band(
+            signal="llm",
+            linked_paper_tier=None,
+            surviving_window_count=3,
+            context_source="pdf",
+            category=Category.USES_NDIF,
+        )
+        assert band == Confidence.HIGH
+
+    def test_llm_with_single_window_pdf_is_medium(self):
+        from ndif_citations.process import _compute_confidence_band
+        band = _compute_confidence_band(
+            signal="llm",
+            linked_paper_tier=None,
+            surviving_window_count=1,
+            context_source="pdf",
+            category=Category.USES_NDIF,
+        )
+        assert band == Confidence.MEDIUM
+
+    def test_llm_with_abstract_only_is_medium(self):
+        from ndif_citations.process import _compute_confidence_band
+        band = _compute_confidence_band(
+            signal="llm",
+            linked_paper_tier=None,
+            surviving_window_count=1,
+            context_source="abstract",
+            category=Category.USES_NDIF,
+        )
+        assert band == Confidence.MEDIUM
+
+    def test_keyword_fallback_is_low(self):
+        from ndif_citations.process import _compute_confidence_band
+        band = _compute_confidence_band(
+            signal="keyword_fallback",
+            linked_paper_tier=None,
+            surviving_window_count=0,
+            context_source="pdf",
+            category=Category.USES_NDIF,
+        )
+        assert band == Confidence.LOW
+
+    def test_unclassified_is_none(self):
+        from ndif_citations.process import _compute_confidence_band
+        band = _compute_confidence_band(
+            signal="llm",
+            linked_paper_tier=None,
+            surviving_window_count=0,
+            context_source="none",
+            category=Category.UNCLASSIFIED,
+        )
+        assert band == Confidence.NONE
