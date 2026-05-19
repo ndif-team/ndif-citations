@@ -695,16 +695,13 @@ def _decide_bucket(paper: DiscoveredPaper) -> tuple[Bucket, Optional[PaperReason
     """Return (bucket, reason) for a paper based on ordered demotion rules.
 
     Rules apply IN ORDER; first match wins:
-    1. stub_metadata  — year==0 OR no usable abstract OR no identifier of any kind
-    2. unclassified_* — classify_category returned UNCLASSIFIED
-    3. low_confidence — category_confidence < 0.7
+    1. stub_metadata     — year==0 OR no usable abstract OR no identifier
+    2. unclassified_*    — Category.UNCLASSIFIED
+    3. medium_confidence — band == MEDIUM
+    4. low_confidence    — band == LOW
 
-    Papers that pass all three rules → VERIFIED, regardless of discovery source.
+    Papers with band CERTAIN or HIGH pass through to VERIFIED.
     """
-    # Rule 1: Stub metadata. "Any identifier" means arxiv_id, doi, s2_paper_id,
-    # openalex_id, or a non-empty url — enough for a human reviewer to look
-    # the paper up. OpenReview/dissertation/ACM papers without arxiv_id/doi
-    # but with a working URL still pass.
     has_any_identifier = bool(
         paper.arxiv_id or paper.doi or paper.s2_paper_id
         or paper.openalex_id or paper.url
@@ -716,14 +713,15 @@ def _decide_bucket(paper: DiscoveredPaper) -> tuple[Bucket, Optional[PaperReason
     ):
         return Bucket.PENDING, PaperReason.STUB_METADATA
 
-    # Rule 2: Unclassified outcome
     if paper.category == Category.UNCLASSIFIED:
         if paper.unclassified_reason in ("no_keywords_anywhere", "no_evidence_extractable"):
             return Bucket.PENDING, PaperReason.UNCLASSIFIED_NO_KEYWORDS
         return Bucket.PENDING, PaperReason.UNCLASSIFIED_LLM
 
-    # Rule 3: Low confidence
-    if paper.category_confidence < 0.7:
+    if paper.category_confidence_band == Confidence.MEDIUM:
+        return Bucket.PENDING, PaperReason.MEDIUM_CONFIDENCE
+
+    if paper.category_confidence_band == Confidence.LOW:
         return Bucket.PENDING, PaperReason.LOW_CONFIDENCE
 
     return Bucket.VERIFIED, None

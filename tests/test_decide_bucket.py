@@ -182,3 +182,63 @@ class TestDecideBucket:
         bucket, reason = _decide_bucket(paper)
         assert bucket == Bucket.PENDING
         assert reason == PaperReason.STUB_METADATA
+
+
+# ---------------------------------------------------------------------------
+# New band-based gating (replaces the legacy 0.7 float threshold)
+# ---------------------------------------------------------------------------
+
+class TestDecideBucketBands:
+    """_decide_bucket should gate on Confidence band, not the legacy float."""
+
+    def test_high_band_goes_to_verified(self):
+        from ndif_citations.models import Confidence
+        paper = make_paper(
+            year=2024,
+            abstract="A real abstract that is long enough.",
+            arxiv_id="2407.14561",
+            category=Category.USES_NDIF,
+            category_confidence_band=Confidence.HIGH,
+        )
+        bucket, reason = _decide_bucket(paper)
+        assert bucket == Bucket.VERIFIED
+        assert reason is None
+
+    def test_medium_band_goes_to_pending_with_medium_reason(self):
+        from ndif_citations.models import Confidence
+        paper = make_paper(
+            year=2024,
+            abstract="A real abstract that is long enough.",
+            arxiv_id="2407.14561",
+            category=Category.USES_NDIF,
+            category_confidence_band=Confidence.MEDIUM,
+        )
+        bucket, reason = _decide_bucket(paper)
+        assert bucket == Bucket.PENDING
+        assert reason == PaperReason.MEDIUM_CONFIDENCE
+
+    def test_low_band_goes_to_pending_low_confidence(self):
+        from ndif_citations.models import Confidence
+        paper = make_paper(
+            year=2024,
+            abstract="A real abstract that is long enough.",
+            arxiv_id="2407.14561",
+            category=Category.USES_NDIF,
+            category_confidence_band=Confidence.LOW,
+        )
+        bucket, reason = _decide_bucket(paper)
+        assert bucket == Bucket.PENDING
+        assert reason == PaperReason.LOW_CONFIDENCE
+
+    def test_certain_band_goes_to_verified(self):
+        from ndif_citations.models import Confidence
+        paper = make_paper(
+            year=2024,
+            abstract="A real abstract that is long enough.",
+            arxiv_id="2407.14561",
+            category=Category.REFERENCING,
+            category_confidence_band=Confidence.CERTAIN,
+        )
+        bucket, reason = _decide_bucket(paper)
+        assert bucket == Bucket.VERIFIED
+        assert reason is None
