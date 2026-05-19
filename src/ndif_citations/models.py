@@ -70,6 +70,7 @@ class PaperReason(str, Enum):
     # Pending reasons
     OPENALEX_SOURCE = "openalex_source"
     LOW_CONFIDENCE = "low_confidence"
+    MEDIUM_CONFIDENCE = "medium_confidence"
     UNCLASSIFIED_NO_KEYWORDS = "unclassified_no_keywords"
     UNCLASSIFIED_LLM = "unclassified_llm"
     STUB_METADATA = "stub_metadata"
