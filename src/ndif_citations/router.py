@@ -136,8 +136,20 @@ def _route_single_paper(
         logger.debug(f"NEW: {paper.title[:50]}...")
         return RoutingDecision(paper, ProcessingBucket.NEW, None, _all_true())
 
-    # PROTECTED: Manual override
+    # PROTECTED: Manual override — but allow fill-gaps for empty fields so the
+    # pipeline can backfill description / thumbnail / affiliations without
+    # overwriting curated values. process.py guards each write to skip
+    # non-empty fields on manual_override papers.
     if existing.manual_override:
+        needs = {
+            "summary":      not existing.has_summary,
+            "classify":     not existing.has_classification,
+            "thumbnail":    not existing.has_thumbnail,
+            "affiliations": not existing.has_affiliations,
+        }
+        if any(needs.values()):
+            logger.debug(f"PROTECTED->FILL_GAPS: {paper.title[:50]}... (needs: {needs})")
+            return RoutingDecision(paper, ProcessingBucket.FILL_GAPS, existing, needs)
         logger.debug(f"PROTECTED: {paper.title[:50]}...")
         return RoutingDecision(paper, ProcessingBucket.PROTECTED, existing, _all_false())
 
