@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ndif_citations.models import Category, DiscoveredPaper
+from ndif_citations.models import Category, Confidence, DiscoveredPaper
 from ndif_citations.process import classify_category
 from tests.conftest import make_paper
 from tests.helpers.llm import MockLLMClient
@@ -45,9 +45,11 @@ class TestClassifyCategoryMockLLM:
         _inject_mock(monkeypatch, mock)
         pdf = _setup_pdf_context(monkeypatch, tmp_path, "We ran experiments on NDIF cluster.")
         paper = make_paper()
-        cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
+        cat, conf, band = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
         assert cat == Category.USES_NDIF
-        assert conf == pytest.approx(0.85)
+        # Single-window LLM verdict, no cross-link tier → MEDIUM band (0.55)
+        assert band == Confidence.MEDIUM
+        assert conf == pytest.approx(0.55)
 
     def test_uses_nnsight_reply(self, monkeypatch, tmp_path):
         mock = MockLLMClient()
@@ -55,9 +57,10 @@ class TestClassifyCategoryMockLLM:
         _inject_mock(monkeypatch, mock)
         pdf = _setup_pdf_context(monkeypatch, tmp_path, "import nnsight; model = nnsight.LanguageModel(...)")
         paper = make_paper()
-        cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
+        cat, conf, band = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
         assert cat == Category.USES_NNSIGHT
-        assert conf == pytest.approx(0.85)
+        assert band == Confidence.MEDIUM
+        assert conf == pytest.approx(0.55)
 
     def test_referencing_reply(self, monkeypatch, tmp_path):
         mock = MockLLMClient()
@@ -65,9 +68,10 @@ class TestClassifyCategoryMockLLM:
         _inject_mock(monkeypatch, mock)
         pdf = _setup_pdf_context(monkeypatch, tmp_path, "NNsight is listed in related work.")
         paper = make_paper()
-        cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
+        cat, conf, band = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
         assert cat == Category.REFERENCING
-        assert conf == pytest.approx(0.85)
+        assert band == Confidence.MEDIUM
+        assert conf == pytest.approx(0.55)
 
     def test_unclassified_reply(self, monkeypatch, tmp_path):
         mock = MockLLMClient()
@@ -75,7 +79,7 @@ class TestClassifyCategoryMockLLM:
         _inject_mock(monkeypatch, mock)
         pdf = _setup_pdf_context(monkeypatch, tmp_path, "nnsight is mentioned somewhere.")
         paper = make_paper()
-        cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
+        cat, conf, _band = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
         assert cat == Category.UNCLASSIFIED
         assert conf == pytest.approx(0.0)
         assert paper.unclassified_reason == "llm_returned_unclassified"
@@ -86,7 +90,7 @@ class TestClassifyCategoryMockLLM:
         _inject_mock(monkeypatch, mock)
         pdf = _setup_pdf_context(monkeypatch, tmp_path, "nnsight in methods section.")
         paper = make_paper()
-        cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
+        cat, conf, _band = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
         assert cat == Category.UNCLASSIFIED
         assert conf == pytest.approx(0.0)
         assert paper.unclassified_reason == "llm_unparseable"
@@ -116,7 +120,7 @@ class TestClassifyCategoryEarlyReturn:
         _inject_mock(monkeypatch, mock)
         paper = make_paper(abstract=None)
         # No pdf_path passed → context = "" → enters early-return branch
-        cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=None)
+        cat, conf, _band = classify_category(paper, FAKE_OUTPUT, pdf_path=None)
         assert cat == Category.UNCLASSIFIED
         assert conf == pytest.approx(0.0)
         assert paper.unclassified_reason == "no_evidence_extractable"
@@ -128,7 +132,7 @@ class TestClassifyCategoryEarlyReturn:
         pdf = _setup_pdf_context(monkeypatch, tmp_path,
                                  "No direct mentions of NDIF or nnsight found in the paper text.")
         paper = make_paper(abstract="A paper about transformers and attention.")
-        cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
+        cat, conf, _band = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
         assert cat == Category.UNCLASSIFIED
         assert conf == pytest.approx(0.0)
         assert paper.unclassified_reason == "no_keywords_anywhere"
@@ -140,7 +144,7 @@ class TestClassifyCategoryEarlyReturn:
         pdf = _setup_pdf_context(monkeypatch, tmp_path,
                                  "No direct mentions of NDIF or nnsight found in the paper text.")
         paper = make_paper(abstract=None)
-        cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
+        cat, conf, _band = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
         assert cat == Category.UNCLASSIFIED
         assert paper.unclassified_reason == "no_evidence_extractable"
         mock.assert_no_calls()
@@ -152,9 +156,11 @@ class TestClassifyCategoryEarlyReturn:
         paper = make_paper(
             abstract="We hosted models on NDIF cluster for all experiments.",
         )
-        cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=None)
+        cat, conf, band = classify_category(paper, FAKE_OUTPUT, pdf_path=None)
         assert cat == Category.USES_NDIF
-        assert conf == pytest.approx(0.85)
+        # Abstract-only LLM context → MEDIUM (0.55)
+        assert band == Confidence.MEDIUM
+        assert conf == pytest.approx(0.55)
         assert paper.unclassified_reason is None
         assert len(mock.record_calls()) == 1
         user_msg = mock.record_calls()[0][-1]["content"]
@@ -170,17 +176,20 @@ class TestClassifyCategoryFallback:
         monkeypatch.setattr("ndif_citations.process._get_llm_client", lambda: None)
         pdf = _setup_pdf_context(monkeypatch, tmp_path, "We hosted models on ndif cluster.")
         paper = make_paper()
-        cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
+        cat, conf, band = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
         assert cat == Category.USES_NDIF
-        assert conf == pytest.approx(0.4)
+        # Keyword fallback (no LLM) → LOW (0.30)
+        assert band == Confidence.LOW
+        assert conf == pytest.approx(0.30)
 
     def test_no_client_nnsight_fallback(self, monkeypatch, tmp_path):
         monkeypatch.setattr("ndif_citations.process._get_llm_client", lambda: None)
         pdf = _setup_pdf_context(monkeypatch, tmp_path, "import nnsight; nnsight.trace(model)")
         paper = make_paper()
-        cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
+        cat, conf, band = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
         assert cat == Category.USES_NNSIGHT
-        assert conf == pytest.approx(0.4)
+        assert band == Confidence.LOW
+        assert conf == pytest.approx(0.30)
 
 
 # ---------------------------------------------------------------------------
@@ -228,9 +237,11 @@ class TestNegativeEvidencePreFilter:
         context = (FIXTURE_DIR / "negative_evidence_removed.txt").read_text()
         pdf = _setup_pdf_context(monkeypatch, tmp_path, context)
         paper = make_paper()
-        cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
+        cat, conf, band = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
         assert cat == Category.REFERENCING
-        assert conf == pytest.approx(0.9)
+        # Negative-evidence pre-filter → CERTAIN (1.0)
+        assert band == Confidence.CERTAIN
+        assert conf == pytest.approx(1.0)
         assert paper.classification_signal == "pre_filter:negative_evidence"
         mock.assert_no_calls()
 
@@ -240,7 +251,7 @@ class TestNegativeEvidencePreFilter:
         context = (FIXTURE_DIR / "negative_evidence.txt").read_text()
         pdf = _setup_pdf_context(monkeypatch, tmp_path, context)
         paper = make_paper()
-        cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
+        cat, conf, _band = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
         assert cat == Category.REFERENCING
         mock.assert_no_calls()
 
@@ -258,9 +269,9 @@ class TestNegativeEvidencePreFilter:
         )
         pdf = _setup_pdf_context(monkeypatch, tmp_path, context)
         paper = make_paper()
-        cat, _ = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
+        cat, _conf, _band = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
         assert cat == Category.USES_NNSIGHT
-        assert paper.classification_signal is None
+        assert paper.classification_signal == "llm"  # LLM path was taken (post-pre-filter)
         calls = mock.record_calls()
         assert len(calls) == 1
         # Only the positive window should be in the prompt
@@ -279,9 +290,11 @@ class TestComparisonTablePreFilter:
         context = (FIXTURE_DIR / "comparison_table_tdhook_style.txt").read_text()
         pdf = _setup_pdf_context(monkeypatch, tmp_path, context)
         paper = make_paper()
-        cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
+        cat, conf, band = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
         assert cat == Category.REFERENCING
-        assert conf == pytest.approx(0.85)
+        # Comparison-table pre-filter → MEDIUM (0.55) — signal exists but weak
+        assert band == Confidence.MEDIUM
+        assert conf == pytest.approx(0.55)
         assert paper.classification_signal == "pre_filter:comparison_table"
         mock.assert_no_calls()
 
@@ -294,9 +307,9 @@ class TestComparisonTablePreFilter:
         context = table_window + "\n---\n" + positive_window
         pdf = _setup_pdf_context(monkeypatch, tmp_path, context)
         paper = make_paper()
-        cat, _ = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
+        cat, _conf, _band = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
         assert cat == Category.USES_NNSIGHT
-        assert paper.classification_signal is None
+        assert paper.classification_signal == "llm"  # LLM path was taken (post-pre-filter)
         mock.record_calls()  # LLM was called
         assert len(mock.record_calls()) == 1
 
@@ -312,9 +325,11 @@ class TestAcksOnlyPreFilter:
         context = (FIXTURE_DIR / "acks_only_ndif.txt").read_text()
         pdf = _setup_pdf_context(monkeypatch, tmp_path, context)
         paper = make_paper()
-        cat, conf = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
+        cat, conf, band = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
         assert cat == Category.REFERENCING
-        assert conf == pytest.approx(0.85)
+        # Acks-only pre-filter → MEDIUM (0.55)
+        assert band == Confidence.MEDIUM
+        assert conf == pytest.approx(0.55)
         assert paper.classification_signal == "pre_filter:acks_only_thank_you"
         mock.assert_no_calls()
 
@@ -325,9 +340,9 @@ class TestAcksOnlyPreFilter:
         context = (FIXTURE_DIR / "acks_with_impl_confirm.txt").read_text()
         pdf = _setup_pdf_context(monkeypatch, tmp_path, context)
         paper = make_paper()
-        cat, _ = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
+        cat, _conf, _band = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
         assert cat == Category.USES_NDIF
-        assert paper.classification_signal is None
+        assert paper.classification_signal == "llm"  # LLM path was taken (post-pre-filter)
         assert len(mock.record_calls()) == 1
 
     def test_acks_with_keyword_first_llm_called_regression_guard_2411_08745(
@@ -340,9 +355,9 @@ class TestAcksOnlyPreFilter:
         context = (FIXTURE_DIR / "acks_with_keyword_first.txt").read_text()
         pdf = _setup_pdf_context(monkeypatch, tmp_path, context)
         paper = make_paper()
-        cat, _ = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
+        cat, _conf, _band = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
         assert cat == Category.USES_NNSIGHT
-        assert paper.classification_signal is None
+        assert paper.classification_signal == "llm"  # LLM path was taken (post-pre-filter)
         assert len(mock.record_calls()) == 1
 
     def test_acks_with_citation_inline_llm_called_2411_08745_regression(
@@ -355,7 +370,7 @@ class TestAcksOnlyPreFilter:
         context = (FIXTURE_DIR / "acks_with_citation_inline.txt").read_text()
         pdf = _setup_pdf_context(monkeypatch, tmp_path, context)
         paper = make_paper()
-        cat, _ = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
+        cat, _conf, _band = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
         assert cat == Category.USES_NNSIGHT
-        assert paper.classification_signal is None
+        assert paper.classification_signal == "llm"  # LLM path was taken (post-pre-filter)
         assert len(mock.record_calls()) == 1

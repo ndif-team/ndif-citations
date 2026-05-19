@@ -680,14 +680,15 @@ def reclassify(ids: str | None, output_dir: str | None, dry_run: bool) -> None:
         old_cat = paper.category.value
         pdf_path = get_cached_pdf(paper, out)
 
-        new_cat, new_conf = classify_category(paper, out, pdf_path=pdf_path)
+        new_cat, new_conf, new_band = classify_category(paper, out, pdf_path=pdf_path)
 
-        if new_cat != paper.category or new_conf != paper.category_confidence:
+        if new_cat != paper.category or new_band != paper.category_confidence_band:
             signal = paper.classification_signal
             changes.append((paper.title, old_cat, new_cat.value, signal))
             if not dry_run:
                 paper.category = new_cat
                 paper.category_confidence = new_conf
+                paper.category_confidence_band = new_band
                 paper.has_classification = new_cat != Category.UNCLASSIFIED
 
     # Print diff
