@@ -35,8 +35,29 @@ python -m ndif_citations run
 | `python -m ndif_citations run --skip-papers` | GitHub repos only — skip S2/OpenAlex/LLM |
 | `python -m ndif_citations discover` | Discovery only — list papers and repos, no LLM calls |
 | `python -m ndif_citations add <url>` | Process a single paper by URL and append to output |
+| `python -m ndif_citations edit <id>` | Interactively override any of 16 curated fields on one paper (sets `manual_override=True`) |
+| `python -m ndif_citations edit <id> --set field=value` | One-shot field edit, scriptable. Repeat `--set` for multiple fields. Add `--yes` to skip confirm. |
+| `python -m ndif_citations reclassify [--ids X,Y]` | Re-run LLM classify on existing papers (apply new pre-filter / band rules) |
+| `python -m ndif_citations promote <id>` | Move paper to verified, freeze with `manual_override=True` |
+| `python -m ndif_citations demote <id> --reason ...` | Move paper to pending, freeze with `manual_override=True` |
+| `python -m ndif_citations discard <id>` | Move paper to discarded, freeze with `manual_override=True` |
+| `python -m ndif_citations debug <id>` | Read-only trace for one paper (PDF cache, keyword hits, classification state) |
 
 All commands accept `--output-dir <path>` and `--verbose` flags.
+
+### Classification confidence bands
+
+Every classified paper carries a `category_confidence_band` (categorical) alongside the legacy `category_confidence` float:
+
+| Band | Float equiv | When | Bucket |
+|---|---|---|---|
+| `CERTAIN` | 1.00 | `manual_override=True` OR pre-filter caught explicit non-use ("alternative to NDIF") | VERIFIED |
+| `HIGH` | 0.85 | LLM verdict with ≥2 surviving context windows OR `linked_paper_tier ≤ 2` cross-link | VERIFIED |
+| `MEDIUM` | 0.55 | LLM verdict on a single context window OR abstract-only OR pre-filter caught comparison-table / acks-only | PENDING (`MEDIUM_CONFIDENCE`) |
+| `LOW` | 0.30 | Keyword fallback (LLM unavailable / errored) | PENDING (`LOW_CONFIDENCE`) |
+| `NONE` | 0.00 | UNCLASSIFIED (no evidence / LLM unparseable) | PENDING (`UNCLASSIFIED_*`) |
+
+`manual_override=True` papers route to `FILL_GAPS` if any `has_*` flag is False, so the pipeline backfills empty description / thumbnail / affiliations on the next run without overwriting curated values.
 
 ## Output
 
