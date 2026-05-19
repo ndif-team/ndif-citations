@@ -18,6 +18,46 @@ class Category(str, Enum):
     UNCLASSIFIED = "unclassified"
 
 
+class Confidence(str, Enum):
+    """Categorical confidence band tied to evidence type (replaces the
+    informal float thresholds). Each band carries a backwards-compat
+    float in _BAND_TO_FLOAT for any caller still reading the legacy
+    category_confidence field.
+    """
+    CERTAIN = "certain"  # manual_override OR pre_filter:negative_evidence
+    HIGH    = "high"     # LLM verdict on rich evidence
+    MEDIUM  = "medium"   # LLM verdict on thin evidence
+    LOW     = "low"      # keyword fallback (no LLM)
+    NONE    = "none"     # UNCLASSIFIED
+
+
+_BAND_TO_FLOAT: dict[Confidence, float] = {
+    Confidence.CERTAIN: 1.00,
+    Confidence.HIGH:    0.85,
+    Confidence.MEDIUM:  0.55,
+    Confidence.LOW:     0.30,
+    Confidence.NONE:    0.00,
+}
+
+
+def _float_to_band(value: float, *, manual_override: bool = False) -> Confidence:
+    """Derive a band from a legacy float. Used to migrate existing JSON state
+    that predates the band field. Bucket thresholds chosen to match the
+    historical 0.0 / 0.4 / 0.55 / 0.85 / 1.0 values produced by classify_category.
+    """
+    if manual_override:
+        return Confidence.CERTAIN
+    if value >= 0.95:
+        return Confidence.CERTAIN
+    if value >= 0.70:
+        return Confidence.HIGH
+    if value >= 0.50:
+        return Confidence.MEDIUM
+    if value > 0.0:
+        return Confidence.LOW
+    return Confidence.NONE
+
+
 class Bucket(str, Enum):
     """3-bucket placement for the output pipeline."""
     PENDING = "pending"
@@ -95,6 +135,7 @@ class DiscoveredPaper(BaseModel):
     description: str = ""  # LLM-generated summary
     category: Category = Category.REFERENCING
     category_confidence: float = 0.0
+    category_confidence_band: Confidence = Confidence.NONE
     image: Optional[str] = None  # Path like "/images/Slug.png"
 
     # 3-bucket placement
@@ -144,6 +185,15 @@ class DiscoveredPaper(BaseModel):
         """Auto-compute hash on creation if not set."""
         if not self.content_hash:
             self.content_hash = self.compute_hash()
+        # Migrate legacy float → band when band is at its default but float isn't,
+        # OR when manual_override is set (band should be CERTAIN).
+        if self.manual_override and self.category_confidence_band != Confidence.CERTAIN:
+            self.category_confidence_band = Confidence.CERTAIN
+        elif (
+            self.category_confidence_band == Confidence.NONE
+            and self.category_confidence > 0.0
+        ):
+            self.category_confidence_band = _float_to_band(self.category_confidence)
         if not hasattr(self, 'has_summary') or self.has_summary is None:
             self.has_summary = bool(self.description)
         if not hasattr(self, 'has_classification') or self.has_classification is None:
