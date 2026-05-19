@@ -811,6 +811,34 @@ def process_papers(
             results.append(paper)
             continue
 
+        # FILL_GAPS on a manual_override paper: hydrate the discovered paper
+        # with the curated existing state so the fields we don't refill
+        # (everything except has_* gaps) persist across runs.
+        is_protected_manual = (
+            bucket == ProcessingBucket.FILL_GAPS
+            and decision.existing_paper is not None
+            and decision.existing_paper.manual_override
+        )
+        if is_protected_manual:
+            existing = decision.existing_paper
+            paper.title = existing.title or paper.title
+            paper.authors = existing.authors or paper.authors
+            paper.affiliations = existing.affiliations or paper.affiliations
+            paper.venue = existing.venue or paper.venue
+            paper.year = existing.year or paper.year
+            paper.description = existing.description or paper.description
+            paper.category = existing.category
+            paper.category_confidence = existing.category_confidence
+            paper.category_confidence_band = existing.category_confidence_band
+            paper.bucket = existing.bucket
+            paper.reason = existing.reason
+            paper.reason_detail = existing.reason_detail
+            paper.image = existing.image or paper.image
+            paper.project_url = existing.project_url or paper.project_url
+            paper.url = existing.url or paper.url
+            paper.pdf_url = existing.pdf_url or paper.pdf_url
+            paper.manual_override = True
+
         # Get PDF path if needed for classification, thumbnail, or affiliations
         pdf_path = None
         if needs.get("classify") or needs.get("thumbnail") or needs.get("affiliations"):
@@ -818,10 +846,13 @@ def process_papers(
             if not pdf_path:
                 logger.warning(f"Could not get PDF for '{paper.title[:50]}...'")
 
-        # Summary generation
+        # Summary generation — guarded for manual_override
         if needs.get("summary") and not skip_llm:
-            paper.description = generate_summary(paper)
-            paper.has_summary = bool(paper.description)
+            if is_protected_manual and paper.description:
+                logger.debug(f"FILL_GAPS guard: keeping curated description for '{paper.title[:50]}'")
+            else:
+                paper.description = generate_summary(paper)
+        paper.has_summary = bool(paper.description)
 
         # Discard check: zero PDF keyword hits (US-D2)
         if needs.get("classify") and pdf_path:
@@ -830,30 +861,31 @@ def process_papers(
                 results.append(paper)
                 continue
 
-        # Category classification
+        # Category classification — guarded for manual_override
         if needs.get("classify") and not skip_llm:
-            effective_pdf = pdf_path if pdf_path and pdf_path.exists() else None
-            category, confidence, band = classify_category(paper, output_dir, pdf_path=effective_pdf)
-            paper.category = category
-            paper.category_confidence = confidence
-            paper.category_confidence_band = band
-            paper.has_classification = category != Category.UNCLASSIFIED
+            if is_protected_manual and paper.category != Category.UNCLASSIFIED:
+                logger.debug(f"FILL_GAPS guard: keeping curated category for '{paper.title[:50]}'")
+            else:
+                effective_pdf = pdf_path if pdf_path and pdf_path.exists() else None
+                category, confidence, band = classify_category(paper, output_dir, pdf_path=effective_pdf)
+                paper.category = category
+                paper.category_confidence = confidence
+                paper.category_confidence_band = band
+                paper.has_classification = category != Category.UNCLASSIFIED
+                paper.bucket, paper.reason = _decide_bucket(paper)
 
-            # Bucket decision after classification (US-D3)
-            paper.bucket, paper.reason = _decide_bucket(paper)
-
-        # Thumbnail extraction
+        # Thumbnail extraction — guarded for manual_override
         if needs.get("thumbnail"):
-            if pdf_path and pdf_path.exists():
+            if is_protected_manual and paper.image:
+                logger.debug(f"FILL_GAPS guard: keeping curated image for '{paper.title[:50]}'")
+            elif pdf_path and pdf_path.exists():
                 image_filename = f"{slugify(paper.title)}.png"
                 image_path = output_dir / "images" / image_filename
-
                 if not image_path.exists():
                     extracted = extract_thumbnail(paper, output_dir, pdf_path=pdf_path)
                     if extracted:
                         paper.image = extracted
-
-            paper.has_thumbnail = bool(paper.image)
+        paper.has_thumbnail = bool(paper.image)
 
         # Affiliation extraction from PDF (heuristic, no LLM)
         if needs.get("affiliations") and not paper.affiliations and pdf_path and pdf_path.exists():
