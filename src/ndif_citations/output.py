@@ -371,11 +371,12 @@ def write_outputs(papers: list[DiscoveredPaper], output_dir: Path, run: Pipeline
     run.thumbnails_missing = len(missing)
     run.missing_thumbnails = missing
 
-    from ndif_citations.models import Category
+    from ndif_citations.models import Category, Confidence
     run.low_confidence = [
-        f'"{p.title}" -- classified as "{p.category.value}" (confidence: {p.category_confidence:.2f})'
+        f'"{p.title}" -- classified as "{p.category.value}" (band: {p.category_confidence_band.value})'
         for p in papers
-        if p.category_confidence < 0.7 and p.category != Category.UNCLASSIFIED
+        if p.category_confidence_band in (Confidence.MEDIUM, Confidence.LOW)
+        and p.category != Category.UNCLASSIFIED
     ]
 
     # 1. Website JSON — verified papers only (matches ResearchPaper TS interface)

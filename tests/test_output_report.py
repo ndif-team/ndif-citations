@@ -173,3 +173,68 @@ class TestThreeBucketReport:
         assert len(verified) == 1
         assert len(pending) == 1
         assert len(discarded) == 1
+
+
+class TestLowConfidenceReportUsesBands:
+    """The low_confidence list in PipelineRun should now distinguish
+    MEDIUM and LOW bands (was: any confidence < 0.7).
+    """
+
+    def test_medium_band_appears_in_low_confidence_list(self, tmp_path):
+        from ndif_citations.models import (
+            Bucket, Category, Confidence, DiscoveredPaper, PipelineRun
+        )
+        from ndif_citations.output import write_outputs
+        from tests.conftest import make_paper
+
+        paper = make_paper(
+            arxiv_id="2407.14561",
+            year=2024,
+            category=Category.USES_NDIF,
+            category_confidence_band=Confidence.MEDIUM,
+            bucket=Bucket.PENDING,  # MEDIUM rolls to pending
+        )
+        run = PipelineRun()
+        (tmp_path / "images").mkdir(parents=True, exist_ok=True)
+        write_outputs([paper], tmp_path, run)
+        # Should show up labeled medium
+        assert any("medium" in line.lower() for line in run.low_confidence)
+
+    def test_low_band_appears_in_low_confidence_list(self, tmp_path):
+        from ndif_citations.models import (
+            Bucket, Category, Confidence, PipelineRun
+        )
+        from ndif_citations.output import write_outputs
+        from tests.conftest import make_paper
+
+        paper = make_paper(
+            arxiv_id="2407.14561",
+            year=2024,
+            category=Category.USES_NNSIGHT,
+            category_confidence_band=Confidence.LOW,
+            bucket=Bucket.PENDING,
+        )
+        run = PipelineRun()
+        (tmp_path / "images").mkdir(parents=True, exist_ok=True)
+        write_outputs([paper], tmp_path, run)
+        assert any("low" in line.lower() for line in run.low_confidence)
+
+    def test_high_band_not_in_low_confidence_list(self, tmp_path):
+        from ndif_citations.models import (
+            Bucket, Category, Confidence, PipelineRun
+        )
+        from ndif_citations.output import write_outputs
+        from tests.conftest import make_paper
+
+        paper = make_paper(
+            arxiv_id="2407.14561",
+            year=2024,
+            category=Category.USES_NDIF,
+            category_confidence_band=Confidence.HIGH,
+            bucket=Bucket.VERIFIED,
+        )
+        run = PipelineRun()
+        (tmp_path / "images").mkdir(parents=True, exist_ok=True)
+        write_outputs([paper], tmp_path, run)
+        # HIGH band → not in low_confidence
+        assert run.low_confidence == []
