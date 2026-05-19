@@ -64,3 +64,9 @@ class TestConfidenceFloatBridge:
             manual_override=True,
         )
         assert paper.category_confidence_band == Confidence.CERTAIN
+
+
+class TestNewPaperReason:
+    def test_medium_confidence_reason_exists(self):
+        from ndif_citations.models import PaperReason
+        assert PaperReason.MEDIUM_CONFIDENCE.value == "medium_confidence"
