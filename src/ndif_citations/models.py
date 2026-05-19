@@ -75,6 +75,7 @@ class DiscoveredPaper(BaseModel):
             "existing",              # carried over from paper.venue
             "title_search",          # title-search fallback (no identifiers)
             "fallback",              # "ArXiv {year}" default
+            "manual",                # backfilled from Emma's manual citation list
         ]
     ] = None
     year: int = 0
@@ -105,7 +106,7 @@ class DiscoveredPaper(BaseModel):
     source: DiscoverySource = DiscoverySource.S2_CITATION
     date_discovered: datetime = Field(default_factory=datetime.now)
     manual_override: bool = False  # If true, preserve description/category/bucket on merge
-    github_repo_url: Optional[str] = None
+    project_url: Optional[str] = None  # repo / project page (github.com or other)
     # Cross-link tier (1=BibTeX, 2=Citation section, 3=single ID, 4=most-recent; None when not cross-linked)
     linked_paper_tier: Optional[int] = None
 
@@ -169,8 +170,8 @@ class DiscoveredPaper(BaseModel):
         }
         if self.image:
             result["image"] = self.image
-        if self.github_repo_url:
-            result["github_repo_url"] = self.github_repo_url
+        if self.project_url:
+            result["project_url"] = self.project_url
         return result
 
     def to_full_dict(self) -> dict:

@@ -193,5 +193,5 @@ class TestCourseReposNotCrossLinked:
             linked_paper_tier=None,
         )
         link_repos_to_papers([course_repo], [paper])
-        assert paper.github_repo_url is None
+        assert paper.project_url is None
         assert paper.linked_paper_tier is None

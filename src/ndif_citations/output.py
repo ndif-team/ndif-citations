@@ -478,7 +478,7 @@ def _write_csv(papers: list[DiscoveredPaper], csv_path: Path) -> None:
         "peer_reviewed", "venue_type", "abstract", "bibtex",
         "arxiv_id", "doi", "s2_paper_id", "openalex_id",
         "date_discovered", "category_confidence", "source",
-        "manual_override", "github_repo_url",
+        "manual_override", "project_url",
     ]
 
     with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
@@ -509,7 +509,7 @@ def _write_csv(papers: list[DiscoveredPaper], csv_path: Path) -> None:
                 "category_confidence": f"{paper.category_confidence:.2f}",
                 "source": paper.source.value,
                 "manual_override": paper.manual_override,
-                "github_repo_url": paper.github_repo_url or "",
+                "project_url": paper.project_url or "",
             }
             writer.writerow(row)
 
@@ -543,7 +543,7 @@ def _write_xlsx(
                 "year": paper.year,
                 "url": paper.url,
                 "pdf_url": paper.pdf_url or "",
-                "github_repo_url": paper.github_repo_url or "",
+                "project_url": paper.project_url or "",
                 "description": paper.description,
                 "category": paper.category.value,
                 "bucket": paper.bucket.value,
@@ -571,13 +571,13 @@ def _write_xlsx(
         ws_papers = wb.create_sheet("Papers")
         paper_cols = [
             "title", "authors", "affiliations", "venue", "year",
-            "url", "pdf_url", "github_repo_url",
+            "url", "pdf_url", "project_url",
             "description", "category",
             "peer_reviewed", "venue_type",
             "arxiv_id", "doi", "date_discovered",
             "category_confidence", "source", "manual_override",
         ]
-        url_columns = {"url", "pdf_url", "github_repo_url"}
+        url_columns = {"url", "pdf_url", "project_url"}
         _write_paper_rows(ws_papers, verified_papers, paper_cols, url_columns)
 
         # --- Pending sheet ---

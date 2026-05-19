@@ -53,13 +53,13 @@ class TestMergePaperData:
         _merge_paper_data(primary, secondary)
         assert primary.pdf_url == "https://arxiv.org/pdf/2407.00001.pdf"
 
-    def test_fills_github_repo_url(self):
+    def test_fills_project_url(self):
         primary = make_paper()
-        primary.github_repo_url = None
+        primary.project_url = None
         secondary = make_paper()
-        secondary.github_repo_url = "https://github.com/owner/repo"
+        secondary.project_url = "https://github.com/owner/repo"
         _merge_paper_data(primary, secondary)
-        assert primary.github_repo_url == "https://github.com/owner/repo"
+        assert primary.project_url == "https://github.com/owner/repo"
 
     def test_fills_missing_venue(self):
         primary = make_paper(venue="")

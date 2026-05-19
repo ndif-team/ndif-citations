@@ -498,7 +498,7 @@ def debug(paper_id: str, output_dir: str | None, out_file: str | None) -> None:
     _print(f"   arXiv ID:            {paper.arxiv_id}")
     _print(f"   DOI:                 {paper.doi}")
     _print(f"   URL:                 {paper.url}")
-    _print(f"   GitHub:              {paper.github_repo_url}")
+    _print(f"   GitHub:              {paper.project_url}")
     tier_desc = {1: "BibTeX block", 2: "Citation section", 3: "single post-2020 ID", 4: "most-recent of many"}
     tier_str = (
         f"{paper.linked_paper_tier}  ({tier_desc.get(paper.linked_paper_tier, 'unknown')})"

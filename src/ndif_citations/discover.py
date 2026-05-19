@@ -1060,8 +1060,8 @@ def _merge_paper_data(primary: DiscoveredPaper, secondary: DiscoveredPaper) -> N
         primary.publication_date = secondary.publication_date
 
     # Track GitHub repo if found via GitHub
-    if secondary.github_repo_url and not primary.github_repo_url:
-        primary.github_repo_url = secondary.github_repo_url
+    if secondary.project_url and not primary.project_url:
+        primary.project_url = secondary.project_url
 
 
 def _unlink_shared_template_papers(repos: list[DiscoveredRepo]) -> set[str]:
@@ -1157,7 +1157,7 @@ def link_repos_to_papers(
     """Cross-link repos to papers using linked_paper_url set during enrichment.
 
     For each repo whose linked_paper_url matches a paper's arxiv_id:
-      - Sets paper.github_repo_url = repo.url (only if not already set)
+      - Sets paper.project_url = repo.url (only if not already set)
 
     Note: linked_paper_url is now set by _detect_linked_paper() in
     enrich_repos_from_github_api(), not here.
@@ -1177,11 +1177,11 @@ def link_repos_to_papers(
         if not matched_id:
             continue
 
-        # Set paper.github_repo_url if this arXiv ID matches a known paper
+        # Set paper.project_url if this arXiv ID matches a known paper
         matched_paper = by_arxiv.get(matched_id)
         if matched_paper:
-            if not matched_paper.github_repo_url:
-                matched_paper.github_repo_url = repo.url
+            if not matched_paper.project_url:
+                matched_paper.project_url = repo.url
                 logger.debug(
                     f"Cross-linked: paper '{matched_paper.title[:50]}' "
                     f"<-> repo {repo.owner}/{repo.repo}"
