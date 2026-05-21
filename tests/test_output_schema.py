@@ -87,3 +87,16 @@ def test_merge_repos_backfills_first_seen_when_missing_on_existing(monkeypatch):
     target = next(m for m in merged if m.merge_key() == "o/r")
     assert target.first_seen == "2026-05-20"
     assert target.last_seen == "2026-05-20"
+
+
+def test_merge_repos_preserves_timestamps_on_protected_but_absent(monkeypatch):
+    monkeypatch.setattr(output_module, "_today", lambda: date(2026, 5, 20))
+    existing = [DiscoveredRepo(
+        owner="o", repo="protected", url="https://github.com/o/protected",
+        first_seen="2025-06-01", last_seen="2026-04-01",
+        manual_override=True,
+    )]
+    merged = merge_repos(discovered=[], existing=existing)
+    target = next(m for m in merged if m.merge_key() == "o/protected")
+    assert target.first_seen == "2025-06-01"  # unchanged — no fresh observation
+    assert target.last_seen == "2026-04-01"   # unchanged — no fresh observation

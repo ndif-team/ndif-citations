@@ -10,6 +10,8 @@ from datetime import date, datetime
 def _today() -> date:
     """Wrapped so tests can monkeypatch the current date deterministically."""
     return date.today()
+
+
 from pathlib import Path
 
 from ndif_citations.models import Bucket, Category, DiscoveredPaper, DiscoveredRepo, PipelineRun
