@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 import json
 import logging
 from datetime import datetime
@@ -426,93 +425,6 @@ def _write_repos_outputs(repos: list[DiscoveredRepo], output_dir: Path) -> None:
     logger.info(f"Wrote {len(repos_sorted)} repos to {full_json}")
 
 
-
-def _write_repos_csv(repos: list[DiscoveredRepo], csv_path: Path) -> None:
-    """Write repos to CSV."""
-    fieldnames = [
-        "owner", "repo", "url", "description",
-        "stars", "forks", "last_commit", "archived", "is_fork",
-        "language", "license", "topics",
-        "repo_type", "parent_full_name",
-        "category", "classification_reason",
-        "linked_paper_url", "readme_arxiv_ids",
-        "manual_override", "has_metadata", "has_classification",
-        "content_hash", "processing_bucket",
-    ]
-
-    with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        for repo in repos:
-            writer.writerow({
-                "owner": repo.owner,
-                "repo": repo.repo,
-                "url": repo.url,
-                "description": repo.description or "",
-                "stars": repo.stars if repo.stars is not None else "",
-                "forks": repo.forks if repo.forks is not None else "",
-                "last_commit": repo.last_commit.isoformat() if repo.last_commit else "",
-                "archived": repo.archived,
-                "is_fork": repo.is_fork,
-                "language": repo.language or "",
-                "license": repo.license or "",
-                "topics": "|".join(repo.topics),
-                "repo_type": repo.repo_type,
-                "parent_full_name": repo.parent_full_name or "",
-                "category": repo.category.value,
-                "classification_reason": repo.classification_reason,
-                "linked_paper_url": repo.linked_paper_url or "",
-                "readme_arxiv_ids": "|".join(repo.readme_arxiv_ids),
-                "manual_override": repo.manual_override,
-                "has_metadata": repo.has_metadata,
-                "has_classification": repo.has_classification,
-                "content_hash": repo.content_hash,
-                "processing_bucket": repo.processing_bucket,
-            })
-
-
-def _write_csv(papers: list[DiscoveredPaper], csv_path: Path) -> None:
-    """Write papers to CSV with extended columns."""
-    fieldnames = [
-        "title", "authors", "affiliations", "venue", "year", "url", "pdf_url",
-        "image", "description", "category", 
-        "peer_reviewed", "venue_type", "abstract", "bibtex",
-        "arxiv_id", "doi", "s2_paper_id", "openalex_id",
-        "date_discovered", "category_confidence", "source",
-        "manual_override", "project_url",
-    ]
-
-    with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-
-        for paper in papers:
-            row = {
-                "title": paper.title,
-                "authors": paper.authors,
-                "affiliations": paper.affiliations,
-                "venue": paper.venue,
-                "year": paper.year,
-                "url": paper.url,
-                "pdf_url": paper.pdf_url or "",
-                "image": paper.image or "",
-                "description": paper.description,
-                "category": paper.category.value,
-                "peer_reviewed": paper.peer_reviewed,
-                "venue_type": paper.venue_type or "",
-                "abstract": paper.abstract or "",
-                "bibtex": paper.bibtex or "",
-                "arxiv_id": paper.arxiv_id or "",
-                "doi": paper.doi or "",
-                "s2_paper_id": paper.s2_paper_id or "",
-                "openalex_id": paper.openalex_id or "",
-                "date_discovered": paper.date_discovered.isoformat() if paper.date_discovered else "",
-                "category_confidence": f"{paper.category_confidence:.2f}",
-                "source": paper.source.value,
-                "manual_override": paper.manual_override,
-                "project_url": paper.project_url or "",
-            }
-            writer.writerow(row)
 
 
 def _write_xlsx(
