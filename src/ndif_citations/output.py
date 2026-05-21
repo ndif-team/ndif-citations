@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import date, datetime
+
+
+def _today() -> date:
+    """Wrapped so tests can monkeypatch the current date deterministically."""
+    return date.today()
 from pathlib import Path
 
 from ndif_citations.models import Bucket, Category, DiscoveredPaper, DiscoveredRepo, PipelineRun
@@ -193,20 +198,25 @@ def merge_repos(
 ) -> list[DiscoveredRepo]:
     """Merge discovered repos into existing state.
 
-    - Stale entries (404 / renamed / archived) are NOT in discovered list
-      (already dropped by enrich_repos_from_github_api). This function
-      therefore purges any existing entry that doesn't appear in discovered,
-      UNLESS it has manual_override=True.
-    - For repos that appear in both: carry over existing state for SKIP/PROTECTED;
-      update fields for NEW/REPROCESS/FILL_GAPS (routing has already set processing_bucket).
-    - New repos (in discovered but not in existing): append as-is.
+    - Stamps first_seen / last_seen on every repo that survives the merge:
+        * NEW (in discovered, not in existing): first_seen = last_seen = today
+        * Re-observed (in both): preserve first_seen, update last_seen to today
+        * Protected-but-absent (existing + manual_override, missing from discovered):
+          last_seen unchanged (we have no fresh observation), first_seen preserved
+    - API-confirmed-dead repos (404/renamed/archived) are NOT in `discovered`
+      — they were already dropped in enrich_repos_from_github_api. Those are
+      removed here unless manual_override=True.
+    - Scrape-absent repos (still alive on GitHub, just missing from this run's
+      dependents page) are also NOT in `discovered`. They survive as protected
+      stale entries via the soft age-out applied in Task 5.
     """
+    today_str = _today().isoformat()
     by_key: dict[str, DiscoveredRepo] = {r.merge_key(): r for r in existing}
     discovered_keys: set[str] = {r.merge_key() for r in discovered}
 
     merged: list[DiscoveredRepo] = []
 
-    # Keep existing repos that are still discovered (or protected)
+    # Keep existing repos that are NOT in this run's discovered set
     removed_count = 0
     for existing_repo in existing:
         key = existing_repo.merge_key()
@@ -222,23 +232,27 @@ def merge_repos(
     if removed_count:
         logger.info(f"Purged {removed_count} stale repo(s) from github-repos-full.json")
 
-    # Merge each discovered repo
+    # Merge each discovered repo, stamping first_seen / last_seen
     for repo in discovered:
         key = repo.merge_key()
         existing_repo = by_key.get(key)
 
         if existing_repo is None:
-            # New repo — append as-is
+            # NEW — stamp both
+            repo.first_seen = today_str
+            repo.last_seen = today_str
             merged.append(repo)
         elif repo.processing_bucket in ("skip", "protected"):
-            # Keep existing state (routing already swapped in the existing object in process_repos,
-            # but guard here too)
+            # Keep existing object; just bump last_seen
+            existing_repo.first_seen = existing_repo.first_seen or today_str
+            existing_repo.last_seen = today_str
             merged.append(existing_repo)
         else:
-            # NEW / REPROCESS / FILL_GAPS — use freshly processed repo
-            # Preserve manual_override from existing
+            # NEW / REPROCESS / FILL_GAPS — preserve manual_override + first_seen
             if existing_repo.manual_override:
                 repo.manual_override = True
+            repo.first_seen = existing_repo.first_seen or today_str
+            repo.last_seen = today_str
             merged.append(repo)
 
     return merged
