@@ -1,4 +1,4 @@
-"""Phase 4: Output — JSON/CSV writing with append/merge logic and CLI report."""
+"""Phase 4: Output — JSON/XLSX writing with append/merge logic and CLI report."""
 
 from __future__ import annotations
 
