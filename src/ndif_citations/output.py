@@ -1,17 +1,21 @@
-"""Phase 4: Output — JSON/CSV writing with append/merge logic and CLI report."""
+"""Phase 4: Output — JSON/XLSX writing with append/merge logic and CLI report."""
 
 from __future__ import annotations
 
-import csv
 import json
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from ndif_citations.models import Bucket, Category, DiscoveredPaper, DiscoveredRepo, PipelineRun
 from ndif_citations.utils import is_duplicate
 
 logger = logging.getLogger(__name__)
+
+
+def _today() -> date:
+    """Wrapped so tests can monkeypatch the current date deterministically."""
+    return date.today()
 
 
 # ---------------------------------------------------------------------------
@@ -194,21 +198,34 @@ def merge_repos(
 ) -> list[DiscoveredRepo]:
     """Merge discovered repos into existing state.
 
-    - Stale entries (404 / renamed / archived) are NOT in discovered list
-      (already dropped by enrich_repos_from_github_api). This function
-      therefore purges any existing entry that doesn't appear in discovered,
-      UNLESS it has manual_override=True.
-    - For repos that appear in both: carry over existing state for SKIP/PROTECTED;
-      update fields for NEW/REPROCESS/FILL_GAPS (routing has already set processing_bucket).
-    - New repos (in discovered but not in existing): append as-is.
+    - Stamps first_seen / last_seen on every repo that survives the merge:
+        * NEW (in discovered, not in existing): first_seen = last_seen = today
+        * Re-observed (in both): preserve first_seen, update last_seen to today
+        * Protected-but-absent (existing + manual_override, missing from discovered):
+          last_seen unchanged (we have no fresh observation), first_seen preserved
+    - API-confirmed-dead repos (404/renamed/archived) are NOT in `discovered`
+      — they were already dropped in enrich_repos_from_github_api. Those are
+      removed here unless manual_override=True.
+    - Scrape-absent repos (still alive on GitHub, just missing from this run's
+      dependents page) are also NOT in `discovered`. They survive as protected
+      stale entries via the soft age-out applied in Task 5.
     """
+    today_date = _today()
+    today_str = today_date.isoformat()
     by_key: dict[str, DiscoveredRepo] = {r.merge_key(): r for r in existing}
     discovered_keys: set[str] = {r.merge_key() for r in discovered}
 
     merged: list[DiscoveredRepo] = []
 
-    # Keep existing repos that are still discovered (or protected)
+    # Keep existing repos that are NOT in this run's discovered set
+    # Hybrid policy: manual_override → always keep; otherwise → keep if last_seen
+    # is within 30 days (scrape-absent grace window). API-confirmed-dead repos
+    # (404/rename/archived) get dropped from `enrich_repos_from_github_api`
+    # BEFORE they reach this function, so they tend to be old `last_seen`
+    # values and naturally age out.
+    AGE_OUT_DAYS = 30
     removed_count = 0
+    aged_out_count = 0
     for existing_repo in existing:
         key = existing_repo.merge_key()
         if key in discovered_keys:
@@ -216,30 +233,51 @@ def merge_repos(
         if existing_repo.manual_override:
             logger.debug(f"Keeping protected repo not seen this run: {key}")
             merged.append(existing_repo)
+            continue
+        # Soft age-out
+        if existing_repo.last_seen:
+            try:
+                last = date.fromisoformat(existing_repo.last_seen)
+                days_since = (today_date - last).days
+            except ValueError:
+                days_since = AGE_OUT_DAYS + 1  # bad data → age out
         else:
-            logger.info(f"Purging stale repo from state: {key}")
+            days_since = AGE_OUT_DAYS + 1  # no last_seen → age out
+        if days_since <= AGE_OUT_DAYS:
+            logger.debug(f"Keeping scrape-absent repo (within {AGE_OUT_DAYS}d): {key}")
+            merged.append(existing_repo)
+        else:
+            logger.info(f"Aging out scrape-absent repo ({days_since}d since last seen): {key}")
+            aged_out_count += 1
             removed_count += 1
 
     if removed_count:
-        logger.info(f"Purged {removed_count} stale repo(s) from github-repos-full.json")
+        logger.info(
+            f"Removed {removed_count} stale repo(s) from state "
+            f"({aged_out_count} aged out past {AGE_OUT_DAYS}d)"
+        )
 
-    # Merge each discovered repo
+    # Merge each discovered repo, stamping first_seen / last_seen
     for repo in discovered:
         key = repo.merge_key()
         existing_repo = by_key.get(key)
 
         if existing_repo is None:
-            # New repo — append as-is
+            # NEW — stamp both
+            repo.first_seen = today_str
+            repo.last_seen = today_str
             merged.append(repo)
         elif repo.processing_bucket in ("skip", "protected"):
-            # Keep existing state (routing already swapped in the existing object in process_repos,
-            # but guard here too)
+            # Keep existing object; just bump last_seen
+            existing_repo.first_seen = existing_repo.first_seen or today_str
+            existing_repo.last_seen = today_str
             merged.append(existing_repo)
         else:
-            # NEW / REPROCESS / FILL_GAPS — use freshly processed repo
-            # Preserve manual_override from existing
+            # NEW / REPROCESS / FILL_GAPS — preserve manual_override + first_seen
             if existing_repo.manual_override:
                 repo.manual_override = True
+            repo.first_seen = existing_repo.first_seen or today_str
+            repo.last_seen = today_str
             merged.append(repo)
 
     return merged
@@ -427,93 +465,6 @@ def _write_repos_outputs(repos: list[DiscoveredRepo], output_dir: Path) -> None:
 
 
 
-def _write_repos_csv(repos: list[DiscoveredRepo], csv_path: Path) -> None:
-    """Write repos to CSV."""
-    fieldnames = [
-        "owner", "repo", "url", "description",
-        "stars", "forks", "last_commit", "archived", "is_fork",
-        "language", "license", "topics",
-        "repo_type", "parent_full_name",
-        "category", "classification_reason",
-        "linked_paper_url", "readme_arxiv_ids",
-        "manual_override", "has_metadata", "has_classification",
-        "content_hash", "processing_bucket",
-    ]
-
-    with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        for repo in repos:
-            writer.writerow({
-                "owner": repo.owner,
-                "repo": repo.repo,
-                "url": repo.url,
-                "description": repo.description or "",
-                "stars": repo.stars if repo.stars is not None else "",
-                "forks": repo.forks if repo.forks is not None else "",
-                "last_commit": repo.last_commit.isoformat() if repo.last_commit else "",
-                "archived": repo.archived,
-                "is_fork": repo.is_fork,
-                "language": repo.language or "",
-                "license": repo.license or "",
-                "topics": "|".join(repo.topics),
-                "repo_type": repo.repo_type,
-                "parent_full_name": repo.parent_full_name or "",
-                "category": repo.category.value,
-                "classification_reason": repo.classification_reason,
-                "linked_paper_url": repo.linked_paper_url or "",
-                "readme_arxiv_ids": "|".join(repo.readme_arxiv_ids),
-                "manual_override": repo.manual_override,
-                "has_metadata": repo.has_metadata,
-                "has_classification": repo.has_classification,
-                "content_hash": repo.content_hash,
-                "processing_bucket": repo.processing_bucket,
-            })
-
-
-def _write_csv(papers: list[DiscoveredPaper], csv_path: Path) -> None:
-    """Write papers to CSV with extended columns."""
-    fieldnames = [
-        "title", "authors", "affiliations", "venue", "year", "url", "pdf_url",
-        "image", "description", "category", 
-        "peer_reviewed", "venue_type", "abstract", "bibtex",
-        "arxiv_id", "doi", "s2_paper_id", "openalex_id",
-        "date_discovered", "category_confidence", "source",
-        "manual_override", "project_url",
-    ]
-
-    with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-
-        for paper in papers:
-            row = {
-                "title": paper.title,
-                "authors": paper.authors,
-                "affiliations": paper.affiliations,
-                "venue": paper.venue,
-                "year": paper.year,
-                "url": paper.url,
-                "pdf_url": paper.pdf_url or "",
-                "image": paper.image or "",
-                "description": paper.description,
-                "category": paper.category.value,
-                "peer_reviewed": paper.peer_reviewed,
-                "venue_type": paper.venue_type or "",
-                "abstract": paper.abstract or "",
-                "bibtex": paper.bibtex or "",
-                "arxiv_id": paper.arxiv_id or "",
-                "doi": paper.doi or "",
-                "s2_paper_id": paper.s2_paper_id or "",
-                "openalex_id": paper.openalex_id or "",
-                "date_discovered": paper.date_discovered.isoformat() if paper.date_discovered else "",
-                "category_confidence": f"{paper.category_confidence:.2f}",
-                "source": paper.source.value,
-                "manual_override": paper.manual_override,
-                "project_url": paper.project_url or "",
-            }
-            writer.writerow(row)
-
 
 def _write_xlsx(
     papers: list[DiscoveredPaper],
@@ -605,12 +556,13 @@ def _write_xlsx(
         ws_github = wb.create_sheet("GitHub")
         github_cols = [
             "owner", "repo", "url", "description",
-            "stars", "forks", "last_commit",
+            "stars", "forks",
+            "last_commit", "first_seen",
             "language", "license", "topics",
-            "category", "classification_reason",
-            "repo_type", "parent_full_name",
-            "linked_paper_url",
-            "manual_override", "has_metadata", "has_classification",
+            "linked_paper_url", "linked_paper_tier", "readme_arxiv_ids",
+            "category", "repo_type", "parent_full_name",
+            "archived", "is_fork",
+            "classification_reason", "manual_override",
         ]
         # Header row
         for col_idx, col_name in enumerate(github_cols, 1):
@@ -632,17 +584,20 @@ def _write_xlsx(
                 "stars": repo.stars,
                 "forks": repo.forks,
                 "last_commit": repo.last_commit.isoformat() if repo.last_commit else "",
+                "first_seen": repo.first_seen or "",
                 "language": repo.language or "",
                 "license": repo.license or "",
-                "topics": "|".join(repo.topics),
+                "topics": ", ".join(repo.topics),
+                "linked_paper_url": repo.linked_paper_url or "",
+                "linked_paper_tier": repo.linked_paper_tier if repo.linked_paper_tier is not None else "",
+                "readme_arxiv_ids": ", ".join(repo.readme_arxiv_ids),
                 "category": repo.category.value,
-                "classification_reason": repo.classification_reason,
                 "repo_type": repo.repo_type,
                 "parent_full_name": repo.parent_full_name or "",
-                "linked_paper_url": repo.linked_paper_url or "",
+                "archived": repo.archived,
+                "is_fork": repo.is_fork,
+                "classification_reason": repo.classification_reason,
                 "manual_override": repo.manual_override,
-                "has_metadata": repo.has_metadata,
-                "has_classification": repo.has_classification,
             }
             for col_idx, col_name in enumerate(github_cols, 1):
                 value = row_data[col_name]

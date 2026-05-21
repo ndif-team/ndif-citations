@@ -1118,6 +1118,12 @@ def _tag_repo_type(repo: DiscoveredRepo, unlinked_set: set[str]) -> str:
     EXPERIMENT (default):
       7. Everything else → experiment
     """
+    # Tier 0: honor curator overrides — manual_override means a human set
+    # repo_type by hand and we must not re-tag it. The cli.py loop also
+    # protects the course → linked_paper_url=None side effect.
+    if repo.manual_override:
+        return repo.repo_type
+
     # --- COURSE ---
     # Tier 1: forked from known course source
     if repo.parent_full_name and repo.parent_full_name in config.KNOWN_COURSE_SOURCES:
