@@ -558,12 +558,13 @@ def _write_xlsx(
         ws_github = wb.create_sheet("GitHub")
         github_cols = [
             "owner", "repo", "url", "description",
-            "stars", "forks", "last_commit",
+            "stars", "forks",
+            "last_commit", "first_seen",
             "language", "license", "topics",
-            "category", "classification_reason",
-            "repo_type", "parent_full_name",
-            "linked_paper_url",
-            "manual_override", "has_metadata", "has_classification",
+            "linked_paper_url", "linked_paper_tier", "readme_arxiv_ids",
+            "category", "repo_type", "parent_full_name",
+            "archived", "is_fork",
+            "classification_reason", "manual_override",
         ]
         # Header row
         for col_idx, col_name in enumerate(github_cols, 1):
@@ -585,17 +586,20 @@ def _write_xlsx(
                 "stars": repo.stars,
                 "forks": repo.forks,
                 "last_commit": repo.last_commit.isoformat() if repo.last_commit else "",
+                "first_seen": repo.first_seen or "",
                 "language": repo.language or "",
                 "license": repo.license or "",
-                "topics": "|".join(repo.topics),
+                "topics": ", ".join(repo.topics),
+                "linked_paper_url": repo.linked_paper_url or "",
+                "linked_paper_tier": repo.linked_paper_tier if repo.linked_paper_tier is not None else "",
+                "readme_arxiv_ids": ", ".join(repo.readme_arxiv_ids),
                 "category": repo.category.value,
-                "classification_reason": repo.classification_reason,
                 "repo_type": repo.repo_type,
                 "parent_full_name": repo.parent_full_name or "",
-                "linked_paper_url": repo.linked_paper_url or "",
+                "archived": repo.archived,
+                "is_fork": repo.is_fork,
+                "classification_reason": repo.classification_reason,
                 "manual_override": repo.manual_override,
-                "has_metadata": repo.has_metadata,
-                "has_classification": repo.has_classification,
             }
             for col_idx, col_name in enumerate(github_cols, 1):
                 value = row_data[col_name]

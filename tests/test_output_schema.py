@@ -192,3 +192,25 @@ def test_tag_repo_type_does_not_misclassify_research_with_workshop_keyword():
         linked_paper_url="https://arxiv.org/abs/2601.00000",
     )
     assert _tag_repo_type(r, unlinked_set=set()) == "research"
+
+
+def test_xlsx_github_sheet_columns(tmp_path):
+    import openpyxl
+    from ndif_citations.output import _write_xlsx
+
+    repos = [DiscoveredRepo(
+        owner="o", repo="r", url="https://github.com/o/r",
+        stars=10, forks=2, first_seen="2026-01-01", last_seen="2026-05-20",
+    )]
+    _write_xlsx(papers=[], repos=repos, output_dir=tmp_path, skip_papers=True, skip_github=False)
+    wb = openpyxl.load_workbook(tmp_path / "research-data.xlsx")
+    ws = wb["GitHub"]
+    header = [c.value for c in ws[1]]
+    expected = [
+        "owner", "repo", "url", "description", "stars", "forks",
+        "last_commit", "first_seen", "language", "license", "topics",
+        "linked_paper_url", "linked_paper_tier", "readme_arxiv_ids",
+        "category", "repo_type", "parent_full_name",
+        "archived", "is_fork", "classification_reason", "manual_override",
+    ]
+    assert header == expected
