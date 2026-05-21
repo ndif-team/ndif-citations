@@ -100,3 +100,37 @@ def test_merge_repos_preserves_timestamps_on_protected_but_absent(monkeypatch):
     target = next(m for m in merged if m.merge_key() == "o/protected")
     assert target.first_seen == "2025-06-01"  # unchanged — no fresh observation
     assert target.last_seen == "2026-04-01"   # unchanged — no fresh observation
+
+
+def test_merge_repos_keeps_scrape_absent_repo_within_30_days(monkeypatch):
+    monkeypatch.setattr(output_module, "_today", lambda: date(2026, 5, 20))
+    existing = [DiscoveredRepo(
+        owner="o", repo="r", url="https://github.com/o/r",
+        first_seen="2025-01-01", last_seen="2026-05-01",  # 19 days ago
+    )]
+    merged = merge_repos(discovered=[], existing=existing)
+    assert any(m.merge_key() == "o/r" for m in merged), \
+        "Scrape-absent repo within 30d should survive"
+
+
+def test_merge_repos_ages_out_scrape_absent_repo_past_30_days(monkeypatch):
+    monkeypatch.setattr(output_module, "_today", lambda: date(2026, 5, 20))
+    existing = [DiscoveredRepo(
+        owner="o", repo="r", url="https://github.com/o/r",
+        first_seen="2025-01-01", last_seen="2026-04-01",  # 49 days ago
+    )]
+    merged = merge_repos(discovered=[], existing=existing)
+    assert all(m.merge_key() != "o/r" for m in merged), \
+        "Scrape-absent repo older than 30d should age out"
+
+
+def test_merge_repos_manual_override_survives_age_out(monkeypatch):
+    monkeypatch.setattr(output_module, "_today", lambda: date(2026, 5, 20))
+    existing = [DiscoveredRepo(
+        owner="o", repo="r", url="https://github.com/o/r",
+        first_seen="2024-01-01", last_seen="2024-01-01",  # ancient
+        manual_override=True,
+    )]
+    merged = merge_repos(discovered=[], existing=existing)
+    assert any(m.merge_key() == "o/r" for m in merged), \
+        "manual_override must always survive regardless of last_seen"

@@ -219,7 +219,15 @@ def merge_repos(
     merged: list[DiscoveredRepo] = []
 
     # Keep existing repos that are NOT in this run's discovered set
+    # Hybrid policy: manual_override → always keep; otherwise → keep if last_seen
+    # is within 30 days (scrape-absent grace window). API-confirmed-dead repos
+    # (404/rename/archived) get dropped from `enrich_repos_from_github_api`
+    # BEFORE they reach this function, so they tend to be old `last_seen`
+    # values and naturally age out.
+    AGE_OUT_DAYS = 30
+    today_date = _today()
     removed_count = 0
+    aged_out_count = 0
     for existing_repo in existing:
         key = existing_repo.merge_key()
         if key in discovered_keys:
@@ -227,12 +235,29 @@ def merge_repos(
         if existing_repo.manual_override:
             logger.debug(f"Keeping protected repo not seen this run: {key}")
             merged.append(existing_repo)
+            continue
+        # Soft age-out
+        if existing_repo.last_seen:
+            try:
+                last = date.fromisoformat(existing_repo.last_seen)
+                days_since = (today_date - last).days
+            except ValueError:
+                days_since = AGE_OUT_DAYS + 1  # bad data → age out
         else:
-            logger.info(f"Purging stale repo from state: {key}")
+            days_since = AGE_OUT_DAYS + 1  # no last_seen → age out
+        if days_since <= AGE_OUT_DAYS:
+            logger.debug(f"Keeping scrape-absent repo (within {AGE_OUT_DAYS}d): {key}")
+            merged.append(existing_repo)
+        else:
+            logger.info(f"Aging out scrape-absent repo ({days_since}d since last seen): {key}")
+            aged_out_count += 1
             removed_count += 1
 
     if removed_count:
-        logger.info(f"Purged {removed_count} stale repo(s) from github-repos-full.json")
+        logger.info(
+            f"Removed {removed_count} stale repo(s) from state "
+            f"({aged_out_count} aged out past {AGE_OUT_DAYS}d)"
+        )
 
     # Merge each discovered repo, stamping first_seen / last_seen
     for repo in discovered:
