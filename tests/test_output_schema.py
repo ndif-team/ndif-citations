@@ -134,3 +134,34 @@ def test_merge_repos_manual_override_survives_age_out(monkeypatch):
     merged = merge_repos(discovered=[], existing=existing)
     assert any(m.merge_key() == "o/r" for m in merged), \
         "manual_override must always survive regardless of last_seen"
+
+
+# ---------------------------------------------------------------------------
+# _tag_repo_type manual_override tests
+# ---------------------------------------------------------------------------
+
+from ndif_citations.discover import _tag_repo_type
+
+
+def test_tag_repo_type_respects_manual_override():
+    # A repo a curator hand-tagged as 'course', with manual_override=True.
+    # Its natural classification (stars=100, has description, has linked paper)
+    # would otherwise put it in 'research'.
+    r = DiscoveredRepo(
+        owner="curator", repo="manually-flagged", url="https://github.com/curator/x",
+        stars=100, description="real research project", linked_paper_url="https://arxiv.org/abs/1234.5678",
+        repo_type="course", manual_override=True,
+    )
+    result = _tag_repo_type(r, unlinked_set=set())
+    assert result == "course", "manual_override must short-circuit the 7-rule tree"
+
+
+def test_tag_repo_type_does_not_short_circuit_without_override():
+    # Same repo without manual_override — should be re-tagged as 'research'.
+    r = DiscoveredRepo(
+        owner="curator", repo="not-flagged", url="https://github.com/curator/y",
+        stars=100, description="real research project", linked_paper_url="https://arxiv.org/abs/1234.5678",
+        repo_type="course", manual_override=False,
+    )
+    result = _tag_repo_type(r, unlinked_set=set())
+    assert result == "research", "without manual_override, normal rules apply"

@@ -159,7 +159,13 @@ def run(output_dir: str | None, fresh: bool, skip_github: bool, skip_papers: boo
             repo.repo_type = _tag_repo_type(repo, unlinked_set)
             # Course repos cite many papers — none is canonical. Clear the link
             # so they neither display a 📄 badge nor cross-link to any paper.
-            if repo.repo_type == "course" and repo.linked_paper_url:
+            # Skip this side effect for curator-overridden repos: if a human
+            # set both repo_type AND linked_paper_url, trust them.
+            if (
+                repo.repo_type == "course"
+                and repo.linked_paper_url
+                and not repo.manual_override
+            ):
                 repo.linked_paper_url = None
                 repo.linked_paper_tier = None
                 course_cleared += 1
