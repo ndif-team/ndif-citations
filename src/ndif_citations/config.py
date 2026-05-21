@@ -108,7 +108,17 @@ GITHUB_API_RATE_LIMIT_ANON = 1.0   # seconds between calls when anonymous
 
 EXCLUDED_GITHUB_REPOS: set[str] = {"ndif-team/nnsight"}  # repos to drop entirely
 KNOWN_COURSE_SOURCES: set[str] = {"callummcdougall/ARENA_3.0"}  # repos whose forks → "course"
-COURSE_NAME_PATTERNS: list[str] = ["ARENA", "MATS", "CBAI"]  # case-insensitive name/desc substrings
+COURSE_NAME_PATTERNS: list[str] = [
+    # Course-program identifiers (existing — kept as-is)
+    "ARENA", "MATS", "CBAI",
+    # Generic coursework markers (added 2026-05-20, see spec §3.3 audit)
+    # NOTE: "workshop" intentionally omitted per user decision 2026-05-20 —
+    # too many false positives against workshop-paper research repos.
+    # NOTE: " course " (space-padded) catches "ML course 2025 project" without
+    # matching "coursework", "courses", or "coursera".
+    " course ", "course project", "coursework", "exercises", "capstone",
+    "homework", "assignment",
+]  # case-insensitive name/desc substrings
 SHARED_PAPER_THRESHOLD: int = 5  # min repos sharing same linked_paper_url for template detection
 
 # ---------------------------------------------------------------------------

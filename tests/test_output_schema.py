@@ -165,3 +165,30 @@ def test_tag_repo_type_does_not_short_circuit_without_override():
     )
     result = _tag_repo_type(r, unlinked_set=set())
     assert result == "research", "without manual_override, normal rules apply"
+
+
+def test_tag_repo_type_catches_known_course_leaks():
+    # Real repos that today get tagged 'experiment' but are clearly coursework.
+    theia = DiscoveredRepo(
+        owner="AntonKorznikov", repo="TheiaSae", url="https://github.com/AntonKorznikov/TheiaSae",
+        stars=0, description="Skoltech ML course 2025 project",
+    )
+    metarepo = DiscoveredRepo(
+        owner="MichaelRipa", repo="coding-exercises-metarepo",
+        url="https://github.com/MichaelRipa/coding-exercises-metarepo",
+        stars=0, description="This repository contains all my coding exercises from various courses",
+    )
+    assert _tag_repo_type(theia, unlinked_set=set()) == "course"
+    assert _tag_repo_type(metarepo, unlinked_set=set()) == "course"
+
+
+def test_tag_repo_type_does_not_misclassify_research_with_workshop_keyword():
+    # Per user decision 2026-05-20: "workshop" was dropped from COURSE_NAME_PATTERNS
+    # to avoid false-positive on workshop-paper research repos. Verify a research
+    # repo mentioning "workshop" still tags as research.
+    r = DiscoveredRepo(
+        owner="real", repo="research", url="https://github.com/real/research",
+        stars=200, description="ICLR 2026 workshop paper code",
+        linked_paper_url="https://arxiv.org/abs/2601.00000",
+    )
+    assert _tag_repo_type(r, unlinked_set=set()) == "research"
