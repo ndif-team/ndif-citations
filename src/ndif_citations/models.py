@@ -288,6 +288,11 @@ class DiscoveredRepo(BaseModel):
         """Return key for deduplication: owner/repo."""
         return f"{self.owner}/{self.repo}"
 
+    @property
+    def is_course(self) -> bool:
+        """True iff repo_type is 'course'. The slim JSON exposes only this boolean."""
+        return self.repo_type == "course"
+
     def compute_content_hash(self) -> str:
         """Compute content hash for change detection."""
         return hashlib.sha256(
@@ -300,7 +305,7 @@ class DiscoveredRepo(BaseModel):
             self.content_hash = self.compute_content_hash()
 
     def to_website_dict(self) -> dict:
-        """Export slim dict for github-repos.json."""
+        """Export slim dict for github-repos.json — exactly 12 fields, no internal state."""
         return {
             "owner": self.owner,
             "repo": self.repo,
@@ -310,13 +315,9 @@ class DiscoveredRepo(BaseModel):
             "forks": self.forks,
             "last_commit": self.last_commit.isoformat() if self.last_commit else None,
             "language": self.language,
-            "license": self.license,
-            "topics": self.topics,
-            "archived": self.archived,
-            "category": self.category.value,
             "linked_paper_url": self.linked_paper_url,
-            "linked_paper_tier": self.linked_paper_tier,
-            "repo_type": self.repo_type,
+            "is_course": self.is_course,
+            "is_fork": self.is_fork,
             "parent_full_name": self.parent_full_name,
         }
 
