@@ -5,19 +5,17 @@ from __future__ import annotations
 import json
 import logging
 from datetime import date, datetime
-
-
-def _today() -> date:
-    """Wrapped so tests can monkeypatch the current date deterministically."""
-    return date.today()
-
-
 from pathlib import Path
 
 from ndif_citations.models import Bucket, Category, DiscoveredPaper, DiscoveredRepo, PipelineRun
 from ndif_citations.utils import is_duplicate
 
 logger = logging.getLogger(__name__)
+
+
+def _today() -> date:
+    """Wrapped so tests can monkeypatch the current date deterministically."""
+    return date.today()
 
 
 # ---------------------------------------------------------------------------
@@ -212,7 +210,8 @@ def merge_repos(
       dependents page) are also NOT in `discovered`. They survive as protected
       stale entries via the soft age-out applied in Task 5.
     """
-    today_str = _today().isoformat()
+    today_date = _today()
+    today_str = today_date.isoformat()
     by_key: dict[str, DiscoveredRepo] = {r.merge_key(): r for r in existing}
     discovered_keys: set[str] = {r.merge_key() for r in discovered}
 
@@ -225,7 +224,6 @@ def merge_repos(
     # BEFORE they reach this function, so they tend to be old `last_seen`
     # values and naturally age out.
     AGE_OUT_DAYS = 30
-    today_date = _today()
     removed_count = 0
     aged_out_count = 0
     for existing_repo in existing:

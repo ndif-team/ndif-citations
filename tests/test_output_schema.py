@@ -1,6 +1,7 @@
 """Schema and behavioral tests for the GitHub pipeline revamp (2026-05-20)."""
 from __future__ import annotations
 
+import pytest
 from datetime import date
 from ndif_citations.models import DiscoveredRepo
 
@@ -214,3 +215,19 @@ def test_xlsx_github_sheet_columns(tmp_path):
         "archived", "is_fork", "classification_reason", "manual_override",
     ]
     assert header == expected
+
+
+def test_persisted_github_repos_json_has_exactly_twelve_keys():
+    """Belt-and-suspenders guard: if a real pipeline output exists, every
+    entry in github-repos.json must match the 12-field contract. Skipped
+    when the file is absent (clean clones / CI without prior run)."""
+    import json
+    from pathlib import Path
+    path = Path(__file__).resolve().parent.parent / "output" / "github-repos.json"
+    if not path.exists():
+        pytest.skip(f"{path} not present — no pipeline output to check")
+    data = json.loads(path.read_text())
+    for i, entry in enumerate(data):
+        assert set(entry.keys()) == SLIM_KEYS, \
+            f"entry {i} ({entry.get('owner')}/{entry.get('repo')}) keys mismatch: " \
+            f"missing={SLIM_KEYS - set(entry.keys())} extra={set(entry.keys()) - SLIM_KEYS}"
