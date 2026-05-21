@@ -280,6 +280,10 @@ class DiscoveredRepo(BaseModel):
     has_classification: bool = False
     processing_bucket: str = ""
 
+    # Lifecycle tracking
+    first_seen: Optional[str] = None  # ISO YYYY-MM-DD — first run that observed this repo
+    last_seen: Optional[str] = None   # ISO YYYY-MM-DD — most recent run that observed it
+
     def merge_key(self) -> str:
         """Return key for deduplication: owner/repo."""
         return f"{self.owner}/{self.repo}"
