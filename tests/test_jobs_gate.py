@@ -319,3 +319,80 @@ def test_submit_gate_wrong_state_raises(monkeypatch, fixture_state):
     # A second submit_gate on the now-done run must raise.
     with pytest.raises((GateError, ValueError)):
         runner.submit_gate(run_id, process_ids=[], discard_ids=[], edits={})
+
+
+# ---------------------------------------------------------------------------
+# 9. submit_gate with an unknown edit field → GateError before the run advances.
+# ---------------------------------------------------------------------------
+
+def test_gate_edit_unknown_field_raises(monkeypatch, fixture_state):
+    """A typo'd field name in edits raises GateError synchronously and the run
+    stays in 'awaiting_review' (not consumed).  A subsequent valid submit_gate
+    must still work and drive the run to 'done'.
+    """
+    install_pipeline_fakes(monkeypatch, orchestrator)
+    out = fixture_state
+
+    runner = JobRunner()
+    runner.start(out, mode="incremental")
+    assert _wait_until(lambda: runner.status().state == "awaiting_review")
+
+    rec = runner.status()
+
+    # Bad edit: 'bogus_field' is not in the editable schema.
+    with pytest.raises(GateError, match="bogus_field"):
+        runner.submit_gate(
+            rec.run_id,
+            process_ids=[NEW_PAPER_ID],
+            discard_ids=[],
+            edits={NEW_PAPER_ID: {"bogus_field": "x"}},
+        )
+
+    # The run must still be awaiting_review — not consumed.
+    assert runner.status().state == "awaiting_review", (
+        f"run was consumed by a bad-edit submit_gate; state={runner.status().state}"
+    )
+
+    # A valid submit_gate must now still work.
+    runner.submit_gate(rec.run_id, process_ids=[NEW_PAPER_ID], discard_ids=[], edits={})
+    assert _wait_until(lambda: runner.status().state == "done"), (
+        f"run did not finish after valid submit_gate; state={runner.status().state}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 10. submit_gate with an unparseable edit value → GateError, run not consumed.
+# ---------------------------------------------------------------------------
+
+def test_gate_edit_parse_error_raises(monkeypatch, fixture_state):
+    """A value that cannot be parsed for its field type raises GateError
+    synchronously and the run stays in 'awaiting_review' (not consumed).
+    """
+    install_pipeline_fakes(monkeypatch, orchestrator)
+    out = fixture_state
+
+    runner = JobRunner()
+    runner.start(out, mode="incremental")
+    assert _wait_until(lambda: runner.status().state == "awaiting_review")
+
+    rec = runner.status()
+
+    # 'year' expects an integer; 'not-a-number' must fail to parse.
+    with pytest.raises(GateError, match="year"):
+        runner.submit_gate(
+            rec.run_id,
+            process_ids=[NEW_PAPER_ID],
+            discard_ids=[],
+            edits={NEW_PAPER_ID: {"year": "not-a-number"}},
+        )
+
+    # The run must still be awaiting_review — not consumed.
+    assert runner.status().state == "awaiting_review", (
+        f"run was consumed by a parse-error submit_gate; state={runner.status().state}"
+    )
+
+    # Clean up: finish the run normally.
+    runner.submit_gate(rec.run_id, process_ids=[], discard_ids=[], edits={})
+    assert _wait_until(lambda: runner.status().state == "done"), (
+        f"run did not finish after cleanup submit_gate; state={runner.status().state}"
+    )

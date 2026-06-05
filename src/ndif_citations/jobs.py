@@ -152,7 +152,7 @@ class RunRecord:
     cancel_event: threading.Event = field(default_factory=threading.Event)
     _subscribers: list[queue.Queue] = field(default_factory=list)
     gate_event: threading.Event = field(default_factory=threading.Event)
-    route_result: object | None = None
+    route_result: "orchestrator.RouteResult | None" = None
     paper_candidates: list[dict] = field(default_factory=list)
     repo_candidates: list[dict] = field(default_factory=list)
     gate_selection: dict | None = None
@@ -344,10 +344,48 @@ class JobRunner:
                     f"run {run_id!r} is not awaiting review "
                     f"(state={getattr(current, 'state', None)!r})"
                 )
+
+        # --- Validate and pre-parse all edits BEFORE touching any state ---
+        # This must happen synchronously so bad edits raise GateError to the
+        # caller, keeping the run in "awaiting_review" (not consumed).
+        parsed_edits: dict[str, dict[str, object]] = {}
+        for paper_id, field_edits in (edits or {}).items():
+            parsed_field_edits: dict[str, object] = {}
+            for name, raw in (field_edits or {}).items():
+                field_def = edit_schema.get_field(name)
+                if field_def is None:
+                    raise GateError(
+                        f"edit for paper {paper_id!r}: unknown or non-editable field {name!r}"
+                    )
+                try:
+                    raw_str = raw if isinstance(raw, str) else str(raw)
+                    parsed_field_edits[name] = field_def.parse(raw_str)
+                except (ValueError, TypeError) as exc:
+                    raise GateError(
+                        f"edit for paper {paper_id!r}: failed to parse field "
+                        f"{name!r}={raw!r}: {exc}"
+                    ) from exc
+            parsed_edits[paper_id] = parsed_field_edits
+
+        # All edits are valid — now stash the selection and unblock the worker.
+        with self._lock:
+            current = self._current
+            if (
+                current is None
+                or current.run_id != run_id
+                or current.state != "awaiting_review"
+            ):
+                # Race: run moved out of awaiting_review between our two lock
+                # acquisitions (e.g. concurrent cancel). Raise rather than silently
+                # dropping the selection.
+                raise GateError(
+                    f"run {run_id!r} is not awaiting review "
+                    f"(state={getattr(current, 'state', None)!r})"
+                )
             current.gate_selection = {
                 "process_ids": list(process_ids),
                 "discard_ids": list(discard_ids),
-                "edits": dict(edits),
+                "edits": parsed_edits,  # store pre-parsed values
             }
             gate_event = current.gate_event
         # Release the worker OUTSIDE the lock — it re-acquires the lock to read
@@ -721,22 +759,29 @@ class JobRunner:
 
     @staticmethod
     def _apply_edits(paper, field_edits: dict) -> None:
-        """Apply gate edits to ``paper`` via the editable-field schema.
+        """Apply gate edits to ``paper``.
 
         Gate edits are pre-processing fixes — they do NOT set ``manual_override``
-        (unlike a curator ``edit`` command). Unknown / non-editable fields are
-        ignored. A parse error on one field does not abort the others.
+        (unlike a curator ``edit`` command).
+
+        ``field_edits`` maps field name → **already-parsed** value (pre-validated
+        and pre-parsed by ``submit_gate`` before the worker was released).  We
+        therefore just look up the field (to get the canonical attribute name) and
+        ``setattr`` directly — no re-parsing needed.
+
+        Any unknown field name here is a programming error (submit_gate guarantees
+        it cannot happen via normal usage), so we raise ``AssertionError`` rather
+        than silently dropping the edit.
         """
-        for name, raw in (field_edits or {}).items():
+        for name, value in (field_edits or {}).items():
             field_def = edit_schema.get_field(name)
             if field_def is None:
-                logger.warning("gate edit: ignoring non-editable field %r", name)
-                continue
-            try:
-                value = field_def.parse(raw if isinstance(raw, str) else str(raw))
-            except (ValueError, TypeError) as exc:
-                logger.warning("gate edit: failed to parse %r=%r (%s)", name, raw, exc)
-                continue
+                # This should never happen: submit_gate validated every field
+                # before stashing the selection.  If it does, it is a bug.
+                raise AssertionError(
+                    f"gate edit: unexpected non-editable field {name!r} reached worker "
+                    "(should have been rejected by submit_gate)"
+                )
             setattr(paper, field_def.name, value)
 
     @staticmethod
