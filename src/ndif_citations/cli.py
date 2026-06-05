@@ -870,5 +870,26 @@ def edit(paper_id: str, output_dir: str | None,
     console.print("\n[green][OK] Saved.[/green]")
 
 
+@cli.command()
+@click.option("--port", default=8723, show_default=True, help="Port to bind on localhost")
+@click.option("--host", default="127.0.0.1", show_default=True, help="Host to bind (localhost only by default)")
+@click.option("--no-open", is_flag=True, default=False, help="Don't auto-open the browser")
+def serve(port, host, no_open):
+    """Launch the local web app (FastAPI) and open it in the browser."""
+    import threading
+    import uvicorn
+    import webbrowser
+
+    url = f"http://{host}:{port}"
+    console.print(f"[bold cyan]NDIF Citations[/bold cyan] — serving at {url}")
+
+    if not no_open:
+        timer = threading.Timer(1.0, lambda: webbrowser.open(url))
+        timer.daemon = True
+        timer.start()
+
+    uvicorn.run("ndif_citations.server.app:app", host=host, port=port, log_level="info")
+
+
 if __name__ == "__main__":
     cli()
