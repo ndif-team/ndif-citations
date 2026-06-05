@@ -15,8 +15,8 @@ What is faked / why
 * ``ndif_citations.extract.enrich_papers`` — patched to identity (pass-through)
   so the enrichment phase doesn't need an arXiv or PDF cache.
 * ``generate_summary``, ``classify_category``, ``extract_thumbnail`` on
-  ``ndif_citations.process`` — patched via ``install_pipeline_fakes`` on a
-  throw-away module object so the LLM / PDF steps are skipped.
+  ``ndif_citations.process`` — patched (via the local ``_install_process_fakes``
+  helper) so the LLM / PDF steps are skipped.
 * ``get_cached_pdf`` on ``ndif_citations.pdf_cache`` — patched to return None
   (no PDF available) so the process loop doesn't try to read a disk file.
 
@@ -38,7 +38,6 @@ from click.testing import CliRunner
 from ndif_citations.cli import cli
 from ndif_citations.models import Category, Confidence, DiscoveredPaper, DiscoverySource
 from ndif_citations.router import RoutingDecision
-from tests.helpers.fakes import install_pipeline_fakes
 
 
 # ---------------------------------------------------------------------------
@@ -123,8 +122,6 @@ def test_add_routes_before_processing(monkeypatch, tmp_path):
     import ndif_citations.process as process_mod
 
     received_first_arg: list[Any] = []
-
-    original_process_papers = process_mod.process_papers
 
     def _spy_process_papers(decisions, output_dir, **kwargs):
         received_first_arg.append(decisions)
