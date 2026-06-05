@@ -54,7 +54,7 @@ import queue
 import threading
 import traceback
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -263,6 +263,58 @@ class JobRunner:
                 "skip_github": skip_github,
             },
             name=f"pipeline-run-{run_id}",
+            daemon=True,
+        )
+        thread.start()
+        return run_id
+
+    def start_job(
+        self,
+        out: Path,
+        job_fn: "Callable[[Callable[[], bool]], dict]",
+        *,
+        kind: str,
+    ) -> str:
+        """Start an arbitrary ``job_fn`` on a daemon thread; return its ``run_id``.
+
+        Mirrors :meth:`start` but runs ``job_fn(cancel_check) -> dict`` on the
+        worker instead of the full pipeline. ``cancel_check`` is the run's
+        ``cancel_event.is_set`` callable; the returned dict (if any) is stored on
+        ``record.counts``. ``kind`` is reused as ``RunRecord.mode`` (e.g.
+        ``"reprocess"``) so the run shows up in history / SSE exactly like a
+        normal run.
+
+        Used for heavy off-request work that must respect the single-run gate
+        (e.g. targeted reprocess: LLM + Surya), so it shares the same Surya-safe
+        serialization, cancellation, persistence, and SSE fan-out as a pipeline
+        run.
+
+        Raises ``RunActiveError`` if a run is already active (the active-check and
+        record install happen under the lock so two ``start_job`` / ``start``
+        calls cannot both win).
+        """
+        with self._lock:
+            if (
+                self._current is not None
+                and self._current.state in self._ACTIVE_STATES
+            ):
+                raise RunActiveError("a pipeline run is already active")
+
+            run_id = self._new_run_id()
+            record = RunRecord(
+                run_id=run_id,
+                state="running",
+                mode=kind,
+                skip_papers=False,
+                skip_github=False,
+                started_at=datetime.now().isoformat(),
+            )
+            self._current = record
+
+        thread = threading.Thread(
+            target=self._run_job,
+            args=(record, out, job_fn),
+            name=f"job-{kind}-{run_id}",
             daemon=True,
         )
         thread.start()
@@ -503,17 +555,7 @@ class JobRunner:
         invisible to this worker. It is always cleared in ``finally``.
         """
 
-        def _append(ev: ProgressEvent) -> None:
-            # Under the lock: append to the persistent buffer AND fan out to every
-            # live subscriber queue. Holding the lock here pairs with subscribe()'s
-            # snapshot+register critical section so an event can't be lost (in
-            # neither the snapshot nor a queue) or duplicated (in both).
-            with self._lock:
-                record.events.append(ev)
-                for q in record._subscribers:
-                    q.put(ev)
-
-        events.set_sink(_append)
+        events.set_sink(self._make_sink(record))
         # Compute the terminal outcome first, but DON'T flip the visible state
         # to a terminal value yet. The state is flipped to "done"/"error" only
         # in the `finally`, *after* the record is persisted — so an observer that
@@ -559,20 +601,79 @@ class JobRunner:
                 record.error = repr(e)
                 record.traceback = tb
         finally:
-            events.clear_sink()
+            self._finalize_record(record, out, terminal_state)
+
+    def _run_job(
+        self,
+        record: RunRecord,
+        out: Path,
+        job_fn: "Callable[[Callable[[], bool]], dict]",
+    ) -> None:
+        """Worker-thread body for an arbitrary ``job_fn`` (see ``start_job``).
+
+        Owns the events sink for THIS thread (installed here, not in
+        ``start_job``, because ``events`` uses ``threading.local`` storage). The
+        terminal-state / persist / sentinel logic is shared with ``_run`` via
+        ``_finalize_record`` so a job record behaves exactly like a pipeline run
+        for ``status`` / ``subscribe`` / ``history`` / ``cancel``.
+        """
+        events.set_sink(self._make_sink(record))
+        terminal_state = "done"
+        try:
+            result = job_fn(record.cancel_event.is_set)
             with self._lock:
-                record.finished_at = datetime.now().isoformat()
-            # Persist while still nominally "running", then flip the state so the
-            # terminal state and the on-disk file become visible together.
-            self._persist(record, out, state_override=terminal_state)
+                record.counts = result if isinstance(result, dict) else {}
+        except RunCancelled:
+            terminal_state = "cancelled"
+            logger.info("job %s was cancelled", record.run_id)
+        except Exception as e:  # noqa: BLE001 — record any failure on the record
+            terminal_state = "error"
+            tb = traceback.format_exc()
+            logger.exception("job %s failed", record.run_id)
             with self._lock:
-                record.state = terminal_state
-                # Wake every live subscriber: push the sentinel so a stream
-                # blocked on q.get() stops. Done under the lock and AFTER the
-                # state flip so a subscriber that drains the queue then re-reads
-                # state sees the terminal value.
+                record.error = repr(e)
+                record.traceback = tb
+        finally:
+            self._finalize_record(record, out, terminal_state)
+
+    def _make_sink(self, record: RunRecord) -> "Callable[[ProgressEvent], None]":
+        """Build the events sink for *record* (shared by ``_run`` / ``_run_job``).
+
+        Under the lock: append to the persistent buffer AND fan out to every live
+        subscriber queue. Holding the lock here pairs with ``subscribe``'s
+        snapshot+register critical section so an event can't be lost (in neither
+        the snapshot nor a queue) or duplicated (in both).
+        """
+
+        def _append(ev: ProgressEvent) -> None:
+            with self._lock:
+                record.events.append(ev)
                 for q in record._subscribers:
-                    q.put(_DONE)
+                    q.put(ev)
+
+        return _append
+
+    def _finalize_record(
+        self, record: RunRecord, out: Path, terminal_state: str
+    ) -> None:
+        """Clear the sink, stamp finished_at, persist, then flip the terminal state.
+
+        Shared by ``_run`` and ``_run_job``. The state is flipped to its terminal
+        value only AFTER the record is persisted, so an observer that sees a
+        terminal state via ``status()`` is guaranteed the on-disk file already
+        exists (no read-your-write race). The ``_DONE`` sentinel wakes every live
+        subscriber after the flip.
+        """
+        events.clear_sink()
+        with self._lock:
+            record.finished_at = datetime.now().isoformat()
+        # Persist while still nominally "running", then flip the state so the
+        # terminal state and the on-disk file become visible together.
+        self._persist(record, out, state_override=terminal_state)
+        with self._lock:
+            record.state = terminal_state
+            for q in record._subscribers:
+                q.put(_DONE)
 
     # -- incremental gate driver -------------------------------------------
 

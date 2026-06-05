@@ -9,9 +9,17 @@ testable via dependency_overrides.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ndif_citations.models import Bucket, Category, DiscoveredPaper, PaperReason, PipelineRun
 from ndif_citations.output import load_existing_papers, write_outputs
+from ndif_citations.utils import slugify
+
+if TYPE_CHECKING:
+    from fastapi import UploadFile
+
+# PNG file signature (magic bytes) — first 8 bytes of every PNG.
+_PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 
 def resolve(out: Path, paper_id: str) -> DiscoveredPaper | None:
@@ -213,6 +221,59 @@ def set_bucket(
     paper.bucket = Bucket(bucket)
     paper.reason = PaperReason(reason) if reason is not None else None  # raises ValueError for bad value
     paper.reason_detail = detail
+    paper.manual_override = True
+
+    write_outputs(papers, out, PipelineRun())
+    return paper.to_full_dict()
+
+
+def upload_image(out: Path, paper_id: str, file: "UploadFile") -> dict:
+    """Save an uploaded PNG as a paper's thumbnail and persist.
+
+    The bytes are written to ``out/images/{slugify(title)}.png`` (the same path
+    convention the pipeline uses), and the paper's ``image`` /
+    ``has_thumbnail`` / ``manual_override`` fields are updated.
+
+    Parameters
+    ----------
+    out:
+        Output directory.
+    paper_id:
+        Paper merge_key.
+    file:
+        The uploaded file (FastAPI ``UploadFile``).
+
+    Returns the updated paper's ``to_full_dict()``.
+
+    Raises
+    ------
+    KeyError:
+        If no paper with *paper_id* exists.
+    ValueError:
+        If the upload is not a PNG (by content-type or magic bytes).
+    """
+    papers = load_existing_papers(out)
+    paper: DiscoveredPaper | None = None
+    for p in papers:
+        if p.merge_key() == paper_id:
+            paper = p
+            break
+    if paper is None:
+        raise KeyError(paper_id)
+
+    data = file.file.read()
+    content_type = (file.content_type or "").lower()
+    is_png = content_type == "image/png" or data[:8] == _PNG_MAGIC
+    if not is_png:
+        raise ValueError("uploaded file is not a PNG")
+
+    filename = f"{slugify(paper.title)}.png"
+    images_dir = out / "images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+    (images_dir / filename).write_bytes(data)
+
+    paper.image = f"/images/{filename}"
+    paper.has_thumbnail = True
     paper.manual_override = True
 
     write_outputs(papers, out, PipelineRun())

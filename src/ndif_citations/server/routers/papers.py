@@ -16,13 +16,17 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
+from ndif_citations.jobs import JobRunner, RunActiveError
 from ndif_citations.server import deps
 from ndif_citations.server.services import papers_svc
 
 router = APIRouter(prefix="/api", tags=["papers"])
+
+# Allowed targeted-reprocess fields (mirrors reprocess.ALLOWED_FIELDS).
+_REPROCESS_FIELDS = {"summary", "classify", "thumbnail", "affiliations"}
 
 
 # ---------------------------------------------------------------------------
@@ -39,6 +43,17 @@ class BucketRequest(BaseModel):
     bucket: Literal["pending", "verified", "discarded"]
     reason: Optional[str] = None
     detail: Optional[str] = None
+
+
+class ReprocessRequest(BaseModel):
+    """Body for POST /api/papers/{paper_id}/reprocess."""
+    fields: list[str]
+
+
+class ReprocessResponse(BaseModel):
+    """Response for the reprocess / reextract-thumbnail endpoints."""
+    run_id: str
+    state: str
 
 
 @router.get("/papers")
@@ -124,6 +139,123 @@ def set_bucket(
     """
     try:
         return papers_svc.set_bucket(out, paper_id, body.bucket, body.reason, body.detail)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Paper {paper_id!r} not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Targeted force-reprocess + image upload (Task 4.3)
+# ---------------------------------------------------------------------------
+
+
+def _start_reprocess_job(
+    out: Path,
+    runner: JobRunner,
+    paper_id: str,
+    fields: list[str],
+) -> ReprocessResponse:
+    """Validate + queue a targeted reprocess job on the JobRunner.
+
+    Shared by ``/reprocess`` and ``/reextract-thumbnail``. Heavy work (LLM /
+    Surya) runs on the worker thread, serialized behind the single-run gate.
+
+    * 404 — the paper does not exist.
+    * 422 — *fields* is empty or contains a non-allowed field.
+    * 409 — a run/job is already active (``RunActiveError``).
+    """
+    from ndif_citations import reprocess
+
+    if papers_svc.resolve(out, paper_id) is None:
+        raise HTTPException(status_code=404, detail=f"Paper {paper_id!r} not found")
+
+    if not fields or not set(fields).issubset(_REPROCESS_FIELDS):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"fields must be a non-empty subset of {sorted(_REPROCESS_FIELDS)}"
+            ),
+        )
+
+    try:
+        run_id = runner.start_job(
+            out,
+            lambda cc: reprocess.reprocess_papers(
+                out, [paper_id], list(fields), cancel_check=cc
+            ),
+            kind="reprocess",
+        )
+    except RunActiveError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return ReprocessResponse(run_id=run_id, state="running")
+
+
+@router.post("/papers/{paper_id:path}/reprocess", response_model=ReprocessResponse)
+def reprocess_paper(
+    paper_id: str,
+    body: ReprocessRequest,
+    out: Path = Depends(deps.get_output_dir),
+    runner: JobRunner = Depends(deps.get_runner),
+) -> ReprocessResponse:
+    """Force a targeted re-run of the requested *fields* on a single paper.
+
+    The heavy work (LLM summary/classification, Surya thumbnail, affiliation
+    extraction) runs on the JobRunner worker — the client watches progress via
+    ``GET /api/runs/{run_id}`` + the SSE events stream.
+
+    Returns ``{"run_id": ..., "state": "running"}``.
+
+    * 404 — no paper with the given merge_key.
+    * 422 — ``fields`` empty or contains a non-allowed value.
+    * 409 — a run/job is already active.
+    """
+    return _start_reprocess_job(out, runner, paper_id, body.fields)
+
+
+@router.post(
+    "/papers/{paper_id:path}/reextract-thumbnail", response_model=ReprocessResponse
+)
+def reextract_thumbnail(
+    paper_id: str,
+    out: Path = Depends(deps.get_output_dir),
+    runner: JobRunner = Depends(deps.get_runner),
+) -> ReprocessResponse:
+    """Re-run ONLY the Surya thumbnail extraction for a single paper.
+
+    Convenience wrapper over ``/reprocess`` with ``fields=["thumbnail"]``. Same
+    status-code mapping (404 / 409).
+    """
+    return _start_reprocess_job(out, runner, paper_id, ["thumbnail"])
+
+
+@router.post("/papers/{paper_id:path}/image")
+def upload_image(
+    paper_id: str,
+    file: UploadFile = File(...),
+    out: Path = Depends(deps.get_output_dir),
+    _guard: None = Depends(deps.require_no_active_run),
+) -> dict:
+    """Upload a curated PNG thumbnail for a paper (fast synchronous file write).
+
+    Unlike reprocess, this is not heavy work, so it runs on the request thread —
+    but it still requires no active run (``require_no_active_run`` → 409) so it
+    doesn't race a pipeline write to ``research-papers-full.json``.
+
+    The PNG is saved to ``out/images/{slugify(title)}.png`` (the same path
+    convention ``extract_thumbnail`` / ``write_outputs`` use), and the paper's
+    ``image`` is set to ``/images/{filename}`` with ``has_thumbnail=True`` and
+    ``manual_override=True``.
+
+    Returns the updated paper's ``to_full_dict()``.
+
+    * 404 — no paper with the given merge_key.
+    * 422 — the upload is not a PNG (content-type or magic bytes).
+    * 409 — a run/job is already active.
+    """
+    try:
+        return papers_svc.upload_image(out, paper_id, file)
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Paper {paper_id!r} not found")
     except ValueError as exc:
