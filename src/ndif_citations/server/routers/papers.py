@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from ndif_citations.jobs import JobRunner, RunActiveError
 from ndif_citations.server import deps
 from ndif_citations.server.services import papers_svc
+from ndif_citations.utils import extract_arxiv_id_from_url
 
 router = APIRouter(prefix="/api", tags=["papers"])
 
@@ -54,6 +55,70 @@ class ReprocessResponse(BaseModel):
     """Response for the reprocess / reextract-thumbnail endpoints."""
     run_id: str
     state: str
+
+
+class AddPaperRequest(BaseModel):
+    """Body for POST /api/papers/add."""
+    url: str
+
+
+class AddPaperResponse(BaseModel):
+    """Response for POST /api/papers/add."""
+    run_id: str
+    state: str
+
+
+# ---------------------------------------------------------------------------
+# Add-by-URL endpoint (Task 4.5)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/papers/add", response_model=AddPaperResponse)
+def add_paper(
+    body: AddPaperRequest,
+    out: Path = Depends(deps.get_output_dir),
+    runner: JobRunner = Depends(deps.get_runner),
+) -> AddPaperResponse:
+    """Add a single paper by URL via the JobRunner.
+
+    The URL must be non-empty and either:
+    * yield a parseable arXiv ID (e.g. ``https://arxiv.org/abs/2407.14561``), or
+    * look like a generic http/https URL.
+
+    Heavy work (S2 lookup, enrichment, LLM classification) runs on the
+    JobRunner worker — the client watches progress via
+    ``GET /api/runs/{run_id}`` or the SSE events stream.
+
+    Returns ``{"run_id": ..., "state": "running"}``.
+
+    * 422 — ``url`` is empty or clearly invalid (not http/https and not an
+      arXiv URL).
+    * 409 — a run/job is already active.
+    """
+    url = (body.url or "").strip()
+    if not url:
+        raise HTTPException(status_code=422, detail="url must not be empty")
+
+    # Accept if: parseable arXiv ID OR starts with http:// or https://
+    arxiv_id = extract_arxiv_id_from_url(url)
+    if arxiv_id is None and not url.startswith(("http://", "https://")):
+        raise HTTPException(
+            status_code=422,
+            detail="url must be an http/https URL or a recognisable arXiv URL",
+        )
+
+    from ndif_citations import manual_add
+
+    try:
+        run_id = runner.start_job(
+            out,
+            lambda cc: manual_add.add_paper_by_url(out, url, cancel_check=cc),
+            kind="add",
+        )
+    except RunActiveError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return AddPaperResponse(run_id=run_id, state="running")
 
 
 @router.get("/papers")

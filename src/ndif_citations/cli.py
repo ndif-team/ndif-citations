@@ -234,84 +234,17 @@ def discover(output_dir: str | None, fresh: bool) -> None:
 @click.option("--output-dir", "-o", default=None, help="Custom output directory")
 def add(url: str, output_dir: str | None) -> None:
     """Process a single paper by URL and append it to the output."""
-    from ndif_citations.extract import enrich_papers
-    from ndif_citations.models import Category, DiscoveredPaper, DiscoverySource
-    from ndif_citations.output import load_existing_papers, merge_papers, write_outputs
-    from ndif_citations.process import process_papers
-    from ndif_citations.utils import extract_arxiv_id_from_url
+    from ndif_citations import manual_add
 
     out = config.get_output_dir(output_dir)
 
     console.print(f"\n[bold cyan]NDIF Citation Tracker[/bold cyan] — Adding paper: {url}\n")
 
-    # Create a paper from the URL
-    arxiv_id = extract_arxiv_id_from_url(url)
+    result = manual_add.add_paper_by_url(out, url)
 
-    paper = DiscoveredPaper(
-        title="[Pending metadata lookup]",
-        url=url,
-        arxiv_id=arxiv_id,
-        source=DiscoverySource.MANUAL_ADD,
-    )
+    console.print(f"  Title: [cyan]{result['title']}[/cyan]")
 
-    # Try to look up metadata via S2
-    if arxiv_id:
-        try:
-            from semanticscholar import SemanticScholar
-            sch = SemanticScholar(api_key=config.S2_API_KEY) if config.S2_API_KEY else SemanticScholar()
-            s2_paper = sch.get_paper(f"ARXIV:{arxiv_id}", fields=config.S2_FIELDS)
-            if s2_paper:
-                paper.title = getattr(s2_paper, "title", paper.title)
-                authors_list = getattr(s2_paper, "authors", []) or []
-                paper.authors = ", ".join(
-                    a.get("name", "") if isinstance(a, dict) else getattr(a, "name", str(a))
-                    for a in authors_list
-                )
-                paper.abstract = getattr(s2_paper, "abstract", None)
-                paper.venue = getattr(s2_paper, "venue", "") or ""
-                pub_date_str = getattr(s2_paper, "publicationDate", None)
-                if pub_date_str:
-                    from datetime import date
-                    try:
-                        if isinstance(pub_date_str, str):
-                            paper.publication_date = date.fromisoformat(pub_date_str)
-                        else:
-                            paper.publication_date = pub_date_str
-                        paper.year = paper.publication_date.year
-                    except (ValueError, AttributeError):
-                        pass
-                external_ids = getattr(s2_paper, "externalIds", {}) or {}
-                paper.doi = external_ids.get("DOI")
-                paper.s2_paper_id = getattr(s2_paper, "paperId", None)
-                open_access = getattr(s2_paper, "openAccessPdf", None)
-                if open_access:
-                    paper.pdf_url = (open_access.get("url")
-                                     if isinstance(open_access, dict)
-                                     else getattr(open_access, "url", None))
-        except Exception as e:
-            console.print(f"  [yellow]S2 lookup failed: {e}[/yellow]")
-
-    papers = [paper]
-
-    # Enrich
-    papers = enrich_papers(papers)
-    console.print(f"  Title: [cyan]{papers[0].title}[/cyan]")
-    console.print(f"  Authors: {papers[0].authors}")
-    console.print(f"  Venue: {papers[0].venue}")
-
-    # Route → Process → Merge → Write
-    from ndif_citations.router import route_papers
-
-    existing = load_existing_papers(out)
-    decisions = route_papers(papers, existing)
-    processed = process_papers(decisions, out)
-    console.print(f"  Category: [green]{processed[0].category.value}[/green]")
-    console.print(f"  Description: {processed[0].description[:100]}...")
-
-    merged, run_stats = merge_papers(existing, processed)
-    write_outputs(merged, out, run_stats)
-
-    if run_stats.new_papers > 0:
+    if result["added"]:
         console.print(f"\n  ★ [bold green]Paper added successfully![/bold green]")
     else:
         console.print(f"\n  ─ [dim]Paper already exists in database[/dim]")
