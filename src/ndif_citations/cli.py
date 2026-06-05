@@ -299,14 +299,16 @@ def add(url: str, output_dir: str | None) -> None:
     console.print(f"  Authors: {papers[0].authors}")
     console.print(f"  Venue: {papers[0].venue}")
 
-    # Process
-    papers = process_papers(papers, out)
-    console.print(f"  Category: [green]{papers[0].category.value}[/green]")
-    console.print(f"  Description: {papers[0].description[:100]}...")
+    # Route → Process → Merge → Write
+    from ndif_citations.router import route_papers
 
-    # Merge and save
     existing = load_existing_papers(out)
-    merged, run_stats = merge_papers(existing, papers)
+    decisions = route_papers(papers, existing)
+    processed = process_papers(decisions, out)
+    console.print(f"  Category: [green]{processed[0].category.value}[/green]")
+    console.print(f"  Description: {processed[0].description[:100]}...")
+
+    merged, run_stats = merge_papers(existing, processed)
     write_outputs(merged, out, run_stats)
 
     if run_stats.new_papers > 0:
