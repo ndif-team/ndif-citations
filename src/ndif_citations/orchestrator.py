@@ -505,11 +505,17 @@ def run_pipeline(
     mode: str,
     skip_papers: bool = False,
     skip_github: bool = False,
+    cancel_check: Optional[Callable[[], bool]] = None,
 ) -> FinalizeResult:
     """Run the full pipeline by chaining the five stages in order.
 
     ``mode`` is one of {"fresh", "incremental"}. "fresh" maps to the old
     ``--fresh`` behavior (the boolean threaded into every stage).
+
+    ``cancel_check`` is forwarded to ``process_stage`` (and through it to
+    ``process_papers`` / ``process_repos``). When non-None and it fires,
+    ``RunCancelled`` propagates out of this function — the JobRunner owns the
+    catch and partial-merge finalization.
 
     No gate pause is inserted here — that is Phase 3 work. Returns the
     ``FinalizeResult`` from ``finalize_stage``.
@@ -519,7 +525,7 @@ def run_pipeline(
     d = discover_stage(out, skip_papers=skip_papers, skip_github=skip_github, fresh=fresh)
     e = enrich_stage(out, d, skip_papers=skip_papers, skip_github=skip_github, fresh=fresh)
     r = route_stage(out, e, skip_papers=skip_papers, skip_github=skip_github, fresh=fresh)
-    completed = process_stage(out, r, skip_papers=skip_papers, skip_github=skip_github)
+    completed = process_stage(out, r, skip_papers=skip_papers, skip_github=skip_github, cancel_check=cancel_check)
     return finalize_stage(
         out, r, d.run_stats,
         skip_papers=skip_papers,

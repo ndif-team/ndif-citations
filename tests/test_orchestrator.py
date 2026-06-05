@@ -132,3 +132,39 @@ class TestRunPipelineEndToEnd:
 
         # removal_counts is propagated from the enrich stage
         assert isinstance(result.removal_counts, dict)
+
+
+# ---------------------------------------------------------------------------
+# 3. cancel_check forwarding through run_pipeline (Task 2.0)
+# ---------------------------------------------------------------------------
+
+class TestRunPipelineCancelCheck:
+    def test_run_pipeline_forwards_cancel_check(
+        self, monkeypatch, fixture_state: Path
+    ):
+        """A cancel_check that always returns True must cause RunCancelled to
+        propagate out of run_pipeline (via process_stage → process_papers)."""
+        install_pipeline_fakes(monkeypatch, orchestrator)
+
+        from ndif_citations.events import RunCancelled
+
+        with pytest.raises(RunCancelled):
+            orchestrator.run_pipeline(
+                fixture_state,
+                mode="incremental",
+                skip_github=True,
+                cancel_check=lambda: True,
+            )
+
+    def test_run_pipeline_no_cancel_check_completes(
+        self, monkeypatch, fixture_state: Path
+    ):
+        """Without cancel_check the pipeline completes normally and returns a
+        FinalizeResult (sanity — default behaviour is unchanged)."""
+        install_pipeline_fakes(monkeypatch, orchestrator)
+
+        result = orchestrator.run_pipeline(
+            fixture_state, mode="incremental", skip_github=True
+        )
+
+        assert isinstance(result, FinalizeResult)
