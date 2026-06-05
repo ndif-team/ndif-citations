@@ -129,3 +129,6 @@ class TestRunPipelineEndToEnd:
 
         # A report event was emitted at the end
         assert any(e.type == "report" for e in event_sink)
+
+        # removal_counts is propagated from the enrich stage
+        assert isinstance(result.removal_counts, dict)

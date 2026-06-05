@@ -46,7 +46,6 @@ from ndif_citations.output import (
     load_existing_repos,
     merge_papers,
     merge_repos,
-    print_report,
     write_outputs,
 )
 from ndif_citations.process import process_papers, process_repos
@@ -96,6 +95,7 @@ class FinalizeResult:
     merged_papers: list[DiscoveredPaper]
     merged_repos: list[DiscoveredRepo]
     run_stats: PipelineRun
+    removal_counts: dict[str, int] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -471,14 +471,6 @@ def finalize_stage(
         skip_github=skip_github,
     )
 
-    # Print final report — print_report itself stays callable by the CLI (Task 1.8).
-    print_report(
-        run_stats, merged_papers, out,
-        repos=merged_repos,
-        skip_github=skip_github,
-        skip_papers=skip_papers,
-        repos_removed_counts=enrich.removal_counts,
-    )
     events.emit(
         "report", stage="finalize",
         total_unique=run_stats.total_unique,
@@ -498,6 +490,7 @@ def finalize_stage(
         merged_papers=merged_papers,
         merged_repos=merged_repos,
         run_stats=run_stats,
+        removal_counts=r.enrich.removal_counts,
     )
 
 
