@@ -4,9 +4,11 @@ Endpoints
 ---------
 POST  /api/runs                  Start a new pipeline run.
 GET   /api/runs                  List all persisted run records (history).
+GET   /api/runs/active           Return the currently active run (if any).
 GET   /api/runs/{run_id}         Fetch a single run record by ID.
 GET   /api/runs/{run_id}/events  Server-Sent Events stream of progress events.
 POST  /api/runs/{run_id}/cancel  Request cancellation of a run.
+POST  /api/runs/{run_id}/gate    Submit the curator gate selection for a run.
 """
 from __future__ import annotations
 
@@ -19,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from ndif_citations.jobs import JobRunner, RunActiveError
+from ndif_citations.jobs import GateError, JobRunner, RunActiveError
 from ndif_citations.server.deps import get_output_dir, get_runner
 
 router = APIRouter(prefix="/api", tags=["runs"])
@@ -39,6 +41,12 @@ class StartRunRequest(BaseModel):
 class StartRunResponse(BaseModel):
     run_id: str
     state: str
+
+
+class GateRequest(BaseModel):
+    process_ids: list[str] = []
+    discard_ids: list[str] = []
+    edits: dict[str, dict[str, str]] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -68,6 +76,31 @@ def start_run(
     except RunActiveError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return StartRunResponse(run_id=run_id, state="running")
+
+
+@router.get("/runs/active")
+def get_active_run(
+    runner: JobRunner = Depends(get_runner),
+) -> dict:
+    """Return the currently active run record, or ``{"active": null}`` if idle.
+
+    An active run is one in state ``"running"`` or ``"awaiting_review"``.  The
+    frontend can call this endpoint after a browser refresh to resume the gate
+    UI without losing track of the in-flight run.
+
+    When awaiting review the returned record includes ``paper_candidates`` and
+    ``repo_candidates`` so the gate UI can render them immediately.
+
+    **Route ordering:** this route is defined BEFORE ``GET /runs/{run_id}`` so
+    FastAPI does not treat the literal path segment ``"active"`` as a run_id.
+    """
+    if runner.active:
+        try:
+            record = runner.status()
+        except KeyError:
+            return {"active": None}
+        return {"active": record.to_dict()}
+    return {"active": None}
 
 
 @router.get("/runs/{run_id}")
@@ -221,3 +254,57 @@ def cancel_run(
     # Safe no-op if the run is not (or no longer) running.
     runner.cancel(run_id)
     return {"status": "cancelling"}
+
+
+@router.post("/runs/{run_id}/gate")
+def submit_gate(
+    run_id: str,
+    body: GateRequest,
+    runner: JobRunner = Depends(get_runner),
+) -> dict:
+    """Submit the curator's gate selection and resume the parked worker.
+
+    The run must be in state ``"awaiting_review"`` — i.e. it is an incremental
+    run that has completed the discover→enrich→route stages and is waiting for
+    a human decision on which candidates to process.
+
+    * ``process_ids`` — candidate paper IDs to send through the LLM process stage.
+    * ``discard_ids`` — candidate paper IDs to mark as MANUAL_DISCARD and merge.
+    * ``edits`` — pre-processing field edits keyed by paper ID, each a
+      ``{field_name: raw_value}`` dict (validated against the edit schema).
+
+    Status codes:
+
+    * 200 ``{"status": "processing", "run_id": run_id}`` — selection accepted
+      and the worker has been unblocked to run process + finalize.
+    * 404 — no run with ``run_id`` is known to the runner.
+    * 409 — the run exists but is NOT in state ``"awaiting_review"`` (already
+      done, running, cancelled, etc.).
+    * 422 — the body failed Pydantic validation, OR an ``edits`` entry
+      references an unknown / non-editable field.
+    """
+    # Resolve the run; raise 404 for unknown ids.
+    try:
+        record = runner.status(run_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Run {run_id!r} not found")
+
+    # The run must be awaiting review; anything else is a 409.
+    if record.state != "awaiting_review":
+        raise HTTPException(
+            status_code=409,
+            detail="run is not awaiting review",
+        )
+
+    # Delegate to the runner — raises GateError if edits are invalid.
+    try:
+        runner.submit_gate(
+            run_id,
+            process_ids=body.process_ids,
+            discard_ids=body.discard_ids,
+            edits=body.edits,
+        )
+    except GateError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return {"status": "processing", "run_id": run_id}
