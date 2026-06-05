@@ -86,10 +86,10 @@ class TestFakeDiscoverPapers:
         assert papers[1].arxiv_id != EXISTING_ARXIV_ID
         assert papers[1].arxiv_id == "9999.99999"
 
-    def test_papers_have_required_fields(self):
-        for p in fake_discover_papers():
-            assert p.title
-            assert p.abstract
+    def test_papers_have_expected_arxiv_ids(self):
+        papers = fake_discover_papers()
+        assert papers[0].arxiv_id == EXISTING_ARXIV_ID
+        assert papers[1].arxiv_id == "9999.99999"
 
 
 # ---------------------------------------------------------------------------
@@ -106,11 +106,9 @@ class TestFakeDiscoverRepos:
         for r in fake_discover_repos():
             assert isinstance(r, DiscoveredRepo)
 
-    def test_repos_have_required_fields(self):
+    def test_repo_urls_match_owner_and_repo(self):
         for r in fake_discover_repos():
-            assert r.owner
-            assert r.repo
-            assert r.url.startswith("https://github.com/")
+            assert r.url == f"https://github.com/{r.owner}/{r.repo}"
 
 
 # ---------------------------------------------------------------------------

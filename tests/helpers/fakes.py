@@ -62,7 +62,11 @@ def fake_discover_papers() -> list[DiscoveredPaper]:
 
 
 def fake_discover_repos() -> list[DiscoveredRepo]:
-    """Return 2 deterministic DiscoveredRepos."""
+    """Return 2 deterministic DiscoveredRepos.
+
+    These are freshly-discovered shells, so has_classification is left False
+    (the default). enrich_repos_from_github_api is responsible for setting it.
+    """
     repo_a = DiscoveredRepo(
         owner="callummcdougall",
         repo="ARENA_3.0",
@@ -70,6 +74,7 @@ def fake_discover_repos() -> list[DiscoveredRepo]:
         stars=1060,
         description=None,
         category=Category.USES_NNSIGHT,
+        # has_classification=False (default) — repo not yet enriched
     )
     repo_b = DiscoveredRepo(
         owner="fake-harness-owner",
@@ -78,12 +83,13 @@ def fake_discover_repos() -> list[DiscoveredRepo]:
         stars=42,
         description="Fake repo for the test harness",
         category=Category.USES_NNSIGHT,
+        # has_classification=False (default) — repo not yet enriched
     )
     return [repo_a, repo_b]
 
 
 def install_pipeline_fakes(monkeypatch: Any, target_module: Any) -> None:
-    """Patch all discovery, enrichment, and processing callables on *target_module*.
+    """Patch all discovery, enrichment, and processing callables.
 
     This is intentionally generic so the same helper works for both the
     ``discover`` module (used by this smoke test) and the future orchestrator
@@ -95,8 +101,13 @@ def install_pipeline_fakes(monkeypatch: Any, target_module: Any) -> None:
     * discover_openalex(raw_dir)             -> list[DiscoveredPaper]
     * discover_scholar(raw_dir, ...)         -> list[DiscoveredPaper]
     * discover_github_dependents(raw_dir)    -> list[DiscoveredRepo]
+
+    Patched on *target_module* if present, else on its home module
+    --------------------------------------------------------------
     * enrich_papers(papers, raw_dir=None)    -> list[DiscoveredPaper]  (identity)
+      home module: ``ndif_citations.extract``
     * enrich_repos_from_github_api(repos)    -> (list[DiscoveredRepo], dict[str,int])
+      home module: ``ndif_citations.discover``
 
     Patched on *ndif_citations.process*
     ------------------------------------
@@ -132,6 +143,10 @@ def install_pipeline_fakes(monkeypatch: Any, target_module: Any) -> None:
     def _fake_enrich_repos(
         repos: list[DiscoveredRepo],
     ) -> tuple[list[DiscoveredRepo], dict[str, int]]:
+        # Mirror real enrich_repos_from_github_api: mark every surviving repo as
+        # has_classification=True so post-enrich state matches the fixtures.
+        for repo in repos:
+            repo.has_classification = True
         removal_counts: dict[str, int] = {"404": 0, "rename_redirect": 0, "archived": 0}
         return repos, removal_counts
 
@@ -140,9 +155,9 @@ def install_pipeline_fakes(monkeypatch: Any, target_module: Any) -> None:
     monkeypatch.setattr(target_module, "discover_scholar", _fake_scholar)
     monkeypatch.setattr(target_module, "discover_github_dependents", _fake_github_dependents)
 
-    # enrich_papers lives in ndif_citations.extract; patch target_module if it
-    # re-exports the name (e.g. the future orchestrator), otherwise fall back
-    # to the canonical home module so the call site is still patched.
+    # enrich_papers home module is ndif_citations.extract.  Patch target_module
+    # if it re-exports the name (e.g. a future orchestrator); otherwise patch
+    # the home module directly so callers that import from there are covered.
     import ndif_citations.extract as extract_mod
 
     if hasattr(target_module, "enrich_papers"):
@@ -150,7 +165,9 @@ def install_pipeline_fakes(monkeypatch: Any, target_module: Any) -> None:
     else:
         monkeypatch.setattr(extract_mod, "enrich_papers", _fake_enrich_papers)
 
-    # enrich_repos_from_github_api lives in ndif_citations.discover.
+    # enrich_repos_from_github_api home module is ndif_citations.discover.
+    # Same pattern: patch target_module if it re-exports the name, else patch
+    # the home module so the real call site is intercepted.
     import ndif_citations.discover as _discover_mod
 
     if hasattr(target_module, "enrich_repos_from_github_api"):
