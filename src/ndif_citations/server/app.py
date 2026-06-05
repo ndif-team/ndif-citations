@@ -14,7 +14,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from ndif_citations.server.routers import images, papers, runs, stats
+from ndif_citations.server.routers import images, papers, repos, runs, stats
 
 # SPA dist directory — populated by the frontend build (Task 3+).
 _WEB_DIST = Path(__file__).resolve().parent.parent.parent.parent / "web" / "dist"
@@ -37,6 +37,7 @@ def create_app() -> FastAPI:
     # JSON API — always mounted.
     app.include_router(runs.router)
     app.include_router(papers.router)
+    app.include_router(repos.router)
     app.include_router(stats.router)
     app.include_router(images.router)
 
