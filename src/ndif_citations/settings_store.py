@@ -61,6 +61,31 @@ def load(path: Path | str) -> dict[str, Any]:
     return result
 
 
+def load_overrides(path: Path | str) -> dict[str, Any]:
+    """Return ONLY the keys explicitly present in the settings file (no DEFAULTS fill).
+
+    Returns ``{}`` if the file is absent.  Keys present in the file but absent
+    from ``DEFAULTS`` are silently ignored (they would be unknown keys).  This
+    ensures callers that only want to apply explicit overrides are not affected
+    by absent-file or future schema additions.
+    """
+    import logging
+    _log = logging.getLogger(__name__)
+
+    path = Path(path)
+    if not path.exists():
+        return {}
+    with path.open() as fh:
+        raw: dict = json.load(fh)
+    result: dict[str, Any] = {}
+    for key, value in raw.items():
+        if key in DEFAULTS:
+            result[key] = value
+        else:
+            _log.warning("settings.json: unknown key %r ignored", key)
+    return result
+
+
 # ---------------------------------------------------------------------------
 # save
 # ---------------------------------------------------------------------------
@@ -105,9 +130,6 @@ def _validate_value(key: str, value: Any) -> None:
     elif isinstance(default, list):
         if not isinstance(value, list):
             raise ValueError(f"{key!r} must be list, got {type(value).__name__!r}")
-    elif default is None:
-        # Untyped None default (only publish_target is handled above, but be safe)
-        pass
 
 
 def save(path: Path | str, partial: dict[str, Any]) -> None:
@@ -124,8 +146,13 @@ def save(path: Path | str, partial: dict[str, Any]) -> None:
     for key, value in partial.items():
         _validate_value(key, value)
 
-    # Read existing on-disk settings (or defaults) then merge
-    current = load(path)
+    # Read the raw on-disk file (only previously-saved keys, NOT defaults),
+    # then merge the new partial on top.  This keeps the file lean — it only
+    # ever contains keys the user has explicitly set, never defaults bloat.
+    current: dict[str, Any] = {}
+    if path.exists():
+        with path.open() as fh:
+            current = json.load(fh)
     current.update(partial)
 
     path.write_text(json.dumps(current, indent=2))

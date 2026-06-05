@@ -245,10 +245,12 @@ def _apply_settings(s: dict) -> None:
             g[config_attr] = converter(s[settings_key])
 
 
-# Apply at import time — if settings.json is absent, load() returns a deep
-# copy of DEFAULTS which exactly matches the hard-coded values above, so this
-# call is a no-op in the common case (byte-for-byte identical behavior).
-_apply_settings(settings_store.load(_SETTINGS_FILE))
+# Apply at import time — use load_overrides() so that an absent or empty
+# settings.json results in _apply_settings({}) which is a true no-op.
+# This preserves env-var-derived values (e.g. LLM_MODEL from .env) when no
+# settings.json is present.  If settings.json DOES contain a key, it wins
+# (intended: explicit UI setting takes precedence over env var).
+_apply_settings(settings_store.load_overrides(_SETTINGS_FILE))
 
 
 def reload_settings() -> None:
@@ -266,5 +268,6 @@ def reload_settings() -> None:
     g["SERPAPI_API_KEY"] = os.environ.get("SERPAPI_API_KEY") or None
     g["OPENALEX_EMAIL"] = os.environ.get("OPENALEX_EMAIL") or None
     g["UNPAYWALL_EMAIL"] = os.environ.get("UNPAYWALL_EMAIL") or g["OPENALEX_EMAIL"]
-    # Re-apply settings.json
-    _apply_settings(settings_store.load(_SETTINGS_FILE))
+    # Re-apply settings.json (overrides only — absent file ⇒ no-op, preserving
+    # env-derived values already set above or pre-existing on the module)
+    _apply_settings(settings_store.load_overrides(_SETTINGS_FILE))

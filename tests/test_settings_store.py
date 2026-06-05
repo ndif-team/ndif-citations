@@ -224,3 +224,136 @@ def test_import_time_apply_is_noop_when_no_settings_file(tmp_path):
         assert config.GITHUB_RATE_LIMIT_SLEEP == 2.0
     finally:
         config._SETTINGS_FILE = original
+
+
+# ---------------------------------------------------------------------------
+# Regression test: env-derived LLM_MODEL survives absent settings.json (bug fix)
+# ---------------------------------------------------------------------------
+
+
+def test_env_derived_llm_model_survives_missing_settings_file(tmp_path, monkeypatch):
+    """reload_settings() must NOT clobber LLM_MODEL when settings.json is absent.
+
+    This is the regression test for the bug where load() returned all DEFAULTS
+    (including llm_model) even when settings.json was absent, causing _apply_settings
+    to silently overwrite an env-derived LLM_MODEL back to the static default.
+    """
+    # Simulate a value derived from the environment (e.g. LLM_MODEL=gpt-4o in .env)
+    config.LLM_MODEL = "custom/model-xyz"
+
+    # Point _SETTINGS_FILE at a nonexistent path so settings.json is absent
+    monkeypatch.setattr(config, "_SETTINGS_FILE", tmp_path / "no_such_settings.json")
+
+    # Prevent load_dotenv from re-reading a real .env that might contain LLM_MODEL
+    monkeypatch.setattr("ndif_citations.config.load_dotenv", lambda *a, **kw: None)
+
+    config.reload_settings()
+
+    # The pre-set (env-derived) value must be preserved — not clobbered by the default
+    assert config.LLM_MODEL == "custom/model-xyz", (
+        f"Expected 'custom/model-xyz', got {config.LLM_MODEL!r}. "
+        "reload_settings() must not overwrite env-derived LLM_MODEL when settings.json is absent."
+    )
+
+
+# ---------------------------------------------------------------------------
+# load_overrides() tests
+# ---------------------------------------------------------------------------
+
+
+def test_load_overrides_returns_empty_when_file_missing(tmp_path):
+    """load_overrides() returns {} when path does not exist."""
+    result = settings_store.load_overrides(tmp_path / "nonexistent.json")
+    assert result == {}
+
+
+def test_load_overrides_returns_only_present_key(tmp_path):
+    """load_overrides() returns only keys present in the file, not all DEFAULTS."""
+    f = tmp_path / "settings.json"
+    f.write_text(json.dumps({"min_paper_year": 2025}))
+    result = settings_store.load_overrides(f)
+    assert result == {"min_paper_year": 2025}
+    # No other DEFAULTS keys should appear
+    assert "llm_model" not in result
+    assert "llm_rate_limit_sleep" not in result
+    assert len(result) == 1
+
+
+def test_load_overrides_ignores_unknown_keys(tmp_path):
+    """load_overrides() silently drops keys not in DEFAULTS."""
+    f = tmp_path / "settings.json"
+    f.write_text(json.dumps({"min_paper_year": 2025, "totally_unknown_key": "foo"}))
+    result = settings_store.load_overrides(f)
+    assert "totally_unknown_key" not in result
+    assert result == {"min_paper_year": 2025}
+
+
+def test_load_overrides_empty_file_returns_empty(tmp_path):
+    """load_overrides() returns {} for an empty JSON object on disk."""
+    f = tmp_path / "settings.json"
+    f.write_text("{}")
+    result = settings_store.load_overrides(f)
+    assert result == {}
+
+
+# ---------------------------------------------------------------------------
+# save() no-bloat test — file must contain ONLY explicitly-set keys
+# ---------------------------------------------------------------------------
+
+
+def test_save_no_bloat(tmp_path):
+    """save() must write ONLY the explicitly-set keys, not all 15+ DEFAULTS keys."""
+    f = tmp_path / "settings.json"
+    settings_store.save(f, {"min_paper_year": 2025})
+    raw = json.loads(f.read_text())
+    assert set(raw.keys()) == {"min_paper_year"}, (
+        f"Expected only {{'min_paper_year'}}, got {set(raw.keys())}. "
+        "save() must not bloat the file with all DEFAULTS keys."
+    )
+    assert raw["min_paper_year"] == 2025
+
+
+def test_save_accumulates_keys_without_bloat(tmp_path):
+    """Successive save() calls accumulate only explicitly-set keys."""
+    f = tmp_path / "settings.json"
+    settings_store.save(f, {"min_paper_year": 2025})
+    settings_store.save(f, {"llm_rate_limit_sleep": 5.0})
+    raw = json.loads(f.read_text())
+    assert set(raw.keys()) == {"min_paper_year", "llm_rate_limit_sleep"}
+    assert raw["min_paper_year"] == 2025
+    assert raw["llm_rate_limit_sleep"] == 5.0
+
+
+# ---------------------------------------------------------------------------
+# DRY sync-guard: DEFAULTS must match config hardcoded values
+# ---------------------------------------------------------------------------
+
+
+def test_defaults_sync_with_config_min_paper_year():
+    """DEFAULTS['min_paper_year'] must equal config.MIN_PAPER_YEAR's hardcoded value."""
+    assert settings_store.DEFAULTS["min_paper_year"] == 2024
+
+
+def test_defaults_sync_with_config_excluded_github_repos():
+    """DEFAULTS excluded_github_repos must match config.EXCLUDED_GITHUB_REPOS."""
+    assert set(settings_store.DEFAULTS["excluded_github_repos"]) == {"ndif-team/nnsight"}
+
+
+def test_defaults_sync_with_config_course_name_patterns():
+    """DEFAULTS course_name_patterns must equal config.COURSE_NAME_PATTERNS."""
+    assert settings_store.DEFAULTS["course_name_patterns"] == config.COURSE_NAME_PATTERNS
+
+
+def test_defaults_sync_with_config_llm_model():
+    """DEFAULTS llm_model must equal the config hardcoded LLM_MODEL default."""
+    assert settings_store.DEFAULTS["llm_model"] == "meta/llama-3.1-70b-instruct"
+
+
+def test_defaults_sync_with_config_llm_base_url():
+    """DEFAULTS llm_base_url must equal the config hardcoded LLM_BASE_URL default."""
+    assert settings_store.DEFAULTS["llm_base_url"] == "https://integrate.api.nvidia.com/v1"
+
+
+def test_defaults_sync_with_config_shared_paper_threshold():
+    """DEFAULTS shared_paper_threshold must equal config.SHARED_PAPER_THRESHOLD."""
+    assert settings_store.DEFAULTS["shared_paper_threshold"] == config.SHARED_PAPER_THRESHOLD
