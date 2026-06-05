@@ -11,8 +11,6 @@ from rich.logging import RichHandler
 
 from ndif_citations import config
 from ndif_citations.events import ProgressEvent
-from ndif_citations.models import PipelineRun
-from ndif_citations.router import route_papers, get_bucket_summary
 
 console = Console()
 
@@ -34,14 +32,6 @@ _STAGE_HEADERS = {
     "route": "[bold]Phase 2.5:[/bold] Routing",
     "process": "[bold]Phase 3:[/bold] Content Processing",
     "finalize": "[bold]Phase 4:[/bold] Output",
-}
-
-# log-message text that the legacy run styled (rather than printing plain).
-_STYLED_LOGS = {
-    "--skip-papers: skipping S2/OpenAlex/Scholar discovery": "  [dim]--skip-papers: skipping S2/OpenAlex/Scholar discovery[/dim]",
-    "--skip-github: skipping GitHub discovery": "  [dim]--skip-github: skipping GitHub discovery[/dim]",
-    "--fresh flag: rebuilding papers from scratch": "  [yellow]--fresh flag: rebuilding papers from scratch[/yellow]",
-    "--fresh flag: rebuilding repos from scratch": "  [yellow]--fresh flag: rebuilding repos from scratch[/yellow]",
 }
 
 
@@ -93,15 +83,8 @@ def _render_event(ev: ProgressEvent) -> None:
 
     if t == "log":
         msg = d.get("message", "")
-        styled = _STYLED_LOGS.get(msg)
-        if styled is not None:
-            console.print(styled)
-        elif msg == "Cross-linked repos and papers":
-            console.print("  Cross-linked repos and papers")
-        elif msg.endswith("venue upgrade(s) detected"):
-            console.print(f"  [green]{msg}[/green]")
-        else:
-            console.print(f"  {msg}")
+        style = d.get("style")
+        console.print(f"  [{style}]{msg}[/{style}]" if style else f"  {msg}")
         return
 
     # merge_result / report / item_* / etc.: not part of the legacy line output.

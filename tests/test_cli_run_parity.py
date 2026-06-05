@@ -84,10 +84,8 @@ def test_cli_run_matches_golden(monkeypatch, tmp_path):
 
     # --- Renderer exercised: key phase markers present in console output ---
     out_text = result.output
-    assert "Phase 1:" in out_text
-    assert "Discovery" in out_text
-    assert "Phase 2.5:" in out_text
-    assert "Routing" in out_text
+    assert "Phase 1: Discovery" in out_text
+    assert "Phase 2.5: Routing" in out_text
     # routing summary line ("Papers — N to process, M skipped")
     assert "to process" in out_text and "skipped" in out_text
     # final report still rendered directly by print_report

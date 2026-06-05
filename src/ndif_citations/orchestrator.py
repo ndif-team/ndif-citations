@@ -155,7 +155,7 @@ def discover_stage(
             min_year=config.MIN_PAPER_YEAR,
         )
     else:
-        events.emit("log", stage="discover", message="--skip-papers: skipping S2/OpenAlex/Scholar discovery")
+        events.emit("log", stage="discover", message="--skip-papers: skipping S2/OpenAlex/Scholar discovery", style="dim")
 
     discovered_repos: list[DiscoveredRepo] = []
     if not skip_github:
@@ -163,7 +163,7 @@ def discover_stage(
         run_stats.github_dependents_found = len(discovered_repos)
         events.emit("source_count", stage="discover", github=len(discovered_repos))
     else:
-        events.emit("log", stage="discover", message="--skip-github: skipping GitHub discovery")
+        events.emit("log", stage="discover", message="--skip-github: skipping GitHub discovery", style="dim")
 
     events.emit("stage_done", stage="discover", papers=len(unique_papers), repos=len(discovered_repos))
 
@@ -414,7 +414,7 @@ def finalize_stage(
     merged_papers: list[DiscoveredPaper] = []
     if not skip_papers:
         if fresh:
-            events.emit("log", stage="finalize", message="--fresh flag: rebuilding papers from scratch")
+            events.emit("log", stage="finalize", message="--fresh flag: rebuilding papers from scratch", style="yellow")
             existing_for_merge: list[DiscoveredPaper] = []
         else:
             existing_for_merge = load_existing_papers(out)
@@ -436,6 +436,7 @@ def finalize_stage(
                 events.emit(
                     "log", stage="finalize",
                     message=f"{len(upgrades)} venue upgrade(s) detected",
+                    style="green",
                 )
 
         write_outputs(merged_papers, out, run_stats)
@@ -443,7 +444,7 @@ def finalize_stage(
     merged_repos: list[DiscoveredRepo] = []
     if not skip_github:
         if fresh:
-            events.emit("log", stage="finalize", message="--fresh flag: rebuilding repos from scratch")
+            events.emit("log", stage="finalize", message="--fresh flag: rebuilding repos from scratch", style="yellow")
             existing_repos_for_merge: list[DiscoveredRepo] = []
         else:
             existing_repos_for_merge = load_existing_repos(out)
