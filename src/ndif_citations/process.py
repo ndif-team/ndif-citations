@@ -5,9 +5,10 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
-from ndif_citations import config
+from ndif_citations import config, events
+from ndif_citations.events import RunCancelled
 from ndif_citations.models import (
     Bucket, Category, Confidence, DiscoveredPaper, DiscoveredRepo, PaperReason,
 )
@@ -764,7 +765,8 @@ def _check_discard_zero_pdf_hits(paper: DiscoveredPaper, pdf_path: Optional[Path
 def process_papers(
     decisions: list[RoutingDecision],
     output_dir: Path,
-    skip_llm: bool = False
+    skip_llm: bool = False,
+    cancel_check: "Callable[[], bool] | None" = None,
 ) -> list[DiscoveredPaper]:
     """Process papers based on routing decisions (selective processing).
 
@@ -787,9 +789,14 @@ def process_papers(
     results: list[DiscoveredPaper] = []
 
     for i, decision in enumerate(decisions):
+        if cancel_check is not None and cancel_check():
+            raise RunCancelled(completed=len(results), results=list(results))
+
         paper = decision.paper
         bucket = decision.bucket
         needs = decision.processing_needed
+
+        events.emit("item_start", stage="process", idx=i, total=len(decisions), title=paper.title, bucket=bucket.value)
 
         logger.info(f"[{i+1}/{len(decisions)}] {bucket.value}: {paper.title[:60]}...")
 
@@ -853,6 +860,7 @@ def process_papers(
             else:
                 paper.description = generate_summary(paper)
         paper.has_summary = bool(paper.description)
+        events.emit("item_step", stage="process", idx=i, step="summary")
 
         # Discard check: zero PDF keyword hits (US-D2)
         if needs.get("classify") and pdf_path:
@@ -873,6 +881,7 @@ def process_papers(
                 paper.category_confidence_band = band
                 paper.has_classification = category != Category.UNCLASSIFIED
                 paper.bucket, paper.reason = _decide_bucket(paper)
+        events.emit("item_step", stage="process", idx=i, step="classify")
 
         # Thumbnail extraction — guarded for manual_override
         if needs.get("thumbnail"):
@@ -886,6 +895,7 @@ def process_papers(
                     if extracted:
                         paper.image = extracted
         paper.has_thumbnail = bool(paper.image)
+        events.emit("item_step", stage="process", idx=i, step="thumbnail")
 
         # Affiliation extraction from PDF (heuristic, no LLM)
         if needs.get("affiliations") and not paper.affiliations and pdf_path and pdf_path.exists():
@@ -898,6 +908,7 @@ def process_papers(
             except Exception as e:
                 logger.debug(f"Affiliation extraction failed: {e}")
         paper.has_affiliations = bool(paper.affiliations)
+        events.emit("item_step", stage="process", idx=i, step="affiliations")
 
         results.append(paper)
 
@@ -942,7 +953,7 @@ def classify_repo(repo: "DiscoveredRepo") -> None:
     repo.has_classification = True
 
 
-def process_repos(decisions: list[RepoRoutingDecision]) -> list[DiscoveredRepo]:
+def process_repos(decisions: list[RepoRoutingDecision], cancel_check: "Callable[[], bool] | None" = None) -> list[DiscoveredRepo]:
     """Phase 3 for repos: apply classification per routing bucket.
 
     NEW / REPROCESS: recompute content_hash (classification already done in enrichment)
@@ -953,8 +964,13 @@ def process_repos(decisions: list[RepoRoutingDecision]) -> list[DiscoveredRepo]:
     total = len(decisions)
 
     for i, decision in enumerate(decisions):
+        if cancel_check is not None and cancel_check():
+            raise RunCancelled(completed=len(results), results=list(results))
+
         repo = decision.repo
         bucket = decision.bucket
+
+        events.emit("item_start", stage="process", idx=i, total=total, title=f"{repo.owner}/{repo.repo}")
 
         try:
             if bucket in (ProcessingBucket.NEW, ProcessingBucket.REPROCESS):
@@ -992,6 +1008,7 @@ def process_repos(decisions: list[RepoRoutingDecision]) -> list[DiscoveredRepo]:
                 f"Failed to process repo {repo.owner}/{repo.repo}: {e}"
             )
 
+        events.emit("item_step", stage="process", idx=i, step="classify")
         results.append(repo)
 
     logger.info(f"Repo processing complete: {len(results)} repos processed")

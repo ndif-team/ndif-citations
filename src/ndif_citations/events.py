@@ -7,6 +7,16 @@ EventType = str  # "stage_start"|"stage_done"|"source_count"|"dedup"|"route_summ
                  # |"item_start"|"item_step"|"rate_limit_wait"|"awaiting_review"
                  # |"merge_result"|"report"|"error"|"cancelled"|"done"|"log"
 
+
+class RunCancelled(Exception):
+    """Raised by the processing loops when a cancel_check fires mid-run.
+    Carries how many items were fully completed and the partial results,
+    so the caller can merge the completed prefix."""
+    def __init__(self, completed: int = 0, results: list | None = None):
+        super().__init__(f"run cancelled after {completed} item(s)")
+        self.completed = completed
+        self.results = results or []
+
 @dataclass
 class ProgressEvent:
     type: EventType

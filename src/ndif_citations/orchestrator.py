@@ -345,22 +345,22 @@ def process_stage(
     so ``finalize_stage`` can merge from the decisions (matching cli.run, which
     merges ``[d.paper for d in decisions]`` — NOT the ``process_papers`` return).
 
-    ``cancel_check`` is accepted but unused in this task; real cooperative-cancel
-    wiring lands in Task 1.7.
+    ``cancel_check`` is threaded through to ``process_papers`` and ``process_repos``
+    (Task 1.7). When non-None and it fires, those functions raise ``RunCancelled``.
     """
     events.emit("stage_start", stage="process")
 
     n_papers = 0
     if not skip_papers and r.paper_decisions:
         events.emit("log", stage="process", message="Running LLM summaries, classification, thumbnails...")
-        processed_papers = process_papers(r.paper_decisions, out)
+        processed_papers = process_papers(r.paper_decisions, out, cancel_check=cancel_check)
         n_papers = len(r.paper_decisions)
         events.emit("log", stage="process", message=f"Processed {len(processed_papers)} papers")
 
     n_repos = 0
     if not skip_github and r.repo_decisions:
         events.emit("log", stage="process", message="Classifying repos (keyword-only)...")
-        processed_repos = process_repos(r.repo_decisions)
+        processed_repos = process_repos(r.repo_decisions, cancel_check=cancel_check)
         n_repos = len(r.repo_decisions)
         # Stash the exact process_repos() output so finalize_stage merges from it
         # (preserves the SKIP/PROTECTED existing_repo substitution from cli.run).
