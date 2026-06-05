@@ -10,10 +10,101 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 from ndif_citations import config
+from ndif_citations.events import ProgressEvent
 from ndif_citations.models import PipelineRun
 from ndif_citations.router import route_papers, get_bucket_summary
 
 console = Console()
+
+
+# --------------------------------------------------------------------------- #
+# Event -> Rich console renderer
+# --------------------------------------------------------------------------- #
+# `cli.run` drives `orchestrator.run_pipeline`, which emits ProgressEvents for
+# every console line the legacy inline pipeline used to print. This renderer maps
+# each event back to the exact Rich output the old `run()` produced — phase
+# headers, source/dedup counts, routing summaries, and per-stage log lines —
+# preserving the CLI UX. The final report is NOT an event; `run()` calls
+# `print_report(...)` directly.
+
+# orchestrator stage name -> legacy "Phase N: <Title>" header.
+_STAGE_HEADERS = {
+    "discover": "[bold]Phase 1:[/bold] Discovery",
+    "enrich": "[bold]Phase 2:[/bold] Metadata Enrichment",
+    "route": "[bold]Phase 2.5:[/bold] Routing",
+    "process": "[bold]Phase 3:[/bold] Content Processing",
+    "finalize": "[bold]Phase 4:[/bold] Output",
+}
+
+# log-message text that the legacy run styled (rather than printing plain).
+_STYLED_LOGS = {
+    "--skip-papers: skipping S2/OpenAlex/Scholar discovery": "  [dim]--skip-papers: skipping S2/OpenAlex/Scholar discovery[/dim]",
+    "--skip-github: skipping GitHub discovery": "  [dim]--skip-github: skipping GitHub discovery[/dim]",
+    "--fresh flag: rebuilding papers from scratch": "  [yellow]--fresh flag: rebuilding papers from scratch[/yellow]",
+    "--fresh flag: rebuilding repos from scratch": "  [yellow]--fresh flag: rebuilding repos from scratch[/yellow]",
+}
+
+
+def _render_event(ev: ProgressEvent) -> None:
+    """Render a single orchestrator ProgressEvent as the legacy CLI console output.
+
+    Mirrors the wording/format of the inline pipeline that previously lived in
+    ``run()``. Unhandled event types (e.g. ``merge_result``, ``report`` — the
+    latter is rendered by ``print_report`` instead) are intentionally ignored.
+    """
+    t = ev.type
+    d = ev.data
+
+    if t == "stage_start":
+        header = _STAGE_HEADERS.get(ev.stage)
+        if header:
+            console.print(header)
+        return
+
+    if t == "stage_done":
+        # Every legacy phase block ended with a trailing blank line.
+        console.print()
+        return
+
+    if t == "source_count":
+        if "github" in d:
+            console.print(f"  GitHub dependents: [green]{d['github']}[/green] repos found")
+        else:
+            console.print(
+                f"  Papers — S2: {d.get('s2', 0)}, "
+                f"OpenAlex: {d.get('openalex', 0)}, "
+                f"Scholar: {d.get('scholar', 0)}"
+            )
+        return
+
+    if t == "dedup":
+        console.print(f"  After deduplication: [cyan]{d['before_year']}[/cyan] unique papers")
+        if d.get("dropped_old"):
+            console.print(
+                f"  After year filter (>= {d['min_year']}): "
+                f"[cyan]{d['after_year']}[/cyan] (dropped {d['dropped_old']} pre-{d['min_year']})"
+            )
+        return
+
+    if t == "route_summary":
+        label = "Papers" if d.get("kind") == "papers" else "Repos"
+        console.print(f"  {label} — {d['to_process']} to process, {d['skipped']} skipped")
+        return
+
+    if t == "log":
+        msg = d.get("message", "")
+        styled = _STYLED_LOGS.get(msg)
+        if styled is not None:
+            console.print(styled)
+        elif msg == "Cross-linked repos and papers":
+            console.print("  Cross-linked repos and papers")
+        elif msg.endswith("venue upgrade(s) detected"):
+            console.print(f"  [green]{msg}[/green]")
+        else:
+            console.print(f"  {msg}")
+        return
+
+    # merge_result / report / item_* / etc.: not part of the legacy line output.
 
 
 def _setup_logging(verbose: bool = False) -> None:
@@ -45,224 +136,31 @@ def run(output_dir: str | None, fresh: bool, skip_github: bool, skip_papers: boo
         console.print("[bold red]Error:[/bold red] --skip-github and --skip-papers cannot both be set (nothing to do)")
         raise SystemExit(1)
 
-    from ndif_citations.discover import (
-        deduplicate_papers,
-        discover_github_dependents,
-        discover_openalex,
-        discover_s2_citations,
-        discover_scholar,
-        enrich_repos_from_github_api,
-        filter_by_min_year,
-        link_repos_to_papers,
-        _tag_repo_type,
-        _unlink_shared_template_papers,
-    )
-    from ndif_citations.extract import check_venue_upgrades, enrich_papers
-    from ndif_citations.output import (
-        _write_repos_outputs,
-        _write_xlsx,
-        load_existing_papers,
-        load_existing_repos,
-        merge_papers,
-        merge_repos,
-        print_report,
-        write_outputs,
-    )
-    from ndif_citations.process import process_papers, process_repos
-    from ndif_citations.router import route_papers, route_repos
+    from ndif_citations import events, orchestrator
+    from ndif_citations.output import print_report
 
     out = config.get_output_dir(output_dir)
-    raw_dir = out / "raw"
-    run_stats = PipelineRun()
 
     console.print("\n[bold cyan]NDIF Citation Tracker[/bold cyan] — Starting full pipeline\n")
 
-    # ------------------------------------------------------------------ #
-    # Phase 1: Discovery
-    # ------------------------------------------------------------------ #
-    console.print("[bold]Phase 1:[/bold] Discovery")
-
-    unique_papers = []
-    if not skip_papers:
-        s2_papers = discover_s2_citations(raw_dir)
-        run_stats.s2_citations_found = len(s2_papers)
-
-        openalex_papers = discover_openalex(raw_dir)
-        run_stats.openalex_found = len(openalex_papers)
-
-        scholar_papers = discover_scholar(raw_dir, force_refresh=fresh)
-        run_stats.scholar_found = len(scholar_papers)
-
-        all_papers = s2_papers + openalex_papers + scholar_papers
-        unique_papers = deduplicate_papers(all_papers)
-        before_year = len(unique_papers)
-        unique_papers = filter_by_min_year(unique_papers, config.MIN_PAPER_YEAR)
-        dropped_old = before_year - len(unique_papers)
-        console.print(
-            f"  Papers — S2: {run_stats.s2_citations_found}, "
-            f"OpenAlex: {run_stats.openalex_found}, "
-            f"Scholar: {run_stats.scholar_found}"
+    events.set_sink(_render_event)
+    try:
+        result = orchestrator.run_pipeline(
+            out,
+            mode="fresh" if fresh else "incremental",
+            skip_papers=skip_papers,
+            skip_github=skip_github,
         )
-        console.print(f"  After deduplication: [cyan]{before_year}[/cyan] unique papers")
-        if dropped_old:
-            console.print(f"  After year filter (>= {config.MIN_PAPER_YEAR}): [cyan]{len(unique_papers)}[/cyan] (dropped {dropped_old} pre-{config.MIN_PAPER_YEAR})")
-    else:
-        console.print("  [dim]--skip-papers: skipping S2/OpenAlex/Scholar discovery[/dim]")
+    finally:
+        events.clear_sink()
 
-    discovered_repos = []
-    if not skip_github:
-        discovered_repos = discover_github_dependents(raw_dir)
-        run_stats.github_dependents_found = len(discovered_repos)
-        console.print(f"  GitHub dependents: [green]{len(discovered_repos)}[/green] repos found")
-    else:
-        console.print("  [dim]--skip-github: skipping GitHub discovery[/dim]")
-    console.print()
-
-    # ------------------------------------------------------------------ #
-    # Phase 2: Enrichment
-    # ------------------------------------------------------------------ #
-    console.print("[bold]Phase 2:[/bold] Metadata Enrichment")
-
-    if not skip_papers and unique_papers:
-        unique_papers = enrich_papers(unique_papers, raw_dir)
-        console.print(f"  Enriched {len(unique_papers)} papers")
-
-    repo_removal_counts: dict[str, int] = {"404": 0, "rename_redirect": 0, "archived": 0}
-    if not skip_github and discovered_repos:
-        console.print("  Enriching repos via GitHub API (stars, forks, last commit)...")
-        discovered_repos, repo_removal_counts = enrich_repos_from_github_api(discovered_repos)
-        console.print(f"  {len(discovered_repos)} repos retained after staleness check")
-
-        # Drop excluded repos (e.g. ndif-team/nnsight — the library itself)
-        pre_filter = len(discovered_repos)
-        discovered_repos = [r for r in discovered_repos if r.merge_key() not in config.EXCLUDED_GITHUB_REPOS]
-        if len(discovered_repos) < pre_filter:
-            console.print(f"  Excluded {pre_filter - len(discovered_repos)} repo(s) from EXCLUDED_GITHUB_REPOS")
-
-        # Cross-repo cleanup: unlink shared template papers (runs on merged set)
-        if not fresh:
-            existing_for_cross = load_existing_repos(out)
-            # Merge: discovered repos override existing by merge_key
-            by_key = {r.merge_key(): r for r in existing_for_cross}
-            by_key.update({r.merge_key(): r for r in discovered_repos})
-            all_for_cross = list(by_key.values())
-        else:
-            all_for_cross = discovered_repos
-
-        unlinked_set = _unlink_shared_template_papers(all_for_cross)
-        if unlinked_set:
-            console.print(f"  Shared-paper cleanup: {len(unlinked_set)} template links unlinked")
-
-        # Tag every repo (runs on the merged set for consistent cross-repo state)
-        course_cleared = 0
-        for repo in all_for_cross:
-            repo.repo_type = _tag_repo_type(repo, unlinked_set)
-            # Course repos cite many papers — none is canonical. Clear the link
-            # so they neither display a 📄 badge nor cross-link to any paper.
-            # Skip this side effect for curator-overridden repos: if a human
-            # set both repo_type AND linked_paper_url, trust them.
-            if (
-                repo.repo_type == "course"
-                and repo.linked_paper_url
-                and not repo.manual_override
-            ):
-                repo.linked_paper_url = None
-                repo.linked_paper_tier = None
-                course_cleared += 1
-        if course_cleared:
-            console.print(f"  Cleared linked_paper_url on {course_cleared} course repo(s)")
-
-        # Cross-link repos <-> papers (minimal URL fields)
-        if not skip_papers:
-            link_repos_to_papers(discovered_repos, unique_papers)
-            console.print("  Cross-linked repos and papers")
-    console.print()
-
-    # ------------------------------------------------------------------ #
-    # Phase 2.5: Routing
-    # ------------------------------------------------------------------ #
-    console.print("[bold]Phase 2.5:[/bold] Routing")
-
-    decisions = []
-    if not skip_papers:
-        existing_papers = load_existing_papers(out) if not fresh else []
-        decisions = route_papers(unique_papers, existing_papers)
-        skipped = sum(1 for d in decisions if d.bucket.value in ("skip", "protected"))
-        console.print(f"  Papers — {len(decisions) - skipped} to process, {skipped} skipped")
-
-    repo_decisions = []
-    if not skip_github and discovered_repos:
-        existing_repos = load_existing_repos(out) if not fresh else []
-        repo_decisions = route_repos(discovered_repos, existing_repos)
-        repo_skipped = sum(1 for d in repo_decisions if d.bucket.value in ("skip", "protected"))
-        console.print(f"  Repos — {len(repo_decisions) - repo_skipped} to process, {repo_skipped} skipped")
-    console.print()
-
-    # ------------------------------------------------------------------ #
-    # Phase 3: Processing
-    # ------------------------------------------------------------------ #
-    console.print("[bold]Phase 3:[/bold] Content Processing")
-
-    processed_papers = []
-    if not skip_papers and decisions:
-        console.print("  Running LLM summaries, classification, thumbnails...")
-        processed_papers = process_papers(decisions, out)
-        console.print(f"  Processed {len(processed_papers)} papers")
-
-    processed_repos = []
-    if not skip_github and repo_decisions:
-        console.print("  Classifying repos (keyword-only)...")
-        processed_repos = process_repos(repo_decisions)
-        console.print(f"  Classified {len(processed_repos)} repos")
-    console.print()
-
-    # ------------------------------------------------------------------ #
-    # Phase 4: Output
-    # ------------------------------------------------------------------ #
-    console.print("[bold]Phase 4:[/bold] Output")
-
-    merged_papers = []
-    if not skip_papers:
-        if fresh:
-            console.print("  [yellow]--fresh flag: rebuilding papers from scratch[/yellow]")
-            existing_for_merge = []
-        else:
-            existing_for_merge = load_existing_papers(out)
-        merged_papers, run_stats = merge_papers(existing_for_merge, [d.paper for d in decisions], run_stats)
-
-        if existing_for_merge:
-            upgrades = check_venue_upgrades(unique_papers, existing_for_merge)
-            if upgrades:
-                console.print(f"  [green]{len(upgrades)} venue upgrade(s) detected[/green]")
-
-        write_outputs(merged_papers, out, run_stats)
-
-    merged_repos = []
-    if not skip_github:
-        if fresh:
-            console.print("  [yellow]--fresh flag: rebuilding repos from scratch[/yellow]")
-            existing_repos_for_merge = []
-        else:
-            existing_repos_for_merge = load_existing_repos(out)
-        merged_repos = merge_repos(processed_repos, existing_repos_for_merge)
-        _write_repos_outputs(merged_repos, out)
-
-    # Write combined XLSX (only if both sides ran, or just one)
-    _write_xlsx(
-        merged_papers if not skip_papers else [],
-        merged_repos if not skip_github else [],
-        out,
-        skip_papers=skip_papers,
-        skip_github=skip_github,
-    )
-
-    # Print final report
+    # Print final report (NOT an event — rendered directly, exactly as before).
     print_report(
-        run_stats, merged_papers, out,
-        repos=merged_repos,
+        result.run_stats, result.merged_papers, out,
+        repos=result.merged_repos,
         skip_github=skip_github,
         skip_papers=skip_papers,
-        repos_removed_counts=repo_removal_counts,
+        repos_removed_counts=result.removal_counts,
     )
 
 
