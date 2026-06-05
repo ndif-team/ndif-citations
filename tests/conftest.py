@@ -16,7 +16,6 @@ _MINI_REPOS = _FIXTURES_DIR / "mini-github-repos-full.json"
 def no_sleep(monkeypatch):
     """Suppress all rate_limit_sleep calls in every test — keeps the suite fast."""
     monkeypatch.setattr("ndif_citations.utils.time.sleep", lambda s: None)
-    monkeypatch.setattr("ndif_citations.process.rate_limit_sleep", lambda s, label="": None)
 
 
 @pytest.fixture()

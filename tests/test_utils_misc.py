@@ -115,3 +115,13 @@ class TestGenerateBibtex:
             doi="10.1234/test",
         )
         assert "doi={10.1234/test}" in result
+
+
+def test_rate_limit_sleep_emits_wait():
+    from ndif_citations import events, utils
+    got = []
+    events.set_sink(got.append)
+    utils.rate_limit_sleep(0.5, "LLM classify")   # time.sleep is no-op'd by conftest; 0.5 > 0 so it emits
+    events.clear_sink()
+    waits = [e for e in got if e.type == "rate_limit_wait"]
+    assert waits and waits[0].data["label"] == "LLM classify" and waits[0].data["seconds"] == 0.5

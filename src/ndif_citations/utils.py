@@ -12,6 +12,8 @@ from typing import Optional
 import requests
 from rapidfuzz import fuzz
 
+from ndif_citations import events
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -451,6 +453,7 @@ def rate_limit_sleep(seconds: float, label: str = "") -> None:
     if seconds > 0:
         if label:
             logger.debug(f"Rate limiting ({label}): sleeping {seconds}s")
+        events.emit("rate_limit_wait", label=label, seconds=seconds)
         time.sleep(seconds)
 
 
