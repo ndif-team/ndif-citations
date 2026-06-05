@@ -262,9 +262,9 @@ def upload_image(out: Path, paper_id: str, file: "UploadFile") -> dict:
         raise KeyError(paper_id)
 
     data = file.file.read()
-    content_type = (file.content_type or "").lower()
-    is_png = content_type == "image/png" or data[:8] == _PNG_MAGIC
-    if not is_png:
+    # Require PNG magic bytes regardless of declared content-type — content-type
+    # alone is attacker-controlled and not a reliable signal.
+    if data[:8] != _PNG_MAGIC:
         raise ValueError("uploaded file is not a PNG")
 
     filename = f"{slugify(paper.title)}.png"

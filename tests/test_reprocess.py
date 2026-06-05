@@ -18,8 +18,10 @@ from pathlib import Path
 import pytest
 
 from ndif_citations import reprocess
+from ndif_citations.events import RunCancelled
 from ndif_citations.models import Category
 from ndif_citations.output import load_existing_papers
+from ndif_citations.utils import slugify
 
 # manual_override=True paper with a non-empty curated description.
 CURATED_TITLE = (
@@ -179,3 +181,92 @@ def test_reprocess_classify_overwrites_curated(monkeypatch, fixture_state):
     assert after.manual_override is True
     # summary left alone
     assert after.description == old_description
+
+
+# ---------------------------------------------------------------------------
+# 6. Stale on-disk PNG is deleted before re-extraction (Fix 1 regression guard).
+# ---------------------------------------------------------------------------
+
+def test_reextract_thumbnail_deletes_stale_and_regenerates(monkeypatch, fixture_state):
+    """reprocess_papers must unlink the stale PNG so extract_thumbnail actually runs.
+
+    Regression guard: if the stale PNG is NOT deleted, process_papers sees
+    `image_path.exists() == True` and skips `extract_thumbnail` entirely —
+    re-extraction silently keeps the old image.
+    """
+    import ndif_citations.process as process_mod
+    import ndif_citations.pdf_cache as pdf_cache_mod
+
+    out = fixture_state
+    pid = _curated_id(out)
+    paper = _find(out, lambda p: p.merge_key() == pid)
+
+    # Pre-create a stale PNG on disk for this paper.
+    slug = slugify(paper.title)
+    stale_png = out / "images" / f"{slug}.png"
+    stale_png.parent.mkdir(parents=True, exist_ok=True)
+    stale_png.write_bytes(b"STALE")
+
+    # Give the paper an existing image path so _clear_field has something to clear.
+    paper.image = f"/images/{slug}.png"
+
+    # Fake PDF path so the thumbnail branch in process_papers is entered.
+    fake_pdf = out / "pdfs" / "fake.pdf"
+    fake_pdf.parent.mkdir(parents=True, exist_ok=True)
+    fake_pdf.write_bytes(b"%PDF-1.4 fake")
+    monkeypatch.setattr(pdf_cache_mod, "get_cached_pdf", lambda p, o: fake_pdf)
+
+    # Spy: records calls and returns a new image path.
+    extract_calls: list[str] = []
+
+    def _spy_extract(paper, output_dir, pdf_path=None):
+        extract_calls.append(paper.title)
+        new_path = output_dir / "images" / f"{slugify(paper.title)}.png"
+        new_path.parent.mkdir(parents=True, exist_ok=True)
+        new_path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 8)
+        return f"/images/{slugify(paper.title)}.png"
+
+    monkeypatch.setattr(process_mod, "extract_thumbnail", _spy_extract)
+
+    reprocess.reprocess_papers(out, [pid], ["thumbnail"])
+
+    # The spy MUST have been called — proving extraction ran, not silently skipped.
+    assert extract_calls, (
+        "extract_thumbnail was NOT called: the stale PNG was not deleted and "
+        "process_papers skipped re-extraction (the Fix 1 no-op bug)"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 7. Cancel during reprocess does not persist the partially-cleared paper.
+# ---------------------------------------------------------------------------
+
+def test_reprocess_cancel_does_not_persist(monkeypatch, fixture_state):
+    """A cancel_check that fires must propagate RunCancelled and leave the
+    on-disk research-papers-full.json byte-identical to the pre-call snapshot.
+
+    This guards the correct-by-construction cancel safety: write_outputs is
+    never reached when process_papers raises RunCancelled.
+    """
+    import ndif_citations.process as process_mod
+    import ndif_citations.pdf_cache as pdf_cache_mod
+
+    out = fixture_state
+    pid = _curated_id(out)
+
+    json_path = out / "research-papers-full.json"
+    snapshot = json_path.read_bytes()
+
+    # cancel_check always returns True → process_papers raises RunCancelled immediately.
+    monkeypatch.setattr(process_mod, "generate_summary", lambda paper: "SHOULD NOT APPEAR")
+    monkeypatch.setattr(pdf_cache_mod, "get_cached_pdf", lambda p, o: None)
+
+    with pytest.raises(RunCancelled):
+        reprocess.reprocess_papers(out, [pid], ["summary"], cancel_check=lambda: True)
+
+    # The JSON file must be byte-identical to the snapshot — no cleared-but-not-
+    # refilled paper was written to disk.
+    assert json_path.read_bytes() == snapshot, (
+        "research-papers-full.json was modified despite RunCancelled — "
+        "write_outputs must not be called when process_papers is cancelled"
+    )

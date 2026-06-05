@@ -37,6 +37,7 @@ from ndif_citations.models import Category, DiscoveredPaper, PipelineRun
 from ndif_citations.output import load_existing_papers, write_outputs
 from ndif_citations.process import _decide_bucket, process_papers
 from ndif_citations.router import ProcessingBucket, RoutingDecision
+from ndif_citations.utils import slugify
 
 logger = logging.getLogger(__name__)
 
@@ -116,13 +117,16 @@ def reprocess_papers(
         raise ValueError(f"no paper found for id(s): {missing!r}")
 
     # Step 2: clear the requested fields + drop manual_override so the
-    # protective FILL_GAPS hydration/guards are skipped. Remember each target's
-    # original manual_override so we can restore it afterwards.
-    original_overrides: dict[int, bool] = {}
+    # protective FILL_GAPS hydration/guards are skipped.
     for p in targets:
-        original_overrides[id(p)] = p.manual_override
         for field in fields:
             _clear_field(p, field)
+        # Fix 1: for thumbnail re-extraction, delete the stale on-disk PNG so
+        # process_papers' `if not image_path.exists()` guard doesn't skip the
+        # fresh Surya extraction.
+        if "thumbnail" in fields:
+            stale_png = out / "images" / f"{slugify(p.title)}.png"
+            stale_png.unlink(missing_ok=True)
         p.manual_override = False
 
     # Step 3: build FILL_GAPS decisions that re-run ONLY the requested fields.
@@ -140,6 +144,8 @@ def reprocess_papers(
     process_papers(decisions, out, cancel_check=cancel_check)
 
     # Step 5: restore curation lock, re-derive has_* + bucket from fresh values.
+    # Reprocess always locks the paper (manual_override=True) — a forced re-run
+    # implies the curator wants the result to be treated as curated afterward.
     for p in targets:
         p.manual_override = True
         p.has_summary = bool(p.description)
