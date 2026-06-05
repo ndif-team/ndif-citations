@@ -1,4 +1,4 @@
-"""In-process, one-run-at-a-time background pipeline runner (Task 2.1).
+"""In-process, one-run-at-a-time background pipeline runner (Tasks 2.1-2.2).
 
 This is a *local single-user* app, so there is no Celery/Redis: a single
 ``JobRunner`` instance (created in the server layer later) drives
@@ -12,9 +12,14 @@ Scope (Task 2.1):
     * Capture the ProgressEvent buffer for the run.
     * Persist a run record to ``out/runs/<run_id>.json`` (the run history).
 
+Scope (Task 2.2):
+    * Cancel a run via ``JobRunner.cancel()``.
+    * Each run gets a ``threading.Event`` cancel token forwarded to ``run_pipeline``
+      as ``cancel_check``. When ``RunCancelled`` propagates out, the run ends in
+      state "cancelled" — nothing is written to disk for the in-flight run.
+    * Cancel is stop-and-discard: no partial-merge finalization (deferred to Phase 3).
+
 Out of scope (later tasks):
-    * Cancellation (Task 2.2) — for now a ``RunCancelled`` falls into the generic
-      ``except`` and is recorded as an error, which is acceptable.
     * Live SSE streaming / subscriber queue (Task 2.5) and the FastAPI layer
       (Tasks 2.3-2.5). The event buffer here is a plain list.
 
@@ -40,7 +45,7 @@ from datetime import datetime
 from pathlib import Path
 
 from ndif_citations import events, orchestrator
-from ndif_citations.events import ProgressEvent
+from ndif_citations.events import ProgressEvent, RunCancelled
 
 logger = logging.getLogger(__name__)
 
@@ -77,10 +82,13 @@ class RunRecord:
     ``events`` is the captured progress buffer (the live subscriber/queue for SSE
     is a later task). ``counts`` is filled from ``FinalizeResult.run_stats`` on
     success.
+
+    ``cancel_event`` is a ``threading.Event`` that the caller can set to request
+    cancellation. It is NOT serialized to JSON (it's a threading primitive).
     """
 
     run_id: str
-    state: str  # "running" | "done" | "error"
+    state: str  # "running" | "done" | "error" | "cancelled"
     mode: str
     skip_papers: bool
     skip_github: bool
@@ -90,9 +98,14 @@ class RunRecord:
     traceback: str | None = None
     counts: dict = field(default_factory=dict)
     events: list[ProgressEvent] = field(default_factory=list)
+    cancel_event: threading.Event = field(default_factory=threading.Event)
 
     def to_dict(self) -> dict:
-        """Serialize for persistence; events go through ``ProgressEvent.to_dict``."""
+        """Serialize for persistence; events go through ``ProgressEvent.to_dict``.
+
+        ``cancel_event`` is intentionally excluded — it's a threading primitive
+        and must not appear in the persisted JSON.
+        """
         return {
             "run_id": self.run_id,
             "state": self.state,
@@ -194,6 +207,30 @@ class JobRunner:
             raise KeyError(run_id)
         return current
 
+    def cancel(self, run_id: str | None = None) -> None:
+        """Request cancellation of the active run (or the run identified by *run_id*).
+
+        Sets the run's ``cancel_event`` so that the next ``cancel_check`` call
+        inside ``process_papers`` / ``process_repos`` fires and raises
+        ``RunCancelled``.
+
+        Safe no-op semantics:
+          * If no run has ever started, does nothing.
+          * If the identified run is not in state "running" (already done / error /
+            cancelled), does nothing — it is not an error to cancel a finished run.
+          * The lock is held only for the brief lookup, NOT while waiting for the
+            pipeline to actually stop.
+        """
+        with self._lock:
+            current = self._current
+        if current is None:
+            return
+        if run_id is not None and current.run_id != run_id:
+            return
+        # Only set the event if the run is currently running.
+        if current.state == "running":
+            current.cancel_event.set()
+
     def history(self, out: Path) -> list[dict]:
         """Read every persisted run record from ``out/runs/*.json``.
 
@@ -269,10 +306,16 @@ class JobRunner:
                 mode=mode,
                 skip_papers=skip_papers,
                 skip_github=skip_github,
+                cancel_check=record.cancel_event.is_set,
             )
             counts = self._extract_counts(result)
             with self._lock:
                 record.counts = counts
+        except RunCancelled:
+            # Cancel is stop-and-discard: nothing written to disk for the in-flight
+            # run (RunCancelled fires before finalize_stage). Do NOT set error.
+            terminal_state = "cancelled"
+            logger.info("run %s was cancelled", record.run_id)
         except Exception as e:  # noqa: BLE001 — record any failure on the record
             terminal_state = "error"
             tb = traceback.format_exc()

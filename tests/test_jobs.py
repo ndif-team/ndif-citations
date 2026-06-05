@@ -1,9 +1,9 @@
-"""Tests for the in-process JobRunner (Task 2.1).
+"""Tests for the in-process JobRunner (Tasks 2.1-2.2).
 
 The JobRunner drives ``orchestrator.run_pipeline`` on a daemon thread, captures
 the progress-event buffer, and persists a run record to ``out/runs/<run_id>.json``.
 
-Cancel (Task 2.2) and SSE/HTTP (Tasks 2.3-2.5) are explicitly out of scope here.
+SSE/HTTP (Tasks 2.3-2.5) are explicitly out of scope here.
 
 All tests use the deterministic fake harness (``install_pipeline_fakes``) so they
 never touch the network or an LLM. The "active" test parks the worker thread
@@ -158,3 +158,106 @@ def test_run_error_is_captured(monkeypatch, fixture_state):
     data = json.loads(run_file.read_text())
     assert data["state"] == "error"
     assert "discovery exploded" in data["error"]
+
+
+# ---------------------------------------------------------------------------
+# 4. Cancel: a cancel() during processing ends the run in state "cancelled".
+# ---------------------------------------------------------------------------
+
+def test_cancel_stops_run(monkeypatch, fixture_state):
+    install_pipeline_fakes(monkeypatch, orchestrator)
+    out = fixture_state
+
+    # Snapshot the research-papers-full.json bytes BEFORE the run so we can
+    # assert they are byte-for-byte unchanged after a cancelled run (nothing
+    # was written to disk by the in-flight run).
+    papers_file = out / "research-papers-full.json"
+    papers_bytes_before = papers_file.read_bytes()
+
+    # Install a blocking generate_summary fake:
+    #   * For item 0 (first paper): sets `entered`, then waits for `release`.
+    #   * For item 1+: returns normally — but the cancel_check will fire at the
+    #     top of the process_papers loop for item 1, raising RunCancelled before
+    #     generate_summary is even called for that item.
+    import ndif_citations.process as process_mod
+
+    entered = threading.Event()
+    release = threading.Event()
+    call_count = [0]  # mutable counter shared with fake
+
+    def _blocking_summary(paper):
+        idx = call_count[0]
+        call_count[0] += 1
+        if idx == 0:
+            entered.set()
+            release.wait(timeout=5.0)
+        return f"Fake summary for: {paper.title}"
+
+    monkeypatch.setattr(process_mod, "generate_summary", _blocking_summary)
+
+    runner = JobRunner()
+    runner.start(out, mode="incremental")
+
+    # Wait until the worker is parked inside processing of item 0.
+    assert entered.wait(timeout=2.0), "worker never entered the blocking summary"
+    assert runner.active is True
+
+    # Cancel while the worker is blocked inside item 0's processing.
+    runner.cancel()
+
+    # Now release item 0. The loop advances to item 1, hits cancel_check at the
+    # top-of-loop, and RunCancelled propagates out of process_stage.
+    release.set()
+
+    # Poll until the run reaches a terminal state.
+    assert _wait_until(
+        lambda: runner.status().state in ("cancelled", "done", "error"),
+        timeout=4.0,
+    ), f"run did not reach terminal state; state={runner.status().state}"
+
+    rec = runner.status()
+    assert rec.state == "cancelled", f"expected cancelled, got {rec.state!r}"
+    assert rec.error is None, f"error should be None for a cancelled run, got {rec.error!r}"
+    assert not runner.active
+
+    # Persisted JSON must show state="cancelled" and must NOT contain cancel_event.
+    run_file = out / "runs" / f"{rec.run_id}.json"
+    assert run_file.exists(), "persisted run file missing"
+    data = json.loads(run_file.read_text())
+    assert data["state"] == "cancelled"
+    assert "cancel_event" not in data, "cancel_event must not appear in persisted JSON"
+
+    # Safety assertion: the original research-papers-full.json is byte-unchanged
+    # (cancel happened before finalize_stage could write anything).
+    papers_bytes_after = papers_file.read_bytes()
+    assert papers_bytes_after == papers_bytes_before, (
+        "research-papers-full.json was modified by a cancelled run — "
+        "finalize_stage should not have run"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 5. Cancel no-op: cancel() on a finished (or non-existent) run is safe.
+# ---------------------------------------------------------------------------
+
+def test_cancel_noop_when_not_running(monkeypatch, fixture_state):
+    install_pipeline_fakes(monkeypatch, orchestrator)
+    out = fixture_state
+
+    runner = JobRunner()
+
+    # No run started yet — cancel() must not raise.
+    runner.cancel()  # no-op, nothing active
+
+    # Start and let a run finish normally.
+    run_id = runner.start(out, mode="incremental")
+    assert _wait_until(lambda: runner.status().state == "done"), (
+        f"run did not finish; state={runner.status().state}"
+    )
+
+    # Cancel after the run is already done — must be a safe no-op.
+    runner.cancel()
+    runner.cancel(run_id=run_id)
+
+    # State must remain "done" (cancel must not change a terminal state).
+    assert runner.status().state == "done"
