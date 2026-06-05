@@ -59,8 +59,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from ndif_citations import events, orchestrator
+from ndif_citations import edit_schema, events, orchestrator
 from ndif_citations.events import ProgressEvent, RunCancelled
+from ndif_citations.models import Bucket, PaperReason
+from ndif_citations.router import ProcessingBucket
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +75,19 @@ class RunActiveError(Exception):
     """Raised by ``JobRunner.start`` when a run is already active.
 
     Only one pipeline run may execute at a time (it owns the global config /
-    Surya state). Callers should surface this as a 409-style conflict.
+    Surya state). Callers should surface this as a 409-style conflict. A run
+    parked at the review gate (state ``"awaiting_review"``) still counts as
+    active.
+    """
+
+
+class GateError(Exception):
+    """Raised by ``JobRunner.submit_gate`` when no run is awaiting review.
+
+    The gate selection can only be submitted while the worker is parked at the
+    gate (state ``"awaiting_review"``). Submitting against a run in any other
+    state (running / done / error / cancelled, or an unknown id) is an error.
+    Callers should surface this as a 409/404-style conflict.
     """
 
 
@@ -108,10 +122,24 @@ class RunRecord:
     ``_subscribers`` is the live SSE fan-out: a list of ``queue.Queue`` objects,
     one per active ``subscribe`` stream. The event callback pushes each new event
     onto every queue. Like ``cancel_event`` it is NOT serialized to JSON.
+
+    Gate fields (Task 3.1 — incremental human-in-the-loop review):
+      * ``gate_event`` — per-run ``threading.Event`` the worker blocks on while
+        ``state == "awaiting_review"``; ``submit_gate``/``cancel`` set it to
+        release the worker. Threading primitive — NOT serialized.
+      * ``route_result`` — the live ``RouteResult`` captured at the gate so the
+        worker can rebuild its ``paper_decisions`` from the curator selection.
+        Holds live model objects — NOT serialized.
+      * ``paper_candidates`` / ``repo_candidates`` — serializable display lists
+        of the NEW/REPROCESS paper candidates (and new repos) presented at the
+        gate. These ARE serialized so the HTTP layer / persisted record can
+        show what was awaiting review.
+      * ``gate_selection`` — the curator's stashed ``{process_ids, discard_ids,
+        edits}`` selection. Live state — NOT serialized.
     """
 
     run_id: str
-    state: str  # "running" | "done" | "error" | "cancelled"
+    state: str  # "running" | "awaiting_review" | "done" | "error" | "cancelled"
     mode: str
     skip_papers: bool
     skip_github: bool
@@ -123,13 +151,20 @@ class RunRecord:
     events: list[ProgressEvent] = field(default_factory=list)
     cancel_event: threading.Event = field(default_factory=threading.Event)
     _subscribers: list[queue.Queue] = field(default_factory=list)
+    gate_event: threading.Event = field(default_factory=threading.Event)
+    route_result: object | None = None
+    paper_candidates: list[dict] = field(default_factory=list)
+    repo_candidates: list[dict] = field(default_factory=list)
+    gate_selection: dict | None = None
 
     def to_dict(self) -> dict:
         """Serialize for persistence; events go through ``ProgressEvent.to_dict``.
 
-        ``cancel_event`` and ``_subscribers`` are intentionally excluded — they
-        are threading primitives / live state and must not appear in the
-        persisted JSON.
+        ``cancel_event``, ``gate_event``, ``_subscribers``, ``route_result`` and
+        ``gate_selection`` are intentionally excluded — they are threading
+        primitives / live model state and must not appear in the persisted JSON.
+        ``paper_candidates`` / ``repo_candidates`` ARE serialized (plain dicts)
+        so a persisted/awaiting-review record can show what is at the gate.
         """
         return {
             "run_id": self.run_id,
@@ -143,6 +178,8 @@ class RunRecord:
             "traceback": self.traceback,
             "counts": self.counts,
             "events": [ev.to_dict() for ev in self.events],
+            "paper_candidates": self.paper_candidates,
+            "repo_candidates": self.repo_candidates,
         }
 
 
@@ -153,11 +190,20 @@ class JobRunner:
         self._lock = threading.Lock()
         self._current: RunRecord | None = None
 
+    _ACTIVE_STATES = ("running", "awaiting_review")
+
     @property
     def active(self) -> bool:
-        """True iff a run is currently in state ``"running"``."""
+        """True iff a run is currently ``"running"`` or parked ``"awaiting_review"``.
+
+        A run blocked at the review gate still owns the global config / Surya
+        state, so it must keep blocking a new ``start()``.
+        """
         with self._lock:
-            return self._current is not None and self._current.state == "running"
+            return (
+                self._current is not None
+                and self._current.state in self._ACTIVE_STATES
+            )
 
     def start(
         self,
@@ -191,7 +237,10 @@ class JobRunner:
         self._warm_imports()
 
         with self._lock:
-            if self._current is not None and self._current.state == "running":
+            if (
+                self._current is not None
+                and self._current.state in self._ACTIVE_STATES
+            ):
                 raise RunActiveError("a pipeline run is already active")
 
             run_id = self._new_run_id()
@@ -239,9 +288,15 @@ class JobRunner:
         inside ``process_papers`` / ``process_repos`` fires and raises
         ``RunCancelled``.
 
+        A run parked at the review gate (``"awaiting_review"``) can also be
+        cancelled: we set BOTH the ``cancel_event`` and the ``gate_event`` so the
+        blocked worker wakes up, sees the cancel, and abandons the run WITHOUT
+        finalizing (no on-disk write — cancel-during-gate = abandon). Partial
+        merge on cancel remains out of scope (deferred to a later phase).
+
         Safe no-op semantics:
           * If no run has ever started, does nothing.
-          * If the identified run is not in state "running" (already done / error /
+          * If the identified run is not active (already done / error /
             cancelled), does nothing — it is not an error to cancel a finished run.
           * The lock is held only for the brief lookup, NOT while waiting for the
             pipeline to actually stop.
@@ -252,9 +307,52 @@ class JobRunner:
             return
         if run_id is not None and current.run_id != run_id:
             return
-        # Only set the event if the run is currently running.
-        if current.state == "running":
+        # Only act on an active run. Set the gate_event too so a worker blocked
+        # at the gate wakes up and observes the cancel.
+        if current.state in self._ACTIVE_STATES:
             current.cancel_event.set()
+            current.gate_event.set()
+
+    def submit_gate(
+        self,
+        run_id: str,
+        *,
+        process_ids: list[str],
+        discard_ids: list[str],
+        edits: dict[str, dict],
+    ) -> None:
+        """Submit the curator's gate selection and release the parked worker.
+
+        Only valid while the identified run is in state ``"awaiting_review"``
+        (raises ``GateError`` otherwise — unknown id, or any non-gate state).
+
+        The selection is *stashed* on the record and the worker is unblocked via
+        ``gate_event``; the worker thread does the actual decisions-rebuild +
+        ``process_stage`` + ``finalize_stage`` (so this method never holds the
+        lock across heavy work). ``process_ids`` / ``discard_ids`` are paper
+        candidate ids (``DiscoveredPaper.merge_key()``); ``edits`` maps a paper
+        id to a ``{field: raw_value}`` dict of pre-processing fixes.
+        """
+        with self._lock:
+            current = self._current
+            if (
+                current is None
+                or current.run_id != run_id
+                or current.state != "awaiting_review"
+            ):
+                raise GateError(
+                    f"run {run_id!r} is not awaiting review "
+                    f"(state={getattr(current, 'state', None)!r})"
+                )
+            current.gate_selection = {
+                "process_ids": list(process_ids),
+                "discard_ids": list(discard_ids),
+                "edits": dict(edits),
+            }
+            gate_event = current.gate_event
+        # Release the worker OUTSIDE the lock — it re-acquires the lock to read
+        # the stashed selection, so we must not still be holding it.
+        gate_event.set()
 
     def subscribe(self, run_id: str) -> Iterator[ProgressEvent]:
         """Yield this run's events: the buffered prefix, then live events.
@@ -385,16 +483,31 @@ class JobRunner:
         # disk already exists (no read-your-write race for callers).
         terminal_state = "done"
         try:
-            result = orchestrator.run_pipeline(
-                out,
-                mode=mode,
-                skip_papers=skip_papers,
-                skip_github=skip_github,
-                cancel_check=record.cancel_event.is_set,
-            )
-            counts = self._extract_counts(result)
-            with self._lock:
-                record.counts = counts
+            if mode == "incremental":
+                # Stage-driven path with the human-in-the-loop gate (Task 3.1).
+                # Returns None if the run was cancelled at the gate (no finalize).
+                result = self._run_incremental_with_gate(
+                    record, out, skip_papers=skip_papers, skip_github=skip_github
+                )
+                if result is None:
+                    terminal_state = "cancelled"
+                    logger.info("run %s cancelled at gate", record.run_id)
+                else:
+                    counts = self._extract_counts(result)
+                    with self._lock:
+                        record.counts = counts
+            else:
+                # Fresh mode: unchanged end-to-end driver, NO gate.
+                result = orchestrator.run_pipeline(
+                    out,
+                    mode=mode,
+                    skip_papers=skip_papers,
+                    skip_github=skip_github,
+                    cancel_check=record.cancel_event.is_set,
+                )
+                counts = self._extract_counts(result)
+                with self._lock:
+                    record.counts = counts
         except RunCancelled:
             # Cancel is stop-and-discard: nothing written to disk for the in-flight
             # run (RunCancelled fires before finalize_stage). Do NOT set error.
@@ -422,6 +535,209 @@ class JobRunner:
                 # state sees the terminal value.
                 for q in record._subscribers:
                     q.put(_DONE)
+
+    # -- incremental gate driver -------------------------------------------
+
+    # Paper candidates that are *gated* (need a curator decision before the
+    # expensive LLM pass). FILL_GAPS / SKIP / PROTECTED are existing-paper
+    # maintenance and flow through automatically — they are NOT gated.
+    _GATED_BUCKETS = (ProcessingBucket.NEW, ProcessingBucket.REPROCESS)
+
+    def _run_incremental_with_gate(
+        self,
+        record: RunRecord,
+        out: Path,
+        *,
+        skip_papers: bool,
+        skip_github: bool,
+    ) -> orchestrator.FinalizeResult | None:
+        """Drive discover -> enrich -> route, PAUSE at the gate, then process.
+
+        Returns the ``FinalizeResult`` on success, or ``None`` if the run was
+        cancelled at the gate (in which case nothing is finalized / written).
+
+        Steps:
+          1. Run the three cheap stages individually.
+          2. Partition ``route_result.paper_decisions`` into gated *candidates*
+             (NEW/REPROCESS) and *auto-flow* decisions (FILL_GAPS/SKIP/PROTECTED).
+          3. Build serializable candidate lists, stash them + the live
+             RouteResult on the record, emit ``awaiting_review``, flip state, and
+             BLOCK on ``gate_event`` (lock released while blocked).
+          4. On unblock: if cancelled → return None. Otherwise read the stashed
+             selection, rebuild ``paper_decisions`` (process / discard / drop),
+             then run process + finalize.
+        """
+        fresh = False  # incremental mode always merges against existing state
+
+        d = orchestrator.discover_stage(
+            out, skip_papers=skip_papers, skip_github=skip_github, fresh=fresh
+        )
+        e = orchestrator.enrich_stage(
+            out, d, skip_papers=skip_papers, skip_github=skip_github, fresh=fresh
+        )
+        route_result = orchestrator.route_stage(
+            out, e, skip_papers=skip_papers, skip_github=skip_github, fresh=fresh
+        )
+
+        # Partition paper decisions into gated candidates vs auto-flow.
+        candidates = [
+            dec for dec in route_result.paper_decisions
+            if dec.bucket in self._GATED_BUCKETS
+        ]
+        auto_flow = [
+            dec for dec in route_result.paper_decisions
+            if dec.bucket not in self._GATED_BUCKETS
+        ]
+
+        paper_candidates = [self._paper_candidate_dict(dec) for dec in candidates]
+        # New repos are surfaced as light candidates for visibility only — repos
+        # all auto-flow (cheap, no LLM) and are not actually gated.
+        repo_candidates = [
+            self._repo_candidate_dict(dec)
+            for dec in route_result.repo_decisions
+            if dec.bucket == ProcessingBucket.NEW
+        ]
+
+        # Publish gate state + candidates, then block the worker.
+        with self._lock:
+            record.route_result = route_result
+            record.paper_candidates = paper_candidates
+            record.repo_candidates = repo_candidates
+            record.state = "awaiting_review"
+        events.emit(
+            "awaiting_review",
+            paper_candidates=paper_candidates,
+            repo_candidates=repo_candidates,
+        )
+
+        # BLOCK (not under the lock) until submit_gate or cancel sets the event.
+        record.gate_event.wait()
+
+        # Woke up. If cancelled, abandon WITHOUT finalizing (no on-disk write).
+        if record.cancel_event.is_set():
+            return None
+
+        with self._lock:
+            selection = record.gate_selection or {
+                "process_ids": [],
+                "discard_ids": [],
+                "edits": {},
+            }
+        process_ids = set(selection.get("process_ids", []))
+        discard_ids = set(selection.get("discard_ids", []))
+        edits = selection.get("edits", {})
+
+        # Rebuild the kept candidate decisions from the curator selection.
+        kept_candidates = self._apply_gate_selection(
+            candidates, process_ids=process_ids, discard_ids=discard_ids, edits=edits
+        )
+
+        # Auto-flow decisions are always kept; gated candidates only if selected.
+        route_result.paper_decisions = auto_flow + kept_candidates
+
+        completed = orchestrator.process_stage(
+            out,
+            route_result,
+            skip_papers=skip_papers,
+            skip_github=skip_github,
+            cancel_check=record.cancel_event.is_set,
+        )
+        return orchestrator.finalize_stage(
+            out,
+            route_result,
+            d.run_stats,
+            skip_papers=skip_papers,
+            skip_github=skip_github,
+            fresh=fresh,
+            completed=completed,
+        )
+
+    @staticmethod
+    def _paper_candidate_dict(dec) -> dict:
+        """Serializable display record for a single gated paper candidate."""
+        paper = dec.paper
+        abstract = paper.abstract or ""
+        return {
+            "id": paper.merge_key(),
+            "title": paper.title,
+            "authors": paper.authors,
+            "venue": paper.venue,
+            "year": paper.year,
+            "abstract": abstract[:300],
+            "processing_bucket": dec.bucket.value,
+            "source": paper.source.value,
+        }
+
+    @staticmethod
+    def _repo_candidate_dict(dec) -> dict:
+        """Serializable display record for a single new repo (visibility only)."""
+        repo = dec.repo
+        return {
+            "id": repo.merge_key(),
+            "owner": repo.owner,
+            "repo": repo.repo,
+            "stars": repo.stars,
+            "repo_type": repo.repo_type,
+        }
+
+    def _apply_gate_selection(
+        self,
+        candidates: list,
+        *,
+        process_ids: set[str],
+        discard_ids: set[str],
+        edits: dict[str, dict],
+    ) -> list:
+        """Turn gated candidate decisions into the kept decisions list.
+
+        For each candidate (keyed by ``decision.paper.merge_key()``):
+          * id in ``discard_ids`` → mark the paper DISCARDED (manual_override,
+            MANUAL_DISCARD reason) and zero out ``processing_needed`` so
+            ``process_stage`` won't LLM it, but KEEP it so finalize merges it as
+            discarded.
+          * id in ``process_ids`` → apply any ``edits[id]`` (pre-processing
+            fixes; NO manual_override) and keep it for processing.
+          * id in NEITHER → DROP it (not processed, not merged — it reappears on
+            the next discovery).
+
+        ``discard_ids`` wins if an id appears in both sets.
+        """
+        kept: list = []
+        for dec in candidates:
+            cid = dec.paper.merge_key()
+            if cid in discard_ids:
+                dec.paper.bucket = Bucket.DISCARDED
+                dec.paper.reason = PaperReason.MANUAL_DISCARD
+                dec.paper.manual_override = True
+                dec.processing_needed = {
+                    k: False for k in dec.processing_needed
+                }
+                kept.append(dec)
+            elif cid in process_ids:
+                self._apply_edits(dec.paper, edits.get(cid, {}))
+                kept.append(dec)
+            # else: dropped — neither processed nor merged.
+        return kept
+
+    @staticmethod
+    def _apply_edits(paper, field_edits: dict) -> None:
+        """Apply gate edits to ``paper`` via the editable-field schema.
+
+        Gate edits are pre-processing fixes — they do NOT set ``manual_override``
+        (unlike a curator ``edit`` command). Unknown / non-editable fields are
+        ignored. A parse error on one field does not abort the others.
+        """
+        for name, raw in (field_edits or {}).items():
+            field_def = edit_schema.get_field(name)
+            if field_def is None:
+                logger.warning("gate edit: ignoring non-editable field %r", name)
+                continue
+            try:
+                value = field_def.parse(raw if isinstance(raw, str) else str(raw))
+            except (ValueError, TypeError) as exc:
+                logger.warning("gate edit: failed to parse %r=%r (%s)", name, raw, exc)
+                continue
+            setattr(paper, field_def.name, value)
 
     @staticmethod
     def _extract_counts(result: orchestrator.FinalizeResult) -> dict:

@@ -9,6 +9,13 @@ All tests use the deterministic fake harness (``install_pipeline_fakes``) so the
 never touch the network or an LLM. The "active" test parks the worker thread
 *inside* the pipeline by installing a ``generate_summary`` fake that blocks on a
 ``threading.Event`` the test controls, then releases it.
+
+These tests exercise the JobRunner's *worker lifecycle* (start, cancel, subscribe,
+persist, active, conflict) — NOT the human-in-the-loop gate. They drive
+``mode="fresh"``, the ungated end-to-end path, which runs the same
+discover→enrich→route→process→finalize chain (and the same ``generate_summary``
+call site in ``process_papers``) without pausing for curator review. The gate
+(``mode="incremental"``) is covered separately in ``tests/test_jobs_gate.py``.
 """
 from __future__ import annotations
 
@@ -42,7 +49,7 @@ def test_run_completes_and_persists(monkeypatch, fixture_state):
     out = fixture_state
 
     runner = JobRunner()
-    run_id = runner.start(out, mode="incremental")
+    run_id = runner.start(out, mode="fresh")
 
     assert _wait_until(lambda: runner.status().state == "done"), (
         f"run did not finish; state={runner.status().state}"
@@ -52,7 +59,7 @@ def test_run_completes_and_persists(monkeypatch, fixture_state):
     assert isinstance(rec, RunRecord)
     assert rec.run_id == run_id
     assert rec.state == "done"
-    assert rec.mode == "incremental"
+    assert rec.mode == "fresh"
     assert rec.error is None
     assert rec.finished_at is not None
 
@@ -101,7 +108,7 @@ def test_second_start_while_active_raises(monkeypatch, fixture_state):
     monkeypatch.setattr(process_mod, "generate_summary", _blocking_summary)
 
     runner = JobRunner()
-    run_id = runner.start(out, mode="incremental")
+    run_id = runner.start(out, mode="fresh")
 
     # Wait until the worker is parked inside the pipeline.
     assert entered.wait(timeout=2.0), "worker never reached the blocking summary"
@@ -109,7 +116,7 @@ def test_second_start_while_active_raises(monkeypatch, fixture_state):
 
     # A second start() while one is active must raise.
     with pytest.raises(RunActiveError):
-        runner.start(out, mode="incremental")
+        runner.start(out, mode="fresh")
 
     # Release the block and let the first run finish.
     release.set()
@@ -139,7 +146,7 @@ def test_run_error_is_captured(monkeypatch, fixture_state):
     monkeypatch.setattr(orchestrator, "discover_s2_citations", _exploding_s2)
 
     runner = JobRunner()
-    run_id = runner.start(out, mode="incremental")
+    run_id = runner.start(out, mode="fresh")
 
     assert _wait_until(lambda: runner.status().state == "error"), (
         f"run did not reach error state; state={runner.status().state}"
@@ -196,7 +203,7 @@ def test_cancel_stops_run(monkeypatch, fixture_state):
     monkeypatch.setattr(process_mod, "generate_summary", _blocking_summary)
 
     runner = JobRunner()
-    runner.start(out, mode="incremental")
+    runner.start(out, mode="fresh")
 
     # Wait until the worker is parked inside processing of item 0.
     assert entered.wait(timeout=2.0), "worker never entered the blocking summary"
@@ -250,7 +257,7 @@ def test_cancel_noop_when_not_running(monkeypatch, fixture_state):
     runner.cancel()  # no-op, nothing active
 
     # Start and let a run finish normally.
-    run_id = runner.start(out, mode="incremental")
+    run_id = runner.start(out, mode="fresh")
     assert _wait_until(lambda: runner.status().state == "done"), (
         f"run did not finish; state={runner.status().state}"
     )
@@ -274,7 +281,7 @@ def test_subscribe_replays_completed_run(monkeypatch, fixture_state):
     out = fixture_state
 
     runner = JobRunner()
-    run_id = runner.start(out, mode="incremental")
+    run_id = runner.start(out, mode="fresh")
 
     assert _wait_until(lambda: runner.status().state == "done"), (
         f"run did not finish; state={runner.status().state}"
@@ -337,7 +344,7 @@ def test_subscribe_live_then_terminates(monkeypatch, fixture_state):
     monkeypatch.setattr(process_mod, "generate_summary", _blocking_summary)
 
     runner = JobRunner()
-    run_id = runner.start(out, mode="incremental")
+    run_id = runner.start(out, mode="fresh")
 
     # Worker parked inside the pipeline (early stages already emitted events).
     assert entered.wait(timeout=2.0), "worker never reached the blocking summary"

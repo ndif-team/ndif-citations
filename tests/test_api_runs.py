@@ -57,7 +57,7 @@ def _make_client(monkeypatch, fixture_state, runner: JobRunner | None = None):
 def test_start_run_and_poll_status(monkeypatch, fixture_state):
     client, runner = _make_client(monkeypatch, fixture_state)
 
-    resp = client.post("/api/runs", json={"mode": "incremental", "skip_github": True})
+    resp = client.post("/api/runs", json={"mode": "fresh", "skip_github": True})
     assert resp.status_code == 200, resp.text
     data = resp.json()
     assert "run_id" in data
@@ -104,7 +104,7 @@ def test_start_run_conflict_409(monkeypatch, fixture_state):
     client = TestClient(app, raise_server_exceptions=True)
 
     # First POST — should succeed.
-    resp1 = client.post("/api/runs", json={"mode": "incremental"})
+    resp1 = client.post("/api/runs", json={"mode": "fresh"})
     assert resp1.status_code == 200, resp1.text
     run_id = resp1.json()["run_id"]
 
@@ -113,7 +113,7 @@ def test_start_run_conflict_409(monkeypatch, fixture_state):
     assert runner.active
 
     # Second POST while first is active — must return 409.
-    resp2 = client.post("/api/runs", json={"mode": "incremental"})
+    resp2 = client.post("/api/runs", json={"mode": "fresh"})
     assert resp2.status_code == 409, resp2.text
 
     # Release the block and let the first run finish.
@@ -189,7 +189,7 @@ def test_get_finished_run_by_id_after_new_run(monkeypatch, fixture_state):
     app_a.dependency_overrides[deps.get_runner] = lambda: runner_a
     client_a = TestClient(app_a, raise_server_exceptions=True)
 
-    resp_a = client_a.post("/api/runs", json={"mode": "incremental"})
+    resp_a = client_a.post("/api/runs", json={"mode": "fresh"})
     assert resp_a.status_code == 200, resp_a.text
     run_id_a = resp_a.json()["run_id"]
 
@@ -215,7 +215,7 @@ def test_get_finished_run_by_id_after_new_run(monkeypatch, fixture_state):
     app_b.dependency_overrides[deps.get_runner] = lambda: runner_b
     client_b = TestClient(app_b, raise_server_exceptions=True)
 
-    resp_b = client_b.post("/api/runs", json={"mode": "incremental"})
+    resp_b = client_b.post("/api/runs", json={"mode": "fresh"})
     assert resp_b.status_code == 200, resp_b.text
     run_id_b = resp_b.json()["run_id"]
 
@@ -283,7 +283,7 @@ def _parse_sse_lines(lines) -> tuple[list[dict], bool]:
 def test_sse_replays_completed_run(monkeypatch, fixture_state):
     client, runner = _make_client(monkeypatch, fixture_state)
 
-    resp = client.post("/api/runs", json={"mode": "incremental"})
+    resp = client.post("/api/runs", json={"mode": "fresh"})
     assert resp.status_code == 200, resp.text
     run_id = resp.json()["run_id"]
 
@@ -360,7 +360,7 @@ def test_sse_live_during_run(monkeypatch, fixture_state):
     app.dependency_overrides[deps.get_runner] = lambda: runner
     client = TestClient(app, raise_server_exceptions=True)
 
-    resp = client.post("/api/runs", json={"mode": "incremental"})
+    resp = client.post("/api/runs", json={"mode": "fresh"})
     assert resp.status_code == 200, resp.text
     run_id = resp.json()["run_id"]
 
@@ -452,7 +452,7 @@ def test_cancel_endpoint(monkeypatch, fixture_state):
     app.dependency_overrides[deps.get_runner] = lambda: runner
     client = TestClient(app, raise_server_exceptions=True)
 
-    resp = client.post("/api/runs", json={"mode": "incremental"})
+    resp = client.post("/api/runs", json={"mode": "fresh"})
     assert resp.status_code == 200, resp.text
     run_id = resp.json()["run_id"]
 
