@@ -31,7 +31,9 @@ Threading correctness (critical):
 
 from __future__ import annotations
 
+import logging
 import threading
+import traceback
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -39,6 +41,8 @@ from pathlib import Path
 
 from ndif_citations import events, orchestrator
 from ndif_citations.events import ProgressEvent
+
+logger = logging.getLogger(__name__)
 
 
 class RunActiveError(Exception):
@@ -83,6 +87,7 @@ class RunRecord:
     started_at: str  # ISO-8601
     finished_at: str | None = None
     error: str | None = None
+    traceback: str | None = None
     counts: dict = field(default_factory=dict)
     events: list[ProgressEvent] = field(default_factory=list)
 
@@ -97,6 +102,7 @@ class RunRecord:
             "started_at": self.started_at,
             "finished_at": self.finished_at,
             "error": self.error,
+            "traceback": self.traceback,
             "counts": self.counts,
             "events": [ev.to_dict() for ev in self.events],
         }
@@ -129,12 +135,21 @@ class JobRunner:
         the install of the new record happen under the lock so two concurrent
         ``start()`` calls cannot both win.
         """
-        # Warm heavy lazy imports on the CALLER's (typically main) thread before
-        # spawning the worker. The pipeline lazily ``import openpyxl`` inside
-        # ``output._write_xlsx``; doing that *first-ever* import on the worker
-        # thread while another thread is in a busy poll loop stalls on CPython's
-        # per-module import lock (openpyxl pulls in many submodules). Importing it
-        # here makes the worker's import a cheap ``sys.modules`` cache hit.
+        # Pre-import openpyxl on the caller's thread to avoid a first-ever lazy
+        # import on the worker thread racing against test infrastructure.
+        #
+        # NOTE — this is a **test-stability aid**, not a production guarantee:
+        #   • In the real FastAPI server the main thread is blocked in asyncio's
+        #     event loop (select()), so it does not busy-poll and the GIL-release
+        #     argument holds — this warm-up is unnecessary there.
+        #   • It only covers openpyxl; heavier lazy imports (surya, openai, etc.)
+        #     are not pre-warmed and the same reasoning applies to them.
+        #   • Empirically, removing it caused test_run_completes_and_persists to
+        #     exceed its 2 s timeout when openpyxl had not yet been imported into
+        #     sys.modules (cold-start pytest run), even though _wait_until already
+        #     uses time.sleep(0.01).  The worker's first-ever openpyxl import takes
+        #     ~1 s on this host, pushing total run time past the test deadline.
+        #     Restore it here as a best-effort timing guard for the test suite only.
         self._warm_imports()
 
         with self._lock:
@@ -209,11 +224,12 @@ class JobRunner:
 
     @staticmethod
     def _warm_imports() -> None:
-        """Pre-import heavy modules the pipeline imports lazily on the worker.
+        """Pre-import openpyxl to improve test-suite timing stability.
 
-        See ``start`` for the import-lock rationale. Best-effort: a missing
-        optional dependency must not block starting a run (the pipeline will
-        surface the real error on the worker thread and record it).
+        This is a **test-stability aid only** — not a production guarantee.
+        See the comment in ``start()`` for full context.  Best-effort: a
+        missing optional dependency must not block starting a run (the
+        pipeline will surface the real error on the worker thread).
         """
         try:
             import openpyxl  # noqa: F401  (warm the import cache)
@@ -259,8 +275,11 @@ class JobRunner:
                 record.counts = counts
         except Exception as e:  # noqa: BLE001 — record any failure on the record
             terminal_state = "error"
+            tb = traceback.format_exc()
+            logger.exception("run %s failed", record.run_id)
             with self._lock:
                 record.error = repr(e)
+                record.traceback = tb
         finally:
             events.clear_sink()
             with self._lock:
