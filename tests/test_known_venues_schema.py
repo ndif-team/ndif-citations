@@ -102,3 +102,18 @@ class TestEndToEndRecognition:
 
     def test_rejects_unknown_venue(self):
         assert not has_known_venue_token("Some Random Venue 2025")
+
+
+def test_reload_venues_picks_up_new_entry(tmp_path, monkeypatch):
+    import json, copy
+    from ndif_citations import config
+    saved = copy.deepcopy(config.KNOWN_VENUES)
+    try:
+        f = tmp_path / "known_venues.json"
+        f.write_text(json.dumps({"venues": {"ZZZConf": {"type": "conference", "aliases": ["Zeta Z Conf"]}}}))
+        monkeypatch.setattr(config, "_VENUES_FILE", f, raising=False)
+        config.reload_venues()
+        assert "ZZZConf" in config.KNOWN_VENUES["conferences"]
+        assert config.KNOWN_VENUES["acronym_map"].get("Zeta Z Conf") == "ZZZConf"
+    finally:
+        config.KNOWN_VENUES = saved   # restore so other tests see the real venues

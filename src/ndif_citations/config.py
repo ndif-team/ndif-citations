@@ -170,7 +170,14 @@ DEFAULT_OUTPUT_DIR = _PROJECT_ROOT / "output"
 # ---------------------------------------------------------------------------
 _VENUES_FILE = _PROJECT_ROOT / "data" / "known_venues.json"
 KNOWN_VENUES: dict = {}
-if _VENUES_FILE.exists():
+
+
+def reload_venues() -> None:
+    """Rebuild KNOWN_VENUES from _VENUES_FILE (data/known_venues.json)."""
+    global KNOWN_VENUES
+    if not _VENUES_FILE.exists():
+        KNOWN_VENUES = {}
+        return
     with open(_VENUES_FILE) as f:
         _raw = json.load(f)
     # New unified schema: {"venues": {canonical: {type, aliases?, parent?}}}.
@@ -199,6 +206,9 @@ if _VENUES_FILE.exists():
     else:
         # Legacy flat-list schema (pre-migration). Kept for safety.
         KNOWN_VENUES = _raw
+
+
+reload_venues()
 
 
 def get_output_dir(custom: str | None = None) -> Path:
