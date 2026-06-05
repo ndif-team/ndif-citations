@@ -10,6 +10,7 @@ singleton in deps.py.
 """
 from __future__ import annotations
 
+import json
 import threading
 import time
 
@@ -239,3 +240,253 @@ def test_get_finished_run_by_id_after_new_run(monkeypatch, fixture_state):
     )
     # Ensure run_id_b is accessible too.
     assert client_b.get(f"/api/runs/{run_id_b}").json()["state"] == "done"
+
+
+# ---------------------------------------------------------------------------
+# SSE live events + cancel (Task 2.5)
+# ---------------------------------------------------------------------------
+
+
+def _parse_sse_lines(lines) -> tuple[list[dict], bool]:
+    """Parse SSE ``data:`` / ``event:`` lines.
+
+    Returns (data_payloads, saw_end). ``data: {}`` that follows an ``event: end``
+    line is treated as the end marker, not a real event payload.
+    """
+    payloads: list[dict] = []
+    saw_end = False
+    pending_event: str | None = None
+    for raw in lines:
+        line = raw.decode() if isinstance(raw, (bytes, bytearray)) else raw
+        if line.startswith("event:"):
+            pending_event = line[len("event:"):].strip()
+            if pending_event == "end":
+                saw_end = True
+            continue
+        if line.startswith("data:"):
+            body = line[len("data:"):].strip()
+            if pending_event == "end":
+                pending_event = None
+                continue
+            try:
+                payloads.append(json.loads(body))
+            except ValueError:
+                pass
+            pending_event = None
+    return payloads, saw_end
+
+
+# ---------------------------------------------------------------------------
+# 7. SSE replay of a completed run: events + end marker, stream closes.
+# ---------------------------------------------------------------------------
+
+def test_sse_replays_completed_run(monkeypatch, fixture_state):
+    client, runner = _make_client(monkeypatch, fixture_state)
+
+    resp = client.post("/api/runs", json={"mode": "incremental"})
+    assert resp.status_code == 200, resp.text
+    run_id = resp.json()["run_id"]
+
+    assert _wait_until(lambda: runner.status().state == "done"), (
+        f"run did not finish; state={runner.status().state}"
+    )
+
+    # Collect the stream on a helper thread guarded by a join timeout so a hang
+    # can't wedge CI.
+    result: dict = {}
+
+    def _collect():
+        with client.stream("GET", f"/api/runs/{run_id}/events") as r:
+            assert r.status_code == 200
+            assert r.headers["content-type"].startswith("text/event-stream")
+            payloads, saw_end = _parse_sse_lines(r.iter_lines())
+            result["payloads"] = payloads
+            result["saw_end"] = saw_end
+
+    t = threading.Thread(target=_collect, daemon=True)
+    t.start()
+    t.join(timeout=5.0)
+    assert not t.is_alive(), "SSE replay stream did not close (hung)"
+
+    assert result.get("saw_end") is True, "missing SSE end marker"
+    payloads = result.get("payloads", [])
+    assert len(payloads) >= 1, "expected at least one event in the replay"
+    assert any(p.get("type") == "stage_start" for p in payloads), (
+        f"expected a stage_start event; got {[p.get('type') for p in payloads]}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 8. SSE opened against a still-running run: exercises the live subscribe()
+#    path (not file replay), delivers events + end marker, and closes.
+#
+# NOTE on true live interleaving over TestClient
+# ----------------------------------------------
+# Starlette's TestClient uses httpx's ASGITransport, which BUFFERS the entire
+# response body before returning it (ASGIResponseStream.__aiter__ yields
+# ``b"".join(self._body)`` — one chunk, after the ASGI app has run to
+# completion). So ``iter_lines`` cannot observe an SSE event *before* the run
+# finishes — every chunk is delivered in one batch at the end. This is a
+# transport limitation, not a bug in subscribe()/the endpoint.
+#
+# True live interleaving (an event delivered while the worker is still blocked)
+# IS verified directly at the JobRunner layer in
+# tests/test_jobs.py::test_subscribe_live_then_terminates, which drives
+# subscribe() without the HTTP transport. Here we instead prove the HTTP layer
+# routes a *running* run through the live subscribe() generator (registering a
+# real subscriber queue, NOT replaying a persisted file — the run file does not
+# exist yet while the run is still running) and that the stream terminates via
+# the sentinel once the run completes.
+# ---------------------------------------------------------------------------
+
+def test_sse_live_during_run(monkeypatch, fixture_state):
+    import ndif_citations.process as process_mod
+
+    install_pipeline_fakes(monkeypatch, orchestrator)
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    def _blocking_summary(paper):
+        entered.set()
+        release.wait(timeout=5.0)
+        return f"Fake summary for: {paper.title}"
+
+    monkeypatch.setattr(process_mod, "generate_summary", _blocking_summary)
+
+    runner = JobRunner()
+    app = create_app()
+    app.dependency_overrides[deps.get_output_dir] = lambda: fixture_state
+    app.dependency_overrides[deps.get_runner] = lambda: runner
+    client = TestClient(app, raise_server_exceptions=True)
+
+    resp = client.post("/api/runs", json={"mode": "incremental"})
+    assert resp.status_code == 200, resp.text
+    run_id = resp.json()["run_id"]
+
+    # Worker parked mid-pipeline (discover/enrich/route already emitted events).
+    assert entered.wait(timeout=2.0), "worker never reached the blocking summary"
+    assert runner.active
+
+    # The run file must NOT exist yet (run still in flight) — proving the stream
+    # below resolves through the live subscribe() path (which registers a real
+    # subscriber queue), not the persisted-file replay branch.
+    assert not (fixture_state / "runs" / f"{run_id}.json").exists()
+
+    # Prove the live queue branch is actually taken: open a direct subscribe()
+    # against the still-running run and confirm a queue is registered. (The HTTP
+    # stream uses the same code path; TestClient buffers the HTTP response so we
+    # can't observe its queue registration timing, hence this direct probe.)
+    probe = runner.subscribe(run_id)
+    first = next(probe)  # forces the snapshot+register critical section to run
+    assert first.type == "stage_start"
+    assert len(runner.status(run_id)._subscribers) == 1, (
+        "subscribe() did not register a live queue for a running run"
+    )
+
+    result: dict = {}
+
+    def _collect():
+        with client.stream("GET", f"/api/runs/{run_id}/events") as r:
+            assert r.status_code == 200
+            assert r.headers["content-type"].startswith("text/event-stream")
+            payloads, saw_end = _parse_sse_lines(r.iter_lines())
+            result["payloads"] = payloads
+            result["saw_end"] = saw_end
+
+    t = threading.Thread(target=_collect, daemon=True)
+    t.start()
+
+    # Fully drain the probe subscriber on its own thread so it consumes the
+    # sentinel and unregisters its queue (no leak, never blocks _append).
+    drained: list = []
+    drain = threading.Thread(target=lambda: drained.extend(probe), daemon=True)
+    drain.start()
+
+    # Release the worker so the run finishes; the sentinel ends every stream.
+    release.set()
+
+    t.join(timeout=5.0)
+    drain.join(timeout=5.0)
+    assert not t.is_alive(), "SSE live stream did not close after run finished"
+    assert not drain.is_alive(), "probe subscribe() did not terminate"
+
+    assert _wait_until(lambda: runner.status().state == "done")
+    assert result.get("saw_end") is True, "missing SSE end marker"
+    payloads = result.get("payloads", [])
+    assert any(p.get("type") == "stage_start" for p in payloads), (
+        f"expected stage_start in stream; got {[p.get('type') for p in payloads]}"
+    )
+    # The probe subscriber queue is unregistered after the stream completes.
+    assert _wait_until(
+        lambda: len(runner.status(run_id)._subscribers) == 0, timeout=2.0
+    ), "subscriber queue leaked after stream completed"
+
+
+# ---------------------------------------------------------------------------
+# 9. Cancel endpoint: 200 {"status":"cancelling"}, run reaches "cancelled".
+# ---------------------------------------------------------------------------
+
+def test_cancel_endpoint(monkeypatch, fixture_state):
+    import ndif_citations.process as process_mod
+
+    install_pipeline_fakes(monkeypatch, orchestrator)
+
+    entered = threading.Event()
+    release = threading.Event()
+    call_count = [0]
+
+    def _blocking_summary(paper):
+        idx = call_count[0]
+        call_count[0] += 1
+        if idx == 0:
+            entered.set()
+            release.wait(timeout=5.0)
+        return f"Fake summary for: {paper.title}"
+
+    monkeypatch.setattr(process_mod, "generate_summary", _blocking_summary)
+
+    runner = JobRunner()
+    app = create_app()
+    app.dependency_overrides[deps.get_output_dir] = lambda: fixture_state
+    app.dependency_overrides[deps.get_runner] = lambda: runner
+    client = TestClient(app, raise_server_exceptions=True)
+
+    resp = client.post("/api/runs", json={"mode": "incremental"})
+    assert resp.status_code == 200, resp.text
+    run_id = resp.json()["run_id"]
+
+    assert entered.wait(timeout=2.0), "worker never entered blocking summary"
+    assert runner.active
+
+    cancel_resp = client.post(f"/api/runs/{run_id}/cancel")
+    assert cancel_resp.status_code == 200, cancel_resp.text
+    assert cancel_resp.json() == {"status": "cancelling"}
+
+    # Release item 0; the loop hits cancel_check at the top of item 1.
+    release.set()
+
+    assert _wait_until(
+        lambda: client.get(f"/api/runs/{run_id}").json().get("state") == "cancelled",
+        timeout=4.0,
+    ), f"run did not reach cancelled; last={client.get(f'/api/runs/{run_id}').json().get('state')!r}"
+
+
+# ---------------------------------------------------------------------------
+# 10. Cancel of an unknown run id → 404.
+# ---------------------------------------------------------------------------
+
+def test_cancel_unknown_run_404(monkeypatch, fixture_state):
+    client, _ = _make_client(monkeypatch, fixture_state)
+    resp = client.post("/api/runs/does-not-exist/cancel")
+    assert resp.status_code == 404, resp.text
+
+
+# ---------------------------------------------------------------------------
+# 11. SSE events for an unknown run id → 404.
+# ---------------------------------------------------------------------------
+
+def test_sse_unknown_run_404(monkeypatch, fixture_state):
+    client, _ = _make_client(monkeypatch, fixture_state)
+    resp = client.get("/api/runs/does-not-exist/events")
+    assert resp.status_code == 404, resp.text

@@ -19,9 +19,22 @@ Scope (Task 2.2):
       state "cancelled" — nothing is written to disk for the in-flight run.
     * Cancel is stop-and-discard: no partial-merge finalization (deferred to Phase 3).
 
+Scope (Task 2.5):
+    * Live SSE fan-out via ``JobRunner.subscribe(run_id)``. Each ``RunRecord`` now
+      carries a list of subscriber ``queue.Queue`` objects in addition to the
+      ``events`` buffer. The event callback appends to the buffer *and* pushes onto
+      every subscriber queue (under the lock). On run end a module-level ``_DONE``
+      sentinel is pushed onto each queue so live streams know to stop.
+    * ``subscribe`` snapshots the buffer and registers a fresh queue in one
+      critical section (so no event is lost or duplicated between snapshot and
+      queue), then yields the snapshot followed by live events until the sentinel.
+      For a terminal run it replays the buffer only (no queue wait). The queue is
+      always unregistered in a ``finally`` so a disconnected client can't leak or
+      block ``_append``.
+
 Out of scope (later tasks):
-    * Live SSE streaming / subscriber queue (Task 2.5) and the FastAPI layer
-      (Tasks 2.3-2.5). The event buffer here is a plain list.
+    * The FastAPI streaming layer wires ``subscribe`` to ``StreamingResponse``
+      (Task 2.5, server/routers/runs.py).
 
 Threading correctness (critical):
     * ``events.set_sink`` uses ``threading.local`` storage, so it MUST be called
@@ -37,9 +50,11 @@ Threading correctness (critical):
 from __future__ import annotations
 
 import logging
+import queue
 import threading
 import traceback
 import uuid
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -48,6 +63,10 @@ from ndif_citations import events, orchestrator
 from ndif_citations.events import ProgressEvent, RunCancelled
 
 logger = logging.getLogger(__name__)
+
+# Sentinel pushed onto every subscriber queue when a run ends, so a live SSE
+# stream blocked on ``queue.Queue.get()`` knows to stop without polling state.
+_DONE = object()
 
 
 class RunActiveError(Exception):
@@ -85,6 +104,10 @@ class RunRecord:
 
     ``cancel_event`` is a ``threading.Event`` that the caller can set to request
     cancellation. It is NOT serialized to JSON (it's a threading primitive).
+
+    ``_subscribers`` is the live SSE fan-out: a list of ``queue.Queue`` objects,
+    one per active ``subscribe`` stream. The event callback pushes each new event
+    onto every queue. Like ``cancel_event`` it is NOT serialized to JSON.
     """
 
     run_id: str
@@ -99,12 +122,14 @@ class RunRecord:
     counts: dict = field(default_factory=dict)
     events: list[ProgressEvent] = field(default_factory=list)
     cancel_event: threading.Event = field(default_factory=threading.Event)
+    _subscribers: list[queue.Queue] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         """Serialize for persistence; events go through ``ProgressEvent.to_dict``.
 
-        ``cancel_event`` is intentionally excluded — it's a threading primitive
-        and must not appear in the persisted JSON.
+        ``cancel_event`` and ``_subscribers`` are intentionally excluded — they
+        are threading primitives / live state and must not appear in the
+        persisted JSON.
         """
         return {
             "run_id": self.run_id,
@@ -231,6 +256,59 @@ class JobRunner:
         if current.state == "running":
             current.cancel_event.set()
 
+    def subscribe(self, run_id: str) -> Iterator[ProgressEvent]:
+        """Yield this run's events: the buffered prefix, then live events.
+
+        Used by the SSE endpoint. Behaviour:
+
+          * Unknown ``run_id`` → ``KeyError`` (the HTTP layer maps this to 404 or
+            a persisted-file replay).
+          * In a single critical section (under ``self._lock``) we look up the
+            record, snapshot ``list(record.events)``, and — only if the run is
+            still ``"running"`` — register a fresh queue in ``record._subscribers``.
+            Taking the snapshot and registering atomically guarantees no event is
+            lost or duplicated: any event appended *before* registration is in the
+            snapshot; any appended *after* goes onto the queue (because ``_append``
+            takes the same lock).
+          * The generator first yields every snapshot event. If the run was
+            already terminal at subscribe time, it stops there (buffer replay only;
+            no queue is registered, so there is nothing to wait on).
+          * Otherwise it loops on ``q.get()`` (NOT under the lock — never block
+            while holding it), stopping on the ``_DONE`` sentinel and yielding any
+            real event.
+          * A ``finally`` unregisters the queue so a disconnected client neither
+            leaks a queue nor blocks ``_append`` forever.
+        """
+        with self._lock:
+            current = self._current
+            if current is None or current.run_id != run_id:
+                raise KeyError(run_id)
+            record = current
+            snapshot = list(record.events)
+            is_running = record.state == "running"
+            q: queue.Queue | None = None
+            if is_running:
+                q = queue.Queue()
+                record._subscribers.append(q)
+
+        try:
+            yield from snapshot
+            if q is None:
+                # Run was already terminal — buffer replay only, no live wait.
+                return
+            while True:
+                item = q.get()
+                if item is _DONE:
+                    break
+                yield item
+        finally:
+            if q is not None:
+                with self._lock:
+                    try:
+                        record._subscribers.remove(q)
+                    except ValueError:
+                        pass
+
     def history(self, out: Path) -> list[dict]:
         """Read every persisted run record from ``out/runs/*.json``.
 
@@ -290,8 +368,14 @@ class JobRunner:
         """
 
         def _append(ev: ProgressEvent) -> None:
+            # Under the lock: append to the persistent buffer AND fan out to every
+            # live subscriber queue. Holding the lock here pairs with subscribe()'s
+            # snapshot+register critical section so an event can't be lost (in
+            # neither the snapshot nor a queue) or duplicated (in both).
             with self._lock:
                 record.events.append(ev)
+                for q in record._subscribers:
+                    q.put(ev)
 
         events.set_sink(_append)
         # Compute the terminal outcome first, but DON'T flip the visible state
@@ -332,6 +416,12 @@ class JobRunner:
             self._persist(record, out, state_override=terminal_state)
             with self._lock:
                 record.state = terminal_state
+                # Wake every live subscriber: push the sentinel so a stream
+                # blocked on q.get() stops. Done under the lock and AFTER the
+                # state flip so a subscriber that drains the queue then re-reads
+                # state sees the terminal value.
+                for q in record._subscribers:
+                    q.put(_DONE)
 
     @staticmethod
     def _extract_counts(result: orchestrator.FinalizeResult) -> dict:

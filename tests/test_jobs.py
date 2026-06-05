@@ -261,3 +261,108 @@ def test_cancel_noop_when_not_running(monkeypatch, fixture_state):
 
     # State must remain "done" (cancel must not change a terminal state).
     assert runner.status().state == "done"
+
+
+# ---------------------------------------------------------------------------
+# 6. subscribe(): replays the buffered events of a completed run and terminates.
+# ---------------------------------------------------------------------------
+
+def test_subscribe_replays_completed_run(monkeypatch, fixture_state):
+    """After a run finishes, subscribe(run_id) yields the buffered events and
+    terminates (no hang) — exercising the terminal/buffer-replay path."""
+    install_pipeline_fakes(monkeypatch, orchestrator)
+    out = fixture_state
+
+    runner = JobRunner()
+    run_id = runner.start(out, mode="incremental")
+
+    assert _wait_until(lambda: runner.status().state == "done"), (
+        f"run did not finish; state={runner.status().state}"
+    )
+
+    # Guard against a hang: drain the generator on a helper thread with a join
+    # timeout. A terminal-run subscribe must NOT block on a queue.
+    collected: list = []
+
+    def _drain():
+        collected.extend(runner.subscribe(run_id))
+
+    t = threading.Thread(target=_drain, daemon=True)
+    t.start()
+    t.join(timeout=2.0)
+    assert not t.is_alive(), "subscribe() hung on a completed run"
+
+    assert collected, "subscribe() yielded no events for a completed run"
+    types = [ev.type for ev in collected]
+    assert "stage_start" in types, f"expected a stage_start event, got {types}"
+
+    # The replay must match the buffer exactly (same objects, same order).
+    assert collected == runner.status().events
+
+
+# ---------------------------------------------------------------------------
+# 7. subscribe(): unknown run id raises KeyError.
+# ---------------------------------------------------------------------------
+
+def test_subscribe_unknown_run_raises(monkeypatch, fixture_state):
+    install_pipeline_fakes(monkeypatch, orchestrator)
+    runner = JobRunner()
+    with pytest.raises(KeyError):
+        # The generator body raises lazily on first iteration.
+        list(runner.subscribe("nope-does-not-exist"))
+
+
+# ---------------------------------------------------------------------------
+# 8. subscribe(): delivers live events while the worker is still running, then
+#    terminates cleanly once the run finishes.
+# ---------------------------------------------------------------------------
+
+def test_subscribe_live_then_terminates(monkeypatch, fixture_state):
+    """A subscriber opened while the run is blocked mid-pipeline receives the
+    early buffered events, then the sentinel-driven loop terminates after the
+    worker is released."""
+    install_pipeline_fakes(monkeypatch, orchestrator)
+    out = fixture_state
+
+    import ndif_citations.process as process_mod
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    def _blocking_summary(paper):
+        entered.set()
+        release.wait(timeout=5.0)
+        return f"Fake summary for: {paper.title}"
+
+    monkeypatch.setattr(process_mod, "generate_summary", _blocking_summary)
+
+    runner = JobRunner()
+    run_id = runner.start(out, mode="incremental")
+
+    # Worker parked inside the pipeline (early stages already emitted events).
+    assert entered.wait(timeout=2.0), "worker never reached the blocking summary"
+    assert runner.active is True
+
+    collected: list = []
+
+    def _drain():
+        collected.extend(runner.subscribe(run_id))
+
+    t = threading.Thread(target=_drain, daemon=True)
+    t.start()
+
+    # While still blocked, the subscriber should have received the buffered
+    # prefix (at least one stage_start from discover/enrich/route).
+    assert _wait_until(
+        lambda: any(ev.type == "stage_start" for ev in collected),
+        timeout=2.0,
+    ), f"no stage_start delivered live; got {[e.type for e in collected]}"
+
+    # Release the worker; the run finishes and the sentinel ends the stream.
+    release.set()
+    t.join(timeout=4.0)
+    assert not t.is_alive(), "subscribe() did not terminate after the run finished"
+
+    assert _wait_until(lambda: runner.status().state == "done")
+    types = [ev.type for ev in collected]
+    assert "stage_start" in types
