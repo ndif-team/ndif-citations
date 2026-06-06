@@ -17,6 +17,8 @@ export interface RunEventState {
   currentItem: CurrentItem | null
   /** Seconds remaining in rate-limit wait, or null */
   rateLimitWait: number | null
+  /** Source of the active rate-limit wait (e.g. "LLM summary", "OpenAlex", "S2"), or null */
+  rateLimitLabel: string | null
   candidates: { papers: PaperCandidate[]; repos: RepoCandidate[] } | null
   /** Derived state, updated as events arrive */
   derivedState: RunState | null
@@ -37,6 +39,7 @@ function initialState(): RunEventState {
     stageStatus: {},
     currentItem: null,
     rateLimitWait: null,
+    rateLimitLabel: null,
     candidates: null,
     derivedState: null,
     error: null,
@@ -53,6 +56,7 @@ function reducer(state: RunEventState, action: Action): RunEventState {
       const stageStatus = { ...state.stageStatus }
       let currentItem = state.currentItem
       let rateLimitWait = state.rateLimitWait
+      let rateLimitLabel = state.rateLimitLabel
       let candidates = state.candidates
       let derivedState = state.derivedState
       let error = state.error
@@ -74,8 +78,9 @@ function reducer(state: RunEventState, action: Action): RunEventState {
       }
 
       if (e.type === 'rate_limit_wait') {
-        const d = e.data as { seconds?: number }
+        const d = e.data as { seconds?: number; label?: string }
         rateLimitWait = typeof d.seconds === 'number' ? d.seconds : null
+        rateLimitLabel = typeof d.label === 'string' && d.label ? d.label : null
       }
 
       if (e.type === 'awaiting_review') {
@@ -98,17 +103,19 @@ function reducer(state: RunEventState, action: Action): RunEventState {
       // Clear rate_limit_wait once processing resumes (stage_start for process after a wait)
       if (e.type === 'stage_start' && e.stage === 'process') {
         rateLimitWait = null
+        rateLimitLabel = null
       }
       if (e.type === 'item_start') {
         // Also clear on next item start
         rateLimitWait = null
+        rateLimitLabel = null
       }
 
-      return { ...state, events, latestByStage, stageStatus, currentItem, rateLimitWait, candidates, derivedState, error }
+      return { ...state, events, latestByStage, stageStatus, currentItem, rateLimitWait, rateLimitLabel, candidates, derivedState, error }
     }
     case 'rate_tick': {
       if (state.rateLimitWait === null || state.rateLimitWait <= 0) {
-        return { ...state, rateLimitWait: null }
+        return { ...state, rateLimitWait: null, rateLimitLabel: null }
       }
       return { ...state, rateLimitWait: state.rateLimitWait - 1 }
     }

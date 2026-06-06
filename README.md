@@ -45,6 +45,30 @@ python -m ndif_citations run
 
 All commands accept `--output-dir <path>` and `--verbose` flags.
 
+## Web app
+
+A local single-user web UI wraps the same pipeline — no database, no auth, localhost
+only. The existing JSON output files stay the source of truth.
+
+```bash
+python -m ndif_citations serve          # → http://127.0.0.1:8723 (opens a browser)
+python -m ndif_citations serve --no-open # don't auto-open
+python -m ndif_citations serve --port 9000
+```
+
+The server (FastAPI) hosts a React SPA plus a JSON API at `/api` (`/docs` for Swagger).
+It runs **one pipeline at a time**; mutating endpoints return `409` while a run is active.
+
+| Screen | What it does |
+|--------|--------------|
+| **Dashboard** | Catalog KPIs and category breakdown |
+| **Papers** | Browse / filter the catalog, inline-edit 16 curated fields, promote / demote / discard, batch-reprocess, manage thumbnails. Flags column marks curator-locked (🔒) and missing-metadata (⚠) rows |
+| **Runs** | Trigger a run, watch live progress over SSE (phase stepper, per-source rate-limit cooldowns, event log), cancel, browse history. **Incremental runs pause at a review gate before any LLM spend** so you approve candidates first |
+| **Repos** | Browse / edit / exclude discovered GitHub repos |
+| **Settings** | Edit pipeline knobs and known venues; **publish** the catalog to the `ndif-web-beta` site (dry-run diff first, then apply) |
+
+Everything the UI does maps to a CLI command, so the two workflows are interchangeable.
+
 ### Classification confidence bands
 
 Every classified paper carries a `category_confidence_band` (categorical) alongside the legacy `category_confidence` float:
@@ -326,6 +350,14 @@ Controls repo tagging, linked-paper detection, and shared-paper template cleanup
 ## Development
 
 Run tests: `pytest tests/` (after `pip install -e ".[dev]"`).
+
+The web UI lives in `web/` (Vite + React + Tailwind). Rebuild after frontend edits —
+`serve` ships the prebuilt `web/dist`:
+
+```bash
+cd web && bun install && bun run build   # → web/dist (served by `serve`)
+bun run dev                              # Vite dev server, proxies /api → :8723
+```
 
 ## License
 

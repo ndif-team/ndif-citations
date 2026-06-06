@@ -688,13 +688,15 @@ function isDryRunResponse(r: PublishDryRunResponse | PublishResponse): r is Publ
 
 function DiffSummary({ result }: { result: PublishDryRunResponse }) {
   const { papers, repos, images } = result
+  // diff buckets are arrays of affected records — render their lengths as counts.
+  const len = (a: unknown[] | undefined) => (Array.isArray(a) ? a.length : 0)
   return (
     <div className="rounded-md border bg-muted/30 p-3 text-xs space-y-1.5">
       <p className="font-medium text-foreground">Dry-run diff</p>
       <div className="space-y-0.5 text-muted-foreground">
-        <p>Papers: <span className="text-green-700 dark:text-green-400">+{papers.added} added</span>, <span className="text-amber-700 dark:text-amber-400">~{papers.changed} changed</span>, <span className="text-red-700 dark:text-red-400">-{papers.removed} removed</span></p>
-        <p>Repos: <span className="text-green-700 dark:text-green-400">+{repos.added} added</span>, <span className="text-amber-700 dark:text-amber-400">~{repos.changed} changed</span>, <span className="text-red-700 dark:text-red-400">-{repos.removed} removed</span></p>
-        <p>Images: <span className="text-green-700 dark:text-green-400">{images.new} new</span>, <span className="text-amber-700 dark:text-amber-400">{images.changed} changed</span></p>
+        <p>Papers: <span className="text-green-700 dark:text-green-400">+{len(papers?.added)} added</span>, <span className="text-amber-700 dark:text-amber-400">~{len(papers?.changed)} changed</span>, <span className="text-red-700 dark:text-red-400">-{len(papers?.removed)} removed</span></p>
+        <p>Repos: <span className="text-green-700 dark:text-green-400">+{len(repos?.added)} added</span>, <span className="text-amber-700 dark:text-amber-400">~{len(repos?.changed)} changed</span>, <span className="text-red-700 dark:text-red-400">-{len(repos?.removed)} removed</span></p>
+        <p>Images: <span className="text-green-700 dark:text-green-400">{len(images?.new)} new</span>, <span className="text-amber-700 dark:text-amber-400">{len(images?.changed)} changed</span></p>
       </div>
     </div>
   )

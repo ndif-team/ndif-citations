@@ -98,7 +98,8 @@ function eventToLine(e: ProgressEvent): string {
       }
       case 'rate_limit_wait': {
         const { label, seconds } = d as Record<string, unknown>
-        return `${prefix} LLM cooldown: ${label ?? ''} ${seconds ?? '?'}s`
+        const source = typeof label === 'string' && label ? label : 'Rate limit'
+        return `${prefix} ${source} cooldown: ${seconds ?? '?'}s`
       }
       case 'awaiting_review': {
         const papers = (d as { paper_candidates?: unknown[] }).paper_candidates
@@ -227,8 +228,9 @@ function EventLog({ events }: { events: ProgressEvent[] }) {
   )
 }
 
-/** LLM cooldown badge */
-function CooldownBadge({ seconds }: { seconds: number }) {
+/** Rate-limit cooldown badge — `label` names the throttle source (LLM, OpenAlex, S2, …) */
+function CooldownBadge({ seconds, label }: { seconds: number; label?: string | null }) {
+  const source = label && label.trim() ? label : 'Rate limit'
   return (
     <span
       className={cn(
@@ -240,7 +242,7 @@ function CooldownBadge({ seconds }: { seconds: number }) {
       aria-live="polite"
     >
       <Clock className="h-3.5 w-3.5 flex-none" aria-hidden="true" />
-      LLM cooldown: {seconds}s
+      {source} cooldown: {seconds}s
     </span>
   )
 }
@@ -620,7 +622,7 @@ function LiveRunView({ runId, mode, onDone }: LiveRunViewProps) {
 
       {/* Rate limit cooldown */}
       {typeof eventState.rateLimitWait === 'number' && eventState.rateLimitWait > 0 && (
-        <CooldownBadge seconds={eventState.rateLimitWait} />
+        <CooldownBadge seconds={eventState.rateLimitWait} label={eventState.rateLimitLabel} />
       )}
 
       {/* Phase stepper */}

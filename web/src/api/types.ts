@@ -40,7 +40,8 @@ export interface PaperRow {
   has_image: boolean
   manual_override: boolean
   url: string
-  missing: string[]
+  /** Names of missing/weak metadata fields. Optional — an older backend may omit it. */
+  missing?: string[]
 }
 
 export interface PaperDetail {
@@ -244,16 +245,22 @@ export interface PublishTargetResponse {
   valid: boolean
 }
 
-export interface PublishDiffCounts {
-  added: number
-  changed: number
-  removed: number
+/**
+ * A diff bucket from `publish.diff()` — each field is the LIST of affected
+ * records (paper/repo dicts in the slim site format), not a count. Render
+ * `.length` for counts. Typed loosely since the UI only needs the lengths.
+ */
+export interface PublishDiffBuckets {
+  added: unknown[]
+  changed: unknown[]
+  removed: unknown[]
 }
 
 export interface PublishDryRunResponse {
-  papers: PublishDiffCounts
-  repos: PublishDiffCounts
-  images: { new: number; changed: number }
+  papers: PublishDiffBuckets
+  repos: PublishDiffBuckets
+  /** Image filenames that are new / changed. */
+  images: { new: string[]; changed: string[] }
 }
 
 export interface PublishResponse {

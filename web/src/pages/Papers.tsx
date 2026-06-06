@@ -376,7 +376,9 @@ export function Papers() {
         header: '',
         size: 44,
         cell: ({ row }) => {
-          const { manual_override, missing } = row.original
+          const { manual_override } = row.original
+          // Defensive: an older backend may omit `missing` (FE/BE version skew) — never crash the table.
+          const missing = row.original.missing ?? []
           if (!manual_override && missing.length === 0) return null
           return (
             <TooltipProvider>

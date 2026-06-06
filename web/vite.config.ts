@@ -25,5 +25,19 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    chunkSizeWarningLimit: 700,
+    rollupOptions: {
+      output: {
+        // Split heavy/shared vendor libs out of the entry chunk. recharts (charts-only,
+        // pulled by the lazy Dashboard) and radix stay loadable on demand.
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+          if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-vendor')) return 'charts'
+          if (id.includes('react-router') || id.includes('react-dom') || id.includes('/react/') || id.includes('scheduler')) return 'react-vendor'
+          if (id.includes('@radix-ui')) return 'radix'
+          if (id.includes('@tanstack')) return 'query'
+        },
+      },
+    },
   },
 })
