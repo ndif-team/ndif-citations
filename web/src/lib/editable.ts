@@ -25,6 +25,19 @@ export interface EditableFieldMeta {
   placeholder?: string
 }
 
+/**
+ * Sentinel value used in Select components to represent the "none / unset /
+ * clear" option.  Radix UI's Select forbids `value=""` (empty string is
+ * reserved for its internal clear mechanism), so we use this non-empty
+ * constant instead.  All code that reads from / writes to the edit form must
+ * map between the sentinel and the real cleared representation:
+ *
+ *   UI value   → API payload
+ *   SELECT_NONE → ""   (which the backend parses as None for reason /
+ *                        peer_reviewed)
+ */
+export const SELECT_NONE = '__none__'
+
 const CATEGORY_OPTIONS: SelectOption[] = [
   { value: 'uses_ndif',      label: 'Uses NDIF' },
   { value: 'uses_nnsight',   label: 'Uses NNsight' },
@@ -41,9 +54,12 @@ const BUCKET_OPTIONS: SelectOption[] = [
 /**
  * PaperReason values from ndif_citations.models.PaperReason — must stay in
  * sync with the backend enum.
+ *
+ * The "none" option uses SELECT_NONE instead of "" because Radix UI Select
+ * forbids value="".
  */
 const REASON_OPTIONS: SelectOption[] = [
-  { value: '',                         label: '(none)' },
+  { value: SELECT_NONE,                label: '(none)' },
   { value: 'openalex_source',          label: 'OpenAlex source' },
   { value: 'low_confidence',           label: 'Low confidence' },
   { value: 'medium_confidence',        label: 'Medium confidence' },
@@ -56,9 +72,9 @@ const REASON_OPTIONS: SelectOption[] = [
 ]
 
 const PEER_REVIEWED_OPTIONS: SelectOption[] = [
-  { value: '',    label: '(unset)' },
-  { value: 'yes', label: 'Yes' },
-  { value: 'no',  label: 'No' },
+  { value: SELECT_NONE, label: '(unset)' },
+  { value: 'yes',       label: 'Yes' },
+  { value: 'no',        label: 'No' },
 ]
 
 /** All 16 editable fields, in schema order. */

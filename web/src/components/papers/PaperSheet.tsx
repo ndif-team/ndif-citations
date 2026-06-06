@@ -24,7 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { usePaper, useActiveRun } from '@/api/hooks'
 import { useQueryClient } from '@tanstack/react-query'
 import { bucketBadge, confidenceBadge, categoryBadge, categoryLabel } from '@/lib/tokens'
-import { EDITABLE_FIELDS } from '@/lib/editable'
+import { EDITABLE_FIELDS, SELECT_NONE } from '@/lib/editable'
 import type { EditableFieldMeta } from '@/lib/editable'
 import { editPaper, setPaperBucket, uploadPaperImage, reextractThumbnail } from '@/api/client'
 import type { Bucket, ConfidenceBand, Category, PaperDetail } from '@/api/types'
@@ -91,11 +91,31 @@ function CopyBibtex({ bibtex }: { bibtex: string }) {
 // EditForm: renders 16 editable fields pre-filled from paper data
 // ---------------------------------------------------------------------------
 
+/** Fields whose cleared state is represented by SELECT_NONE in the UI. */
+const SELECT_NONE_FIELDS = new Set(['reason', 'peer_reviewed'])
+
+/**
+ * Read a field value from the paper for use as a Select/Input value.
+ *
+ * For clearable select fields (`reason`, `peer_reviewed`) an absent / null /
+ * empty-string value is mapped to SELECT_NONE because Radix UI forbids
+ * `value=""` on a `<SelectItem>`.
+ */
 function fieldValue(paper: PaperDetail, fieldName: string): string {
   const raw = (paper as unknown as Record<string, unknown>)[fieldName]
-  if (raw === null || raw === undefined) return ''
-  if (typeof raw === 'boolean') return raw ? 'yes' : 'no'
-  return String(raw)
+  let str: string
+  if (raw === null || raw === undefined) {
+    str = ''
+  } else if (typeof raw === 'boolean') {
+    str = raw ? 'yes' : 'no'
+  } else {
+    str = String(raw)
+  }
+  // Map empty string to sentinel for clearable select fields
+  if (SELECT_NONE_FIELDS.has(fieldName) && str === '') {
+    return SELECT_NONE
+  }
+  return str
 }
 
 interface EditFormProps {
@@ -134,7 +154,9 @@ function EditForm({ paper, disabled, onSave, onCancel, saving }: EditFormProps) 
     const changed: Record<string, string> = {}
     for (const f of EDITABLE_FIELDS) {
       if (values[f.name] !== original[f.name]) {
-        changed[f.name] = values[f.name]
+        // Map the sentinel back to "" so the backend receives the clear signal
+        // (_parse_reason("") → None, _parse_bool("") → None)
+        changed[f.name] = values[f.name] === SELECT_NONE ? '' : values[f.name]
       }
     }
     if (Object.keys(changed).length === 0) {
@@ -231,8 +253,10 @@ interface BucketActionsProps {
   onMutate: (updater: (prev: PaperDetail) => PaperDetail) => void
 }
 
-const REASON_OPTIONS = [
-  { value: '',                         label: '(none)' },
+// Local reason options for the demote select — uses SELECT_NONE instead of ""
+// to satisfy Radix UI's requirement that SelectItem values are non-empty.
+const BUCKET_REASON_OPTIONS = [
+  { value: SELECT_NONE,                label: '(none)' },
   { value: 'openalex_source',          label: 'OpenAlex source' },
   { value: 'low_confidence',           label: 'Low confidence' },
   { value: 'medium_confidence',        label: 'Medium confidence' },
@@ -245,7 +269,7 @@ const REASON_OPTIONS = [
 ]
 
 function BucketActions({ paper, disabled, onMutate }: BucketActionsProps) {
-  const [demoteReason, setDemoteReason] = useState('')
+  const [demoteReason, setDemoteReason] = useState(SELECT_NONE)
   const [discardOpen, setDiscardOpen] = useState(false)
   const [demoteOpen, setDemoteOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -325,7 +349,7 @@ function BucketActions({ paper, disabled, onMutate }: BucketActionsProps) {
                     <SelectValue placeholder="Reason…" />
                   </SelectTrigger>
                   <SelectContent>
-                    {REASON_OPTIONS.map(opt => (
+                    {BUCKET_REASON_OPTIONS.map(opt => (
                       <SelectItem key={opt.value} value={opt.value} className="text-xs">
                         {opt.label}
                       </SelectItem>
@@ -337,9 +361,11 @@ function BucketActions({ paper, disabled, onMutate }: BucketActionsProps) {
                   variant="outline"
                   disabled={disabled || busy}
                   onClick={async () => {
-                    await handleBucket('pending', demoteReason || undefined)
+                    // Map sentinel back to undefined (no reason) before calling API
+                    const reason = demoteReason === SELECT_NONE ? undefined : demoteReason
+                    await handleBucket('pending', reason)
                     setDemoteOpen(false)
-                    setDemoteReason('')
+                    setDemoteReason(SELECT_NONE)
                   }}
                   className="h-7 text-xs"
                 >
@@ -348,7 +374,7 @@ function BucketActions({ paper, disabled, onMutate }: BucketActionsProps) {
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => { setDemoteOpen(false); setDemoteReason('') }}
+                  onClick={() => { setDemoteOpen(false); setDemoteReason(SELECT_NONE) }}
                   className="h-7 text-xs"
                 >
                   Cancel
