@@ -101,25 +101,36 @@ def title_similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, _norm_title(a), _norm_title(b)).ratio()
 
 
-def resolve_identifiers(paper) -> bool:
-    """Resolve+persist missing ids. Returns True if anything was resolved.
-    Sets paper._enrichment_via_title = True when an id was adopted via title.search."""
+@dataclass(frozen=True)
+class ResolveResult:
+    """Outcome of resolve_identifiers. `via_title` marks ids adopted via a
+    title-search match (lower confidence) so the caller can flag downstream
+    field changes for review."""
+    resolved: bool
+    via_title: bool = False
+
+
+def _strip_doi(doi: str) -> str:
+    return re.sub(r"^https?://(?:dx\.)?doi\.org/", "", (doi or "").strip())
+
+
+def resolve_identifiers(paper) -> ResolveResult:
+    """Resolve+persist missing identifiers on `paper`. Returns a ResolveResult;
+    `via_title` is True when the id was adopted via an OpenAlex title.search match."""
     if paper.arxiv_id or paper.doi:
-        return False
+        return ResolveResult(resolved=False)
     for u in (paper.url, paper.pdf_url):
         axid = extract_arxiv_id_from_url(u) if u else None
         if axid:
             paper.arxiv_id = axid
-            return True
-    work = _openalex_fetch_work(f"title.search:{paper.title[:100]}", by="filter")
+            return ResolveResult(resolved=True)
+    work = _openalex_fetch_work(f"title.search:{(paper.title or '')[:100]}", by="filter")
     if not work:
-        return False
-    if title_similarity(paper.title, work.get("title") or "") < TITLE_MATCH_THRESHOLD:
-        return False
+        return ResolveResult(resolved=False)
+    if title_similarity(paper.title or "", work.get("title") or "") < TITLE_MATCH_THRESHOLD:
+        return ResolveResult(resolved=False)
     paper.openalex_id = work.get("id") or paper.openalex_id
-    ids = work.get("ids") or {}
-    doi = (ids.get("doi") or "").replace("https://doi.org/", "")
+    doi = _strip_doi((work.get("ids") or {}).get("doi") or "")
     if doi and not paper.doi:
         paper.doi = doi
-    object.__setattr__(paper, "_enrichment_via_title", True)
-    return True
+    return ResolveResult(resolved=True, via_title=True)

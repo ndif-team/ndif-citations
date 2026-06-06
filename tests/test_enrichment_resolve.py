@@ -10,8 +10,9 @@ def test_title_similarity_threshold():
 
 def test_resolve_parses_arxiv_from_url(monkeypatch):
     p = make_paper(arxiv_id=None, doi=None, url="https://arxiv.org/abs/2401.12345")
-    changed = resolve_identifiers(p)
-    assert changed is True and p.arxiv_id == "2401.12345"
+    result = resolve_identifiers(p)
+    assert result.resolved is True and result.via_title is False
+    assert p.arxiv_id == "2401.12345"
 
 
 def test_resolve_adopts_openalex_id_on_high_title_match(monkeypatch):
@@ -19,13 +20,14 @@ def test_resolve_adopts_openalex_id_on_high_title_match(monkeypatch):
     work = {"id": "https://openalex.org/W123", "title": "Sparse Probing of LLMs",
             "ids": {"doi": "https://doi.org/10.1/abc"}}
     monkeypatch.setattr(enrichment, "_openalex_fetch_work", lambda ident, by="id": work)
-    changed = resolve_identifiers(p)
-    assert changed and p.openalex_id == "https://openalex.org/W123" and p.doi == "10.1/abc"
+    result = resolve_identifiers(p)
+    assert result.resolved and result.via_title is True
+    assert p.openalex_id == "https://openalex.org/W123" and p.doi == "10.1/abc"
 
 
 def test_resolve_rejects_low_title_match(monkeypatch):
     p = make_paper(arxiv_id=None, doi=None, url="https://example.com/x", title="Sparse Probing of LLMs")
     work = {"id": "https://openalex.org/W999", "title": "Unrelated Physics Paper", "ids": {}}
     monkeypatch.setattr(enrichment, "_openalex_fetch_work", lambda ident, by="id": work)
-    changed = resolve_identifiers(p)
-    assert changed is False and (p.openalex_id in (None, ""))
+    result = resolve_identifiers(p)
+    assert result.resolved is False and (p.openalex_id in (None, ""))
