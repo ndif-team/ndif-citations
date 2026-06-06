@@ -6,6 +6,7 @@ query functions. See docs/superpowers/specs/2026-06-06-robust-enrichment-design.
 """
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from difflib import SequenceMatcher
@@ -15,6 +16,8 @@ from ndif_citations.extract import _openalex_fetch_work
 from ndif_citations.utils import extract_arxiv_id_from_url, query_arxiv_api, rate_limit_sleep
 from ndif_citations.discover import _openalex_work_to_discovered
 from ndif_citations import config
+
+logger = logging.getLogger(__name__)
 
 _ELLIPSIS = ("…", "...")
 _ABSTRACT_MIN = 280
@@ -144,7 +147,7 @@ _MANAGED_FIELDS = ("abstract", "authors", "affiliations", "venue", "year")
 @dataclass(frozen=True)
 class Record:
     source: str
-    fields: dict
+    fields: dict[str, object]
 
 
 def _openalex_record(paper) -> "Record | None":
@@ -176,8 +179,8 @@ def fetch_records(paper) -> list[Record]:
         oa = _openalex_record(paper)
         if oa:
             records.append(oa)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("OpenAlex enrich failed for %r: %s", (paper.title or "?")[:60], e)
     if paper.arxiv_id:
         try:
             rate_limit_sleep(0.3, "arXiv enrich")
@@ -187,6 +190,6 @@ def fetch_records(paper) -> list[Record]:
             if authors or affils:
                 records.append(Record(source="arxiv",
                                        fields={"authors": authors, "affiliations": affils}))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("arXiv enrich failed for %s: %s", paper.arxiv_id, e)
     return records
