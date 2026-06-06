@@ -1,5 +1,5 @@
 import pytest
-from ndif_citations.enrichment import is_broken
+from ndif_citations.enrichment import is_broken, reconcile_field, Candidate
 
 
 @pytest.mark.parametrize("value,expected", [
@@ -32,9 +32,6 @@ def test_is_broken_venue_and_affiliations_and_year():
     assert is_broken("affiliations", "MIT") is False
     assert is_broken("year", 0) is True
     assert is_broken("year", 2024) is False
-
-
-from ndif_citations.enrichment import reconcile_field, Candidate
 
 
 def _c(value, source): return Candidate(value=value, source=source)

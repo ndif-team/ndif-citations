@@ -6,6 +6,8 @@ query functions. See docs/superpowers/specs/2026-06-06-robust-enrichment-design.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from ndif_citations.venue import _WEAK_VENUE_RE
 
 _ELLIPSIS = ("…", "...")
@@ -29,9 +31,6 @@ def is_broken(field: str, value) -> bool:
     if field == "affiliations":
         return False  # non-empty affiliations are acceptable
     return False
-
-
-from dataclasses import dataclass
 
 
 SOURCE_TRUST: dict[str, int] = {
@@ -64,19 +63,23 @@ def _completeness(field: str, value) -> int:
     return 1
 
 
-def _score(field: str, c: Candidate):
+def _score(field: str, c: Candidate) -> tuple[int, int, int]:
     # higher tuple wins: valid first, then trust, then completeness
     return (0 if is_broken(field, c.value) else 1, _trust(c.source), _completeness(field, c.value))
 
 
-def reconcile_field(field, current: Candidate, candidates: list[Candidate],
+def reconcile_field(field: str, current: Candidate, candidates: list[Candidate],
                     low_confidence_sources: set[str] | None = None) -> Resolution:
     low_confidence_sources = low_confidence_sources or set()
-    pool = [current] + [c for c in candidates
-                        if (c.value not in (None, "", 0))]
-    winner = max(pool, key=lambda c: _score(field, c))
-    # Regression guard: never downgrade a non-broken current to an equal-or-worse value.
-    if not is_broken(field, current.value) and _score(field, winner) <= _score(field, current):
+    valid = [c for c in candidates if c.value not in (None, "", 0)]
+    if not valid:
+        return Resolution(value=current.value, source=current.source, changed=False, low_confidence=False)
+    best = max(valid, key=lambda c: _score(field, c))
+    # Replace the current value only if it's broken, or `best` strictly out-scores it.
+    # Otherwise keep current — a non-broken value is never swapped for an equal-or-worse one.
+    if is_broken(field, current.value) or _score(field, best) > _score(field, current):
+        winner = best
+    else:
         winner = current
     changed = winner.value != current.value
     low_conf = changed and winner.source in low_confidence_sources
