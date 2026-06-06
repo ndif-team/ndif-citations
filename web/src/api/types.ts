@@ -86,6 +86,12 @@ export interface PaperDetail {
   has_image: boolean
 }
 
+// Reprocess job response
+export interface ReprocessResponse {
+  run_id: string
+  state: string
+}
+
 // Run state
 export type RunState = 'running' | 'awaiting_review' | 'done' | 'error' | 'cancelled'
 export type RunMode = 'fresh' | 'incremental'

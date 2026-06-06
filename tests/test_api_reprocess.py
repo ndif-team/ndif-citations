@@ -33,6 +33,7 @@ from ndif_citations.server.app import create_app
 from tests.helpers.fakes import install_pipeline_fakes
 
 ARXIV_VERIFIED_ID = "arxiv:2602.16080"
+ARXIV_VERIFIED_ID_2 = "arxiv:2604.07615"  # second verified paper in fixtures
 UNKNOWN_ID = "arxiv:9999.00000"
 
 
@@ -277,3 +278,106 @@ def test_image_upload_active_run_409(fixture_state):
         files={"file": ("thumb.png", io.BytesIO(_tiny_png()), "image/png")},
     )
     assert resp.status_code == 409, resp.text
+
+
+# ---------------------------------------------------------------------------
+# Batch reprocess: POST /api/papers/reprocess
+# ---------------------------------------------------------------------------
+
+def test_batch_reprocess_starts_job(monkeypatch, fixture_state):
+    """Batch reprocess of 2 known ids starts a job and runs to completion."""
+    import ndif_citations.process as process_mod
+
+    client, runner = _make_client(monkeypatch, fixture_state)
+    monkeypatch.setattr(
+        process_mod, "generate_summary", lambda paper: f"BATCH SUMMARY: {paper.title}"
+    )
+
+    resp = client.post(
+        "/api/papers/reprocess",
+        json={"ids": [ARXIV_VERIFIED_ID, ARXIV_VERIFIED_ID_2], "fields": ["summary"]},
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert "run_id" in data
+    assert data["state"] == "running"
+    run_id = data["run_id"]
+
+    assert _wait_until(
+        lambda: client.get(f"/api/runs/{run_id}").json().get("state") == "done"
+    ), f"job did not finish; state={client.get(f'/api/runs/{run_id}').json().get('state')!r}"
+
+    for paper_id in (ARXIV_VERIFIED_ID, ARXIV_VERIFIED_ID_2):
+        after = client.get(f"/api/papers/{paper_id}").json()
+        assert after["description"].startswith("BATCH SUMMARY:"), (
+            f"{paper_id}: unexpected description={after['description']!r}"
+        )
+
+
+def test_batch_reprocess_unknown_id_404(monkeypatch, fixture_state):
+    """A batch with one unknown id → 404 and no job started."""
+    client, runner = _make_client(monkeypatch, fixture_state)
+    resp = client.post(
+        "/api/papers/reprocess",
+        json={"ids": [ARXIV_VERIFIED_ID, UNKNOWN_ID], "fields": ["summary"]},
+    )
+    assert resp.status_code == 404, resp.text
+
+
+def test_batch_reprocess_bad_field_422(monkeypatch, fixture_state):
+    """A batch with an invalid field name → 422."""
+    client, runner = _make_client(monkeypatch, fixture_state)
+    resp = client.post(
+        "/api/papers/reprocess",
+        json={"ids": [ARXIV_VERIFIED_ID], "fields": ["bogus"]},
+    )
+    assert resp.status_code == 422, resp.text
+
+
+def test_batch_reprocess_empty_ids_422(monkeypatch, fixture_state):
+    """An empty ids list → 422."""
+    client, runner = _make_client(monkeypatch, fixture_state)
+    resp = client.post(
+        "/api/papers/reprocess",
+        json={"ids": [], "fields": ["summary"]},
+    )
+    assert resp.status_code == 422, resp.text
+
+
+def test_batch_reprocess_active_run_409(monkeypatch, fixture_state):
+    """When a run is already active, batch reprocess → 409."""
+    import ndif_citations.process as process_mod
+
+    install_pipeline_fakes(monkeypatch, orchestrator)
+
+    release = threading.Event()
+    entered = threading.Event()
+
+    def _blocking_summary(paper):
+        entered.set()
+        release.wait(timeout=5.0)
+        return f"Fake summary for: {paper.title}"
+
+    monkeypatch.setattr(process_mod, "generate_summary", _blocking_summary)
+
+    runner = JobRunner()
+    app = create_app()
+    app.dependency_overrides[deps.get_output_dir] = lambda: fixture_state
+    app.dependency_overrides[deps.get_runner] = lambda: runner
+    client = TestClient(app, raise_server_exceptions=True)
+
+    # Start a blocking pipeline run to hold the runner slot.
+    resp1 = client.post("/api/runs", json={"mode": "fresh"})
+    assert resp1.status_code == 200, resp1.text
+    assert entered.wait(timeout=2.0), "worker never reached blocking summary"
+    assert runner.active
+
+    # Batch reprocess while active → 409.
+    resp2 = client.post(
+        "/api/papers/reprocess",
+        json={"ids": [ARXIV_VERIFIED_ID], "fields": ["summary"]},
+    )
+    assert resp2.status_code == 409, resp2.text
+
+    release.set()
+    assert _wait_until(lambda: runner.status().state == "done")

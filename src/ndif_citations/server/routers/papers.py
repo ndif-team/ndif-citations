@@ -51,6 +51,12 @@ class ReprocessRequest(BaseModel):
     fields: list[str]
 
 
+class BatchReprocessRequest(BaseModel):
+    """Body for POST /api/papers/reprocess (batch)."""
+    ids: list[str]
+    fields: list[str]
+
+
 class ReprocessResponse(BaseModel):
     """Response for the reprocess / reextract-thumbnail endpoints."""
     run_id: str
@@ -119,6 +125,65 @@ def add_paper(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     return AddPaperResponse(run_id=run_id, state="running")
+
+
+@router.post("/papers/reprocess", response_model=ReprocessResponse)
+def batch_reprocess_papers(
+    body: BatchReprocessRequest,
+    out: Path = Depends(deps.get_output_dir),
+    runner: JobRunner = Depends(deps.get_runner),
+) -> ReprocessResponse:
+    """Force a targeted re-run of *fields* on a batch of papers.
+
+    Validates that:
+    * ``ids`` is non-empty and every id resolves to an existing paper (404 if any unknown).
+    * ``fields`` is a non-empty subset of ``{summary, classify, thumbnail, affiliations}`` (422).
+
+    The heavy work runs on the ``JobRunner`` worker — the client polls
+    ``GET /api/runs/{run_id}`` or the SSE events stream.
+
+    Returns ``{"run_id": ..., "state": "running"}``.
+
+    * 404 — one or more ids unknown.
+    * 422 — ids empty or fields empty/invalid.
+    * 409 — a run/job is already active.
+
+    Note: this route is defined BEFORE ``GET /api/papers/{paper_id:path}`` and
+    ``POST /api/papers/{paper_id:path}/reprocess`` so the literal segment
+    ``/papers/reprocess`` is matched first and not captured by the ``:path``
+    converter.
+    """
+    from ndif_citations import reprocess
+
+    if not body.ids:
+        raise HTTPException(status_code=422, detail="ids must not be empty")
+
+    if not body.fields or not set(body.fields).issubset(_REPROCESS_FIELDS):
+        raise HTTPException(
+            status_code=422,
+            detail=f"fields must be a non-empty subset of {sorted(_REPROCESS_FIELDS)}",
+        )
+
+    # Validate that every requested id resolves to an existing paper.
+    missing = [pid for pid in body.ids if papers_svc.resolve(out, pid) is None]
+    if missing:
+        raise HTTPException(
+            status_code=404,
+            detail=f"unknown paper id(s): {missing!r}",
+        )
+
+    ids = list(body.ids)
+    fields = list(body.fields)
+    try:
+        run_id = runner.start_job(
+            out,
+            lambda cc: reprocess.reprocess_papers(out, ids, fields, cancel_check=cc),
+            kind="reprocess",
+        )
+    except RunActiveError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return ReprocessResponse(run_id=run_id, state="running")
 
 
 @router.get("/papers")
