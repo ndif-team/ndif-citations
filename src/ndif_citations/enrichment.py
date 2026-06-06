@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 
 from ndif_citations.venue import _WEAK_VENUE_RE
-from ndif_citations.extract import _openalex_fetch_work
+from ndif_citations.extract import _openalex_fetch_work, detect_peer_review, detect_venue_type
 from ndif_citations.utils import extract_arxiv_id_from_url, query_arxiv_api, rate_limit_sleep
 from ndif_citations.discover import _openalex_work_to_discovered
 from ndif_citations import config
@@ -200,3 +200,48 @@ def fetch_records(paper) -> list[Record]:
         except Exception as e:
             logger.warning("arXiv enrich failed for %s: %s", paper.arxiv_id, e)
     return records
+
+
+@dataclass
+class ChangeSet:
+    changes: dict  # field -> (old, new, source, low_confidence)
+
+
+def reconcile_paper(paper, records: list[Record], *, locked: bool,
+                    low_confidence: bool, fields: tuple[str, ...] = _MANAGED_FIELDS) -> ChangeSet:
+    low_conf_sources = {r.source for r in records} if low_confidence else set()
+    changes: dict = {}
+    for field in fields:
+        current_value = getattr(paper, field)
+        cands = [Candidate(r.fields[field], r.source) for r in records if field in r.fields]
+        if not cands:
+            continue
+        current_source = paper.source.value if paper.source else "unknown"
+        res = reconcile_field(field, Candidate(current_value, current_source),
+                              cands, low_confidence_sources=low_conf_sources)
+        if not res.changed:
+            continue
+        # Never replace a non-broken value — enrich only fills gaps/fixes truncations.
+        if not is_broken(field, current_value) and current_value not in (None, "", 0):
+            continue
+        if locked and (current_value not in (None, "", 0)):
+            continue  # fill-gaps only for curator-locked papers
+        setattr(paper, field, res.value)
+        paper.enrichment_provenance[field] = res.source
+        changes[field] = (current_value, res.value, res.source, res.low_confidence)
+    return ChangeSet(changes=changes)
+
+
+def enrich_paper(paper, *, dry_run: bool = False, fields: tuple[str, ...] = _MANAGED_FIELDS) -> ChangeSet:
+    """Resolve ids -> fetch authorities -> reconcile -> apply. In dry_run, ALL work
+    (including identifier resolution) happens on a deep copy so `paper` is untouched."""
+    target = paper.model_copy(deep=True) if dry_run else paper
+    resolved = resolve_identifiers(target)
+    records = fetch_records(target)
+    cs = reconcile_paper(target, records, locked=target.manual_override,
+                         low_confidence=resolved.via_title, fields=fields)
+    if cs.changes and not dry_run:
+        paper.peer_reviewed = detect_peer_review(paper.venue)
+        paper.venue_type = detect_venue_type(paper.venue)
+        paper.has_affiliations = bool(paper.affiliations)
+    return cs
