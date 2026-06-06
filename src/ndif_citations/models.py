@@ -152,6 +152,10 @@ class DiscoveredPaper(BaseModel):
     # Cross-link tier (1=BibTeX, 2=Citation section, 3=single ID, 4=most-recent; None when not cross-linked)
     linked_paper_tier: Optional[int] = None
 
+    # Provenance of enrichment-repaired fields: field name -> winning source
+    # (e.g. {"abstract": "openalex", "authors": "arxiv"}). Mirrors `venue_source`.
+    enrichment_provenance: dict[str, str] = Field(default_factory=dict)
+
     # Change detection
     content_hash: str = ""  # SHA256(title + "::" + abstract)[:16]
 
