@@ -1,4 +1,4 @@
-import type { StatsResponse, PaperRow, PaperDetail, RunSummary, RepoRow, Bucket, SortOption, RunRecord, RunMode, GatePayload, ReprocessResponse } from './types'
+import type { StatsResponse, PaperRow, PaperDetail, RunSummary, RepoRow, RepoDetail, RepoType, RepoSortOption, Bucket, SortOption, RunRecord, RunMode, GatePayload, ReprocessResponse } from './types'
 
 const BASE = '/api'
 
@@ -98,8 +98,43 @@ export async function submitGate(runId: string, payload: GatePayload): Promise<v
   await post(`/runs/${encodeURIComponent(runId)}/gate`, payload)
 }
 
-export async function fetchRepos(): Promise<RepoRow[]> {
-  return get<RepoRow[]>('/repos')
+export interface ReposParams {
+  repo_type?: RepoType | ''
+  q?: string
+  sort?: RepoSortOption
+}
+
+export async function fetchRepos(params: ReposParams = {}): Promise<RepoRow[]> {
+  const sp = new URLSearchParams()
+  if (params.repo_type) sp.set('repo_type', params.repo_type)
+  if (params.q) sp.set('q', params.q)
+  if (params.sort) sp.set('sort', params.sort)
+  const qs = sp.toString() ? `?${sp.toString()}` : ''
+  return get<RepoRow[]>(`/repos${qs}`)
+}
+
+export async function fetchRepo(owner: string, repo: string): Promise<RepoDetail> {
+  return get<RepoDetail>(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`)
+}
+
+export interface RepoEditPayload {
+  repo_type?: RepoType
+  linked_paper_url?: string | null
+  description?: string | null
+}
+
+export async function editRepo(owner: string, repo: string, payload: RepoEditPayload): Promise<RepoDetail> {
+  return patch<RepoDetail>(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, payload)
+}
+
+export interface ExcludeRepoResponse {
+  excluded: string
+  remaining: number
+  was_present: boolean
+}
+
+export async function excludeRepo(owner: string, repo: string): Promise<ExcludeRepoResponse> {
+  return post<ExcludeRepoResponse>(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/exclude`)
 }
 
 // ---------------------------------------------------------------------------

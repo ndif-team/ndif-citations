@@ -174,6 +174,9 @@ export interface GatePayload {
   edits: Record<string, Record<string, string>>
 }
 
+export type RepoType = 'research' | 'course' | 'experiment'
+export type RepoSortOption = 'stars_desc' | 'recent' | 'name'
+
 export interface RepoRow {
   id: string
   owner: string
@@ -183,9 +186,39 @@ export interface RepoRow {
   stars: number | null
   forks: number | null
   language: string | null
-  repo_type: string
+  repo_type: RepoType
   category: string
   linked_paper_url: string | null
   last_commit: string | null
   manual_override: boolean
+}
+
+/** Full repo detail returned by GET /api/repos/{owner}/{repo} */
+export interface RepoDetail {
+  owner: string
+  repo: string
+  url: string
+  description: string | null
+  stars: number | null
+  forks: number | null
+  last_commit: string | null
+  archived: boolean
+  is_fork: boolean
+  language: string | null
+  license: string | null
+  topics: string[]
+  readme_arxiv_ids: string[]
+  linked_paper_url: string | null
+  linked_paper_tier: number | null
+  category: string
+  classification_reason: string
+  repo_type: RepoType
+  parent_full_name: string | null
+  content_hash: string
+  manual_override: boolean
+  has_metadata: boolean
+  has_classification: boolean
+  processing_bucket: string
+  first_seen: string | null
+  last_seen: string | null
 }

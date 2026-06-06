@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { fetchStats, fetchPapers, fetchPaper, fetchRuns, fetchRun, fetchActiveRun, fetchRepos } from './client'
-import type { PapersParams } from './client'
+import { fetchStats, fetchPapers, fetchPaper, fetchRuns, fetchRun, fetchActiveRun, fetchRepos, fetchRepo } from './client'
+import type { PapersParams, ReposParams } from './client'
 
 export function useStats() {
   return useQuery({
@@ -55,10 +55,19 @@ export function useActiveRun() {
   })
 }
 
-export function useRepos() {
+export function useRepos(params: ReposParams = {}) {
   return useQuery({
-    queryKey: ['repos'],
-    queryFn: fetchRepos,
+    queryKey: ['repos', params],
+    queryFn: () => fetchRepos(params),
+    staleTime: 30_000,
+  })
+}
+
+export function useRepo(owner: string | null, repo: string | null) {
+  return useQuery({
+    queryKey: ['repo', owner, repo],
+    queryFn: () => fetchRepo(owner!, repo!),
+    enabled: !!(owner && repo),
     staleTime: 60_000,
   })
 }

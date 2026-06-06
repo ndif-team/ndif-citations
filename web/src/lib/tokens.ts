@@ -1,4 +1,4 @@
-import type { Bucket, Category, ConfidenceBand, RunState } from '@/api/types'
+import type { Bucket, Category, ConfidenceBand, RunState, RepoType } from '@/api/types'
 import { cn } from './utils'
 
 // Bucket semantic tokens — color is never the only signal
@@ -69,6 +69,26 @@ export function runStateBadge(state: RunState | string): string {
       cancelled: 'bg-slate-100 text-slate-600 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700',
     }[state] ?? 'bg-slate-100 text-slate-600 ring-slate-200'
   )
+}
+
+// Repo-type tokens
+export function repoTypeBadge(repoType: RepoType | string): string {
+  return cn(
+    'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset',
+    {
+      research:   'bg-blue-50 text-blue-800 ring-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:ring-blue-800',
+      course:     'bg-violet-50 text-violet-800 ring-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:ring-violet-800',
+      experiment: 'bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:ring-amber-800',
+    }[repoType] ?? 'bg-slate-100 text-slate-600 ring-slate-200'
+  )
+}
+
+export function repoTypeLabel(repoType: RepoType | string): string {
+  return {
+    research:   'Research',
+    course:     'Course',
+    experiment: 'Experiment',
+  }[repoType] ?? repoType
 }
 
 export function runStateLabel(state: RunState | string): string {
