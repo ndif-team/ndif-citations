@@ -11,7 +11,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from ndif_citations.server.routers import images, papers, publish, repos, runs, settings, stats
@@ -43,13 +44,31 @@ def create_app() -> FastAPI:
     app.include_router(publish.router)
     app.include_router(settings.router)
 
-    # SPA static files — only if the dist directory exists (optional).
+    # SPA — only if the dist directory exists (optional; absent before the
+    # frontend is built). Hashed assets are served from /assets; every other
+    # non-/api path falls back to index.html so client-side routes (e.g.
+    # /papers) work on direct navigation and refresh.
     if _WEB_DIST.exists():
-        app.mount(
-            "/",
-            StaticFiles(directory=str(_WEB_DIST), html=True),
-            name="spa",
-        )
+        assets_dir = _WEB_DIST / "assets"
+        if assets_dir.exists():
+            app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+        _index = _WEB_DIST / "index.html"
+        _dist_root = _WEB_DIST.resolve()
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def spa_fallback(full_path: str) -> FileResponse:
+            # /api/* is handled by the routers above; an unknown API path must
+            # 404 as JSON, not silently return the SPA shell.
+            if full_path == "api" or full_path.startswith("api/"):
+                raise HTTPException(status_code=404, detail="Not Found")
+            # Serve a real static file when one exists (favicon, robots, etc.),
+            # otherwise the SPA shell for client-side routing.
+            if full_path:
+                candidate = (_WEB_DIST / full_path).resolve()
+                if candidate.is_file() and candidate.is_relative_to(_dist_root):
+                    return FileResponse(candidate)
+            return FileResponse(_index)
 
     return app
 
