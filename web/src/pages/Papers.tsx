@@ -83,10 +83,10 @@ export function Papers() {
         accessorKey: 'authors',
         size: 180,
         cell: ({ getValue }) => {
-          const authors = getValue<string[]>() ?? []
+          const authors = getValue<string>() ?? ''
+          const names = authors ? authors.split(/,\s*/).filter(Boolean) : []
           const formatted = formatAuthors(authors)
-          const full = authors.join(', ')
-          if (formatted === full || authors.length <= 3) {
+          if (names.length <= 3) {
             return <span className="text-xs text-muted-foreground">{formatted}</span>
           }
           return (
@@ -95,7 +95,7 @@ export function Papers() {
                 <TooltipTrigger asChild>
                   <span className="text-xs text-muted-foreground cursor-default">{formatted}</span>
                 </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-xs">{full}</TooltipContent>
+                <TooltipContent side="top" className="max-w-xs">{authors}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )

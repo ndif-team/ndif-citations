@@ -110,9 +110,9 @@ export function PaperSheet({ paperId, onClose }: Props) {
               <SheetTitle className="text-sm font-semibold leading-snug pr-6">
                 {paper.title}
               </SheetTitle>
-              {paper.authors && paper.authors.length > 0 && (
+              {paper.authors && paper.authors.trim().length > 0 && (
                 <SheetDescription className="text-xs">
-                  {paper.authors.join(', ')}
+                  {paper.authors}
                 </SheetDescription>
               )}
             </SheetHeader>
@@ -147,10 +147,10 @@ export function PaperSheet({ paperId, onClose }: Props) {
               </div>
 
               {/* Affiliations */}
-              {paper.affiliations && paper.affiliations.length > 0 && (
+              {paper.affiliations && paper.affiliations.trim().length > 0 && (
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Affiliations</p>
-                  <p className="text-xs text-muted-foreground">{paper.affiliations.join('; ')}</p>
+                  <p className="text-xs text-muted-foreground">{paper.affiliations}</p>
                 </div>
               )}
 
