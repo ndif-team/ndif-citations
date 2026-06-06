@@ -5,7 +5,7 @@ import {
   flexRender,
   type ColumnDef,
 } from '@tanstack/react-table'
-import { Search, AlertCircle, FileText, ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
+import { Search, AlertCircle, FileText, ChevronDown, ChevronUp, Trash2, Lock, AlertTriangle } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -367,6 +367,37 @@ export function Papers() {
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-sm">{title}</TooltipContent>
               </Tooltip>
+            </TooltipProvider>
+          )
+        },
+      },
+      {
+        id: 'flags',
+        header: '',
+        size: 44,
+        cell: ({ row }) => {
+          const { manual_override, missing } = row.original
+          if (!manual_override && missing.length === 0) return null
+          return (
+            <TooltipProvider>
+              <div className="flex items-center gap-1">
+                {manual_override && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Lock className="h-3 w-3 text-muted-foreground flex-none" aria-label="Curator-locked" />
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Curator-locked — pipeline won&apos;t overwrite</TooltipContent>
+                  </Tooltip>
+                )}
+                {missing.length > 0 && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <AlertTriangle className="h-3 w-3 text-amber-500 flex-none" aria-label="Missing metadata" />
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Missing: {missing.join(', ')}</TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
             </TooltipProvider>
           )
         },

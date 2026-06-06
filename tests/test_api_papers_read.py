@@ -96,6 +96,7 @@ def test_list_papers_returns_all(client: TestClient):
     expected_keys = {
         "id", "title", "authors", "venue", "year", "category", "bucket",
         "confidence_band", "reason", "source", "has_image", "manual_override", "url",
+        "missing",
     }
     for row in rows:
         assert expected_keys == set(row.keys()), f"Row keys mismatch: {set(row.keys())}"
@@ -310,3 +311,59 @@ def test_serve_image_bare_dotdot_rejected(client: TestClient):
     # our handler runs), but we also handle any decoded variant.
     resp = client.get("/api/images/..%2Fsomething")
     assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# 8. missing field — metadata-gap flags on each row
+# ---------------------------------------------------------------------------
+
+def test_list_papers_missing_field_present(client: TestClient):
+    """Every row must include a `missing` list (may be empty)."""
+    resp = client.get("/api/papers")
+    assert resp.status_code == 200
+    rows = resp.json()
+    for row in rows:
+        assert "missing" in row, f"Row for {row['title']!r} is missing the 'missing' field"
+        assert isinstance(row["missing"], list), "'missing' must be a list"
+
+
+def test_list_papers_missing_image_flagged(client: TestClient, fixture_state):
+    """A paper without an image must include 'image' in its missing list.
+
+    The fixture 'DFWe' paper has no image set, so it must be flagged.
+    """
+    resp = client.get("/api/papers", params={"q": PENDING_TITLE_SUBSTR})
+    assert resp.status_code == 200
+    rows = resp.json()
+    assert len(rows) == 1
+    row = rows[0]
+    assert not row["has_image"], "Fixture paper should have no image"
+    assert "image" in row["missing"], (
+        f"'image' should be in missing for a paper without a thumbnail; got {row['missing']}"
+    )
+
+
+def test_list_papers_missing_weak_venue_flagged(client: TestClient):
+    """A paper whose venue matches the weak 'ArXiv YYYY' fallback must flag 'venue'."""
+    # 'ADAG...' paper has venue='ArXiv 2026' which matches the weak pattern
+    resp = client.get("/api/papers", params={"q": "ADAG"})
+    assert resp.status_code == 200
+    rows = resp.json()
+    assert len(rows) == 1
+    row = rows[0]
+    assert "venue" in row["missing"], (
+        f"'venue' should be flagged for ArXiv fallback venue; got {row['missing']}"
+    )
+
+
+def test_list_papers_missing_with_image_not_flagged(client: TestClient):
+    """A paper that has an image must NOT include 'image' in its missing list."""
+    resp = client.get("/api/papers", params={"q": "Activation Steering"})
+    assert resp.status_code == 200
+    rows = resp.json()
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["has_image"], "Fixture paper should have an image"
+    assert "image" not in row["missing"], (
+        f"'image' should NOT be in missing for a paper with a thumbnail; got {row['missing']}"
+    )

@@ -20,8 +20,32 @@ const CATEGORY_CONFIG: Record<
   unclassified: { label: 'Unclassified', color: '#64748B', darkColor: '#94A3B8' },
 }
 
+interface ChartEntry {
+  key: string
+  label: string
+  value: number
+  color: string
+}
+
 interface Props {
   categories: StatsResponse['categories']
+}
+
+/** Custom tooltip — single line, theme-aware, no wrapping. */
+function ChartTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean
+  payload?: Array<{ payload: ChartEntry }>
+}) {
+  if (!active || !payload?.length) return null
+  const { label, value } = payload[0].payload
+  return (
+    <div className="bg-popover text-popover-foreground border border-border rounded-md shadow px-2 py-1 text-xs whitespace-nowrap">
+      {label}: {value}
+    </div>
+  )
 }
 
 export function CategoryChart({ categories }: Props) {
@@ -53,28 +77,19 @@ export function CategoryChart({ categories }: Props) {
             >
               <XAxis
                 dataKey="label"
-                tick={{ fontSize: 10, fill: 'hsl(215 20% 45%)' }}
-                axisLine={false}
+                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                axisLine={{ stroke: 'hsl(var(--border))' }}
                 tickLine={false}
               />
               <YAxis
-                tick={{ fontSize: 10, fill: 'hsl(215 20% 45%)' }}
-                axisLine={false}
+                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                axisLine={{ stroke: 'hsl(var(--border))' }}
                 tickLine={false}
                 allowDecimals={false}
               />
               <Tooltip
-                contentStyle={{
-                  fontSize: 12,
-                  borderRadius: 6,
-                  border: '1px solid hsl(214 32% 88%)',
-                  background: 'hsl(0 0% 100%)',
-                }}
-                cursor={{ fill: 'hsl(210 40% 94%)' }}
-                formatter={(value) => [value, '']}
-                labelFormatter={(_label, payload) =>
-                  payload && payload[0] ? String(payload[0].payload.label) : ''
-                }
+                content={<ChartTooltip />}
+                cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }}
               />
               <Bar dataKey="value" radius={[3, 3, 0, 0]}>
                 {data.map((entry) => (

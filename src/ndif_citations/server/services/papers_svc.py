@@ -8,6 +8,7 @@ testable via dependency_overrides.
 """
 from __future__ import annotations
 
+import re as _re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -22,6 +23,9 @@ if TYPE_CHECKING:
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 
+_WEAK_VENUE_RE = _re.compile(r"^ArXiv \d{4}$")
+
+
 def resolve(out: Path, paper_id: str) -> DiscoveredPaper | None:
     """Find the paper whose ``merge_key() == paper_id``.
 
@@ -33,6 +37,22 @@ def resolve(out: Path, paper_id: str) -> DiscoveredPaper | None:
         if paper.merge_key() == paper_id:
             return paper
     return None
+
+
+def _compute_missing(paper: DiscoveredPaper) -> list[str]:
+    """Return list of important empty fields for the paper row."""
+    missing: list[str] = []
+    if not paper.image:
+        missing.append("image")
+    if not paper.affiliations:
+        missing.append("affiliations")
+    if not paper.abstract:
+        missing.append("abstract")
+    if not paper.description:
+        missing.append("summary")
+    if not paper.venue or _WEAK_VENUE_RE.match(paper.venue):
+        missing.append("venue")
+    return missing
 
 
 def _paper_to_row(paper: DiscoveredPaper) -> dict:
@@ -51,6 +71,7 @@ def _paper_to_row(paper: DiscoveredPaper) -> dict:
         "has_image": bool(paper.image),
         "manual_override": paper.manual_override,
         "url": paper.url,
+        "missing": _compute_missing(paper),
     }
 
 

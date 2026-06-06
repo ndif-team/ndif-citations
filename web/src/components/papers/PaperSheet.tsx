@@ -1,4 +1,4 @@
-import { ExternalLink, Copy, Check, AlertCircle, Pencil, X, Upload, RotateCcw, ChevronUp, ChevronDown, Trash2 } from 'lucide-react'
+import { ExternalLink, Copy, Check, AlertCircle, Pencil, X, Upload, RotateCcw, ChevronUp, ChevronDown, Trash2, Lock } from 'lucide-react'
 import { useState, useRef, useCallback } from 'react'
 import {
   Sheet,
@@ -612,14 +612,18 @@ export function PaperSheet({ paperId, onClose }: Props) {
         {paper && (
           <>
             {/* Thumbnail */}
-            {paper.has_image && paper.image && (
+            {paper.image ? (
               <div className="p-4 bg-muted/30 border-b">
                 <img
-                  src={`/api/images/${encodeURIComponent(paper.image.replace(/^\/images\//, ''))}`}
+                  src={`/api/images/${encodeURIComponent(paper.image.split('/').pop() ?? '')}`}
                   alt={`Thumbnail for ${paper.title}`}
                   className="w-full max-h-48 object-contain rounded-md"
                   loading="lazy"
                 />
+              </div>
+            ) : (
+              <div className="p-4 border-b flex items-center justify-center h-24 bg-muted/20">
+                <span className="text-xs text-muted-foreground">No thumbnail</span>
               </div>
             )}
 
@@ -667,9 +671,17 @@ export function PaperSheet({ paperId, onClose }: Props) {
                     <span className={categoryBadge(paper.category as Category)}>
                       {categoryLabel(paper.category as Category)}
                     </span>
-                    <span className={confidenceBadge(paper.confidence_band as ConfidenceBand)}>
-                      {paper.confidence_band}
-                    </span>
+                    {paper.confidence_band && paper.confidence_band !== 'NONE' && (
+                      <span className={confidenceBadge(paper.confidence_band as ConfidenceBand)}>
+                        {paper.confidence_band}
+                      </span>
+                    )}
+                    {paper.manual_override && (
+                      <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset bg-violet-50 text-violet-800 ring-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:ring-violet-800">
+                        <Lock className="h-2.5 w-2.5" aria-hidden="true" />
+                        Curator-locked
+                      </span>
+                    )}
                   </div>
 
                   {/* Venue & year */}
@@ -741,12 +753,18 @@ export function PaperSheet({ paperId, onClose }: Props) {
                   />
 
                   {/* ID */}
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">ID</p>
-                    <code className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                      {paper.id}
-                    </code>
-                  </div>
+                  {(() => {
+                    const idLabel = paper.arxiv_id ? 'arXiv' : paper.doi ? 'DOI' : 'ID'
+                    const idValue = paper.arxiv_id ?? paper.doi ?? paperId ?? ''
+                    return idValue ? (
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">{idLabel}</p>
+                        <code className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded break-all">
+                          {idValue}
+                        </code>
+                      </div>
+                    ) : null
+                  })()}
 
                   {/* BibTeX */}
                   {paper.bibtex && <CopyBibtex bibtex={paper.bibtex} />}

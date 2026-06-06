@@ -40,6 +40,7 @@ export interface PaperRow {
   has_image: boolean
   manual_override: boolean
   url: string
+  missing: string[]
 }
 
 export interface PaperDetail {
