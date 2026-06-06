@@ -12,7 +12,9 @@ from difflib import SequenceMatcher
 
 from ndif_citations.venue import _WEAK_VENUE_RE
 from ndif_citations.extract import _openalex_fetch_work
-from ndif_citations.utils import extract_arxiv_id_from_url
+from ndif_citations.utils import extract_arxiv_id_from_url, query_arxiv_api, rate_limit_sleep
+from ndif_citations.discover import _openalex_work_to_discovered
+from ndif_citations import config
 
 _ELLIPSIS = ("…", "...")
 _ABSTRACT_MIN = 280
@@ -134,3 +136,57 @@ def resolve_identifiers(paper) -> ResolveResult:
     if doi and not paper.doi:
         paper.doi = doi
     return ResolveResult(resolved=True, via_title=True)
+
+
+_MANAGED_FIELDS = ("abstract", "authors", "affiliations", "venue", "year")
+
+
+@dataclass(frozen=True)
+class Record:
+    source: str
+    fields: dict
+
+
+def _openalex_record(paper) -> "Record | None":
+    work = None
+    if paper.openalex_id:
+        work = _openalex_fetch_work(paper.openalex_id.replace("https://openalex.org/", ""), by="id")
+    if not work and paper.arxiv_id:
+        work = _openalex_fetch_work(
+            f"locations.landing_page_url:https://arxiv.org/abs/{paper.arxiv_id}", by="filter")
+    if not work and paper.doi:
+        work = _openalex_fetch_work(f"doi:{paper.doi}", by="filter")
+    if not work:
+        return None
+    d = _openalex_work_to_discovered(work)
+    if d is None:
+        return None
+    return Record(source="openalex", fields={
+        "abstract": d.abstract or "", "authors": d.authors or "",
+        "affiliations": d.affiliations or "", "venue": d.venue or "", "year": d.year or 0,
+    })
+
+
+def fetch_records(paper) -> list[Record]:
+    """Gather authority records for a paper (reuses existing query helpers).
+    Network failure on one source must not abort the others."""
+    records: list[Record] = []
+    try:
+        rate_limit_sleep(config.OPENALEX_RATE_LIMIT_SLEEP, "OpenAlex enrich")
+        oa = _openalex_record(paper)
+        if oa:
+            records.append(oa)
+    except Exception:
+        pass
+    if paper.arxiv_id:
+        try:
+            rate_limit_sleep(0.3, "arXiv enrich")
+            ax = query_arxiv_api([paper.arxiv_id]).get(paper.arxiv_id) or {}
+            authors = ", ".join(ax.get("authors") or [])
+            affils = ", ".join(ax.get("affiliations") or [])
+            if authors or affils:
+                records.append(Record(source="arxiv",
+                                       fields={"authors": authors, "affiliations": affils}))
+        except Exception:
+            pass
+    return records
