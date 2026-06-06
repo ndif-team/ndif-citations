@@ -193,6 +193,74 @@ export interface RepoRow {
   manual_override: boolean
 }
 
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+
+export interface SettingsResponse {
+  min_paper_year: number
+  shared_paper_threshold: number
+  excluded_github_repos: string[]
+  known_course_sources: string[]
+  course_name_patterns: string[]
+  ndif_keywords: string[]
+  ndif_readme_keywords_regex: string[]
+  ndif_readme_keywords_substr: string[]
+  ndif_readme_negative_patterns: string[]
+  llm_model: string
+  llm_base_url: string
+  llm_rate_limit_sleep: number
+  s2_rate_limit_sleep: number
+  github_rate_limit_sleep: number
+  publish_target: string | null
+}
+
+export type SettingsPatch = Partial<SettingsResponse>
+
+// ---------------------------------------------------------------------------
+// Venues
+// ---------------------------------------------------------------------------
+
+export type VenueType = 'conference' | 'workshop' | 'journal' | 'preprint'
+
+export interface VenueEntry {
+  type: VenueType
+  aliases?: string[]
+  parent?: string
+}
+
+export interface VenuesResponse {
+  venues: Record<string, VenueEntry>
+}
+
+// ---------------------------------------------------------------------------
+// Publish
+// ---------------------------------------------------------------------------
+
+export interface PublishTargetResponse {
+  detected: string | null
+  configured: string | null
+  valid: boolean
+}
+
+export interface PublishDiffCounts {
+  added: number
+  changed: number
+  removed: number
+}
+
+export interface PublishDryRunResponse {
+  papers: PublishDiffCounts
+  repos: PublishDiffCounts
+  images: { new: number; changed: number }
+}
+
+export interface PublishResponse {
+  summary: string
+  diff: unknown
+  build_hint: string
+}
+
 /** Full repo detail returned by GET /api/repos/{owner}/{repo} */
 export interface RepoDetail {
   owner: string

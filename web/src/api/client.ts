@@ -1,4 +1,4 @@
-import type { StatsResponse, PaperRow, PaperDetail, RunSummary, RepoRow, RepoDetail, RepoType, RepoSortOption, Bucket, SortOption, RunRecord, RunMode, GatePayload, ReprocessResponse } from './types'
+import type { StatsResponse, PaperRow, PaperDetail, RunSummary, RepoRow, RepoDetail, RepoType, RepoSortOption, Bucket, SortOption, RunRecord, RunMode, GatePayload, ReprocessResponse, SettingsResponse, SettingsPatch, VenuesResponse, PublishTargetResponse, PublishDryRunResponse, PublishResponse } from './types'
 
 const BASE = '/api'
 
@@ -16,6 +16,19 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
     method: 'POST',
     headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
     body: body !== undefined ? JSON.stringify(body) : undefined,
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw Object.assign(new Error(`API error ${res.status}: ${text}`), { status: res.status })
+  }
+  return res.json() as Promise<T>
+}
+
+async function put<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText)
@@ -175,4 +188,44 @@ export async function reextractThumbnail(id: string): Promise<ReprocessResponse>
 
 export async function batchReprocess(ids: string[], fields: string[]): Promise<ReprocessResponse> {
   return post<ReprocessResponse>('/papers/reprocess', { ids, fields })
+}
+
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+
+export async function fetchSettings(): Promise<SettingsResponse> {
+  return get<SettingsResponse>('/settings')
+}
+
+export async function putSettings(patch: SettingsPatch): Promise<SettingsResponse> {
+  return put<SettingsResponse>('/settings', patch)
+}
+
+// ---------------------------------------------------------------------------
+// Venues
+// ---------------------------------------------------------------------------
+
+export async function fetchVenues(): Promise<VenuesResponse> {
+  return get<VenuesResponse>('/venues')
+}
+
+export async function putVenues(venues: VenuesResponse['venues']): Promise<VenuesResponse> {
+  return put<VenuesResponse>('/venues', { venues })
+}
+
+// ---------------------------------------------------------------------------
+// Publish
+// ---------------------------------------------------------------------------
+
+export async function fetchPublishTarget(): Promise<PublishTargetResponse> {
+  return get<PublishTargetResponse>('/publish/target')
+}
+
+export async function putPublishTarget(path: string): Promise<{ publish_target: string }> {
+  return put<{ publish_target: string }>('/publish/target', { path })
+}
+
+export async function runPublish(dry_run: boolean): Promise<PublishDryRunResponse | PublishResponse> {
+  return post<PublishDryRunResponse | PublishResponse>('/publish', { dry_run })
 }
