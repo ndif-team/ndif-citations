@@ -16,6 +16,8 @@ def test_is_broken_abstract(value, expected):
 @pytest.mark.parametrize("value,expected", [
     ("", True),
     ("J. Smith, A. …", True),
+    ("Jane Smith et al", True),                         # truncated author list
+    ("Jane Smith et al.", True),                        # with trailing period
     ("Jane Smith, Alan Turing", False),
 ])
 def test_is_broken_authors(value, expected):

@@ -22,7 +22,8 @@ def is_broken(field: str, value) -> bool:
     if field == "abstract":
         return text.endswith(_ELLIPSIS) or len(text) < _ABSTRACT_MIN
     if field == "authors":
-        return text.endswith(_ELLIPSIS) or "…" in text or text.rstrip().endswith("et al")
+        stripped = text.rstrip(". ")
+        return text.endswith(_ELLIPSIS) or "…" in text or stripped.endswith("et al")
     if field == "venue":
         return bool(_WEAK_VENUE_RE.match(text))
     if field == "affiliations":
