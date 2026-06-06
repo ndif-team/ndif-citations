@@ -94,6 +94,14 @@ _STRIP_SUFFIXES = [
 ]
 
 
+# Weak venue pattern: matches preprint servers and placeholder strings.
+# Used by enrichment.is_broken() to identify venues needing repair.
+_WEAK_VENUE_RE = re.compile(
+    r"^(arxiv|corr|biorxiv|medrxiv|ssrn|openreview\.net|preprint)(\s+\d{4})?$",
+    re.I,
+)
+
+
 # Known long-form → short-form mappings. Loaded from data/known_venues.json
 # (acronym_map section), with fallback defaults below if config not loaded.
 _DEFAULT_ACRONYM_MAP = {
