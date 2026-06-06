@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { fetchStats, fetchPapers, fetchPaper, fetchRuns, fetchActiveRun, fetchRepos } from './client'
+import { fetchStats, fetchPapers, fetchPaper, fetchRuns, fetchRun, fetchActiveRun, fetchRepos } from './client'
 import type { PapersParams } from './client'
 
 export function useStats() {
@@ -34,6 +34,15 @@ export function useRuns() {
     queryFn: fetchRuns,
     staleTime: 10_000,
     refetchInterval: 15_000,
+  })
+}
+
+export function useRun(runId: string | null) {
+  return useQuery({
+    queryKey: ['run', runId],
+    queryFn: () => fetchRun(runId!),
+    enabled: !!runId,
+    staleTime: 5_000,
   })
 }
 

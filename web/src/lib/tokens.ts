@@ -1,4 +1,4 @@
-import type { Bucket, Category, ConfidenceBand } from '@/api/types'
+import type { Bucket, Category, ConfidenceBand, RunState } from '@/api/types'
 import { cn } from './utils'
 
 // Bucket semantic tokens — color is never the only signal
@@ -55,4 +55,28 @@ export function categoryLabel(category: Category): string {
     referencing: 'Referencing',
     unclassified: 'Unclassified',
   }[category] ?? category
+}
+
+// Run-state badge tokens
+export function runStateBadge(state: RunState | string): string {
+  return cn(
+    'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset',
+    {
+      running: 'bg-blue-50 text-blue-800 ring-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:ring-blue-800',
+      awaiting_review: 'bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:ring-amber-800',
+      done: 'bg-green-50 text-green-800 ring-green-200 dark:bg-green-950 dark:text-green-300 dark:ring-green-800',
+      error: 'bg-red-50 text-red-800 ring-red-200 dark:bg-red-950 dark:text-red-300 dark:ring-red-800',
+      cancelled: 'bg-slate-100 text-slate-600 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700',
+    }[state] ?? 'bg-slate-100 text-slate-600 ring-slate-200'
+  )
+}
+
+export function runStateLabel(state: RunState | string): string {
+  return {
+    running: 'Running',
+    awaiting_review: 'Awaiting review',
+    done: 'Done',
+    error: 'Error',
+    cancelled: 'Cancelled',
+  }[state] ?? state
 }

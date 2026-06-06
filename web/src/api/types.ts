@@ -86,6 +86,11 @@ export interface PaperDetail {
   has_image: boolean
 }
 
+// Run state
+export type RunState = 'running' | 'awaiting_review' | 'done' | 'error' | 'cancelled'
+export type RunMode = 'fresh' | 'incremental'
+export type PipelineStage = 'discover' | 'enrich' | 'route' | 'process' | 'finalize'
+
 export interface RunSummary {
   run_id: string
   state: string
@@ -93,6 +98,74 @@ export interface RunSummary {
   completed_at: string | null
   total?: number
   processed?: number
+}
+
+// Full run record from GET /runs/{id} or GET /runs/active
+export interface RunRecord {
+  run_id: string
+  state: RunState
+  mode: RunMode
+  started_at: string | null
+  finished_at: string | null
+  error: string | null
+  counts: Record<string, number> | null
+  events: ProgressEvent[]
+  paper_candidates: PaperCandidate[]
+  repo_candidates: RepoCandidate[]
+}
+
+// SSE ProgressEvent shapes
+export type ProgressEventType =
+  | 'stage_start'
+  | 'stage_done'
+  | 'source_count'
+  | 'dedup'
+  | 'route_summary'
+  | 'item_start'
+  | 'item_step'
+  | 'rate_limit_wait'
+  | 'awaiting_review'
+  | 'merge_result'
+  | 'report'
+  | 'error'
+  | 'cancelled'
+  | 'done'
+
+export interface ProgressEvent {
+  type: ProgressEventType
+  stage?: PipelineStage
+  data: Record<string, unknown>
+  ts: string
+}
+
+// Review gate candidates
+export interface PaperCandidate {
+  id: string
+  title: string
+  authors?: string
+  venue?: string
+  year?: number
+  category?: string
+  bucket?: string
+  url?: string
+  source?: string
+  [key: string]: unknown
+}
+
+export interface RepoCandidate {
+  id: string
+  owner: string
+  repo: string
+  url?: string
+  description?: string
+  [key: string]: unknown
+}
+
+// Gate submission
+export interface GatePayload {
+  process_ids: string[]
+  discard_ids: string[]
+  edits: Record<string, Record<string, string>>
 }
 
 export interface RepoRow {
