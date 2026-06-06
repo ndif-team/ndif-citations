@@ -6,9 +6,13 @@ query functions. See docs/superpowers/specs/2026-06-06-robust-enrichment-design.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 
 from ndif_citations.venue import _WEAK_VENUE_RE
+from ndif_citations.extract import _openalex_fetch_work
+from ndif_citations.utils import extract_arxiv_id_from_url
 
 _ELLIPSIS = ("…", "...")
 _ABSTRACT_MIN = 280
@@ -84,3 +88,38 @@ def reconcile_field(field: str, current: Candidate, candidates: list[Candidate],
     changed = winner.value != current.value
     low_conf = changed and winner.source in low_confidence_sources
     return Resolution(value=winner.value, source=winner.source, changed=changed, low_confidence=low_conf)
+
+
+TITLE_MATCH_THRESHOLD = 0.90
+
+
+def _norm_title(t: str) -> str:
+    return re.sub(r"[^a-z0-9 ]+", "", (t or "").lower()).strip()
+
+
+def title_similarity(a: str, b: str) -> float:
+    return SequenceMatcher(None, _norm_title(a), _norm_title(b)).ratio()
+
+
+def resolve_identifiers(paper) -> bool:
+    """Resolve+persist missing ids. Returns True if anything was resolved.
+    Sets paper._enrichment_via_title = True when an id was adopted via title.search."""
+    if paper.arxiv_id or paper.doi:
+        return False
+    for u in (paper.url, paper.pdf_url):
+        axid = extract_arxiv_id_from_url(u) if u else None
+        if axid:
+            paper.arxiv_id = axid
+            return True
+    work = _openalex_fetch_work(f"title.search:{paper.title[:100]}", by="filter")
+    if not work:
+        return False
+    if title_similarity(paper.title, work.get("title") or "") < TITLE_MATCH_THRESHOLD:
+        return False
+    paper.openalex_id = work.get("id") or paper.openalex_id
+    ids = work.get("ids") or {}
+    doi = (ids.get("doi") or "").replace("https://doi.org/", "")
+    if doi and not paper.doi:
+        paper.doi = doi
+    object.__setattr__(paper, "_enrichment_via_title", True)
+    return True
