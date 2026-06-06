@@ -8,22 +8,19 @@ testable via dependency_overrides.
 """
 from __future__ import annotations
 
-import re as _re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ndif_citations.models import Bucket, Category, DiscoveredPaper, PaperReason, PipelineRun
 from ndif_citations.output import load_existing_papers, write_outputs
 from ndif_citations.utils import slugify
+from ndif_citations.venue import _WEAK_VENUE_RE
 
 if TYPE_CHECKING:
     from fastapi import UploadFile
 
 # PNG file signature (magic bytes) — first 8 bytes of every PNG.
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
-
-
-_WEAK_VENUE_RE = _re.compile(r"^ArXiv \d{4}$")
 
 
 def resolve(out: Path, paper_id: str) -> DiscoveredPaper | None:
