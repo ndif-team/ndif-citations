@@ -62,6 +62,19 @@ def test_reconcile_no_candidates_unchanged():
     assert r.changed is False
 
 
+def test_reconcile_respects_discovery_source_trust_keys():
+    # current value's source is a DiscoverySource enum value ("openalex_fulltext"),
+    # which must out-rank an "s2" candidate so good existing metadata isn't churned.
+    good = "A clean full abstract. " * 30
+    r = reconcile_field("abstract", _c(good, "openalex_fulltext"),
+                        [_c("Another full abstract. " * 30, "s2")])
+    assert r.changed is False
+    # an "s2_citation" current must still lose to a higher-trust openalex candidate
+    r2 = reconcile_field("abstract", _c("A full s2 abstract. " * 30, "s2_citation"),
+                         [_c("Z" * 700, "openalex")])
+    assert r2.changed and r2.source == "openalex"
+
+
 def test_reconcile_low_confidence_flag_propagates():
     r = reconcile_field("abstract", _c("snippet …", "scholar"),
                         [_c("A" * 600, "openalex")], low_confidence_sources={"openalex"})

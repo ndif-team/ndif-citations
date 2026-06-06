@@ -42,9 +42,16 @@ def is_broken(field: str, value) -> bool:
     return False
 
 
+# Trust ranking for metadata authority (higher = more authoritative). Keys cover
+# both enrichment-record sources (openalex/arxiv/crossref/s2) AND the paper's
+# DiscoverySource enum values (s2_citation/openalex_fulltext/scholar/...), so the
+# current value's source resolves correctly regardless of which naming it uses.
 SOURCE_TRUST: dict[str, int] = {
-    "openalex": 4, "crossref": 3, "arxiv": 3, "s2": 3,
-    "manual_add": 2, "scholar": 1, "unknown": 0,
+    "openalex": 4, "openalex_fulltext": 4,
+    "crossref": 3, "arxiv": 3, "s2": 3, "s2_citation": 3,
+    "manual_add": 2,
+    "scholar": 1, "github_dependent": 1,
+    "unknown": 0,
 }
 
 
