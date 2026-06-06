@@ -32,3 +32,40 @@ def test_is_broken_venue_and_affiliations_and_year():
     assert is_broken("affiliations", "MIT") is False
     assert is_broken("year", 0) is True
     assert is_broken("year", 2024) is False
+
+
+from ndif_citations.enrichment import reconcile_field, Candidate
+
+
+def _c(value, source): return Candidate(value=value, source=source)
+
+
+def test_reconcile_replaces_broken_with_valid():
+    r = reconcile_field("abstract", _c("snippet …", "scholar"),
+                         [_c("A" * 600, "openalex")])
+    assert r.changed and r.value == "A" * 600 and r.source == "openalex"
+
+
+def test_reconcile_keeps_good_over_lower_trust():
+    good = "A clean full abstract. " * 30
+    r = reconcile_field("abstract", _c(good, "openalex"),
+                         [_c("Another full abstract. " * 30, "scholar")])
+    assert r.changed is False and r.source == "openalex"
+
+
+def test_reconcile_tie_on_validity_prefers_most_trusted():
+    a = "Full abstract alpha. " * 30
+    b = "Full abstract bravo. " * 30  # same length tier, different source
+    r = reconcile_field("abstract", _c(a, "s2"), [_c(b, "openalex")])
+    assert r.value == b and r.source == "openalex"
+
+
+def test_reconcile_no_candidates_unchanged():
+    r = reconcile_field("authors", _c("Jane Smith, Alan Turing", "s2"), [])
+    assert r.changed is False
+
+
+def test_reconcile_low_confidence_flag_propagates():
+    r = reconcile_field("abstract", _c("snippet …", "scholar"),
+                        [_c("A" * 600, "openalex")], low_confidence_sources={"openalex"})
+    assert r.changed and r.low_confidence is True
