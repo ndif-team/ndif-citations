@@ -8,6 +8,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from ndif_citations import settings_store
+
 # Load .env from the project root (two levels up from this file)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 load_dotenv(_PROJECT_ROOT / ".env")
@@ -168,7 +170,14 @@ DEFAULT_OUTPUT_DIR = _PROJECT_ROOT / "output"
 # ---------------------------------------------------------------------------
 _VENUES_FILE = _PROJECT_ROOT / "data" / "known_venues.json"
 KNOWN_VENUES: dict = {}
-if _VENUES_FILE.exists():
+
+
+def reload_venues() -> None:
+    """Rebuild KNOWN_VENUES from _VENUES_FILE (data/known_venues.json)."""
+    global KNOWN_VENUES
+    if not _VENUES_FILE.exists():
+        KNOWN_VENUES = {}
+        return
     with open(_VENUES_FILE) as f:
         _raw = json.load(f)
     # New unified schema: {"venues": {canonical: {type, aliases?, parent?}}}.
@@ -199,6 +208,9 @@ if _VENUES_FILE.exists():
         KNOWN_VENUES = _raw
 
 
+reload_venues()
+
+
 def get_output_dir(custom: str | None = None) -> Path:
     """Return the output directory, creating it if needed."""
     out = Path(custom) if custom else DEFAULT_OUTPUT_DIR
@@ -206,3 +218,66 @@ def get_output_dir(custom: str | None = None) -> Path:
     (out / "images").mkdir(exist_ok=True)
     (out / "raw").mkdir(exist_ok=True)
     return out
+
+
+# ---------------------------------------------------------------------------
+# Runtime settings overlay (settings.json)
+# ---------------------------------------------------------------------------
+
+_SETTINGS_FILE = _PROJECT_ROOT / "settings.json"
+
+# Mapping: settings.json key → (config module attribute name, converter)
+# Converter is a callable applied to the JSON value before assigning.
+_SETTINGS_KEY_MAP: dict[str, tuple[str, object]] = {
+    "min_paper_year":             ("MIN_PAPER_YEAR",             int),
+    "shared_paper_threshold":     ("SHARED_PAPER_THRESHOLD",     int),
+    "excluded_github_repos":      ("EXCLUDED_GITHUB_REPOS",      set),   # list → set
+    "known_course_sources":       ("KNOWN_COURSE_SOURCES",       set),   # list → set
+    "course_name_patterns":       ("COURSE_NAME_PATTERNS",       list),
+    "ndif_keywords":              ("NDIF_KEYWORDS",              list),
+    "ndif_readme_keywords_regex": ("NDIF_README_KEYWORDS_REGEX", list),
+    "ndif_readme_keywords_substr":("NDIF_README_KEYWORDS_SUBSTR",list),
+    "ndif_readme_negative_patterns":("NDIF_README_NEGATIVE_PATTERNS", list),
+    "llm_model":                  ("LLM_MODEL",                  str),
+    "llm_base_url":               ("LLM_BASE_URL",               str),
+    "llm_rate_limit_sleep":       ("LLM_RATE_LIMIT_SLEEP",       float),
+    "s2_rate_limit_sleep":        ("S2_RATE_LIMIT_SLEEP",        float),
+    "github_rate_limit_sleep":    ("GITHUB_RATE_LIMIT_SLEEP",    float),
+    # publish_target has no direct config attribute; skip it
+}
+
+
+def _apply_settings(s: dict) -> None:
+    """Apply *s* (from settings_store.load) onto this module's globals."""
+    g = globals()
+    for settings_key, (config_attr, converter) in _SETTINGS_KEY_MAP.items():
+        if settings_key in s:
+            g[config_attr] = converter(s[settings_key])
+
+
+# Apply at import time — use load_overrides() so that an absent or empty
+# settings.json results in _apply_settings({}) which is a true no-op.
+# This preserves env-var-derived values (e.g. LLM_MODEL from .env) when no
+# settings.json is present.  If settings.json DOES contain a key, it wins
+# (intended: explicit UI setting takes precedence over env var).
+_apply_settings(settings_store.load_overrides(_SETTINGS_FILE))
+
+
+def reload_settings() -> None:
+    """Re-read .env secrets and re-apply settings.json overrides.
+
+    Safe to call at any time; does not crash if .env or settings.json is absent.
+    """
+    g = globals()
+    # Re-load .env (override=True so any manual exports don't win over .env)
+    load_dotenv(_PROJECT_ROOT / ".env", override=True)
+    # Re-read secret env vars
+    g["LLM_API_KEY"] = os.environ.get("LLM_API_KEY") or None
+    g["S2_API_KEY"] = os.environ.get("S2_API_KEY") or None
+    g["GITHUB_TOKEN"] = os.environ.get("GITHUB_TOKEN") or None
+    g["SERPAPI_API_KEY"] = os.environ.get("SERPAPI_API_KEY") or None
+    g["OPENALEX_EMAIL"] = os.environ.get("OPENALEX_EMAIL") or None
+    g["UNPAYWALL_EMAIL"] = os.environ.get("UNPAYWALL_EMAIL") or g["OPENALEX_EMAIL"]
+    # Re-apply settings.json (overrides only — absent file ⇒ no-op, preserving
+    # env-derived values already set above or pre-existing on the module)
+    _apply_settings(settings_store.load_overrides(_SETTINGS_FILE))

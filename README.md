@@ -8,6 +8,13 @@ Replaces a manual workflow of checking Google Scholar, copying metadata into spr
   <img src="docs/architecture.svg" alt="Pipeline architecture" width="680"/>
 </p>
 
+## Releases
+
+- **v1.0.0 — CLI app.** Discovery (S2 / OpenAlex / Scholar / GitHub), metadata enrichment, LLM classification with confidence bands, and catalog + spreadsheet output.
+- **v2.0.0 — adds the local web app** (`serve`): data-dense dashboard, a curation workspace (browse / edit / promote / discard / reprocess, cached-PDF + figure + evidence views), a run console with a pre-LLM review gate, robust metadata re-enrichment (`re-enrich`), and one-click publish to the site. The CLI is unchanged.
+
+See [Releases](https://github.com/ndif-team/ndif-citations/releases) for notes.
+
 ## Quick start
 
 ```bash
@@ -38,12 +45,39 @@ python -m ndif_citations run
 | `python -m ndif_citations edit <id>` | Interactively override any of 16 curated fields on one paper (sets `manual_override=True`) |
 | `python -m ndif_citations edit <id> --set field=value` | One-shot field edit, scriptable. Repeat `--set` for multiple fields. Add `--yes` to skip confirm. |
 | `python -m ndif_citations reclassify [--ids X,Y]` | Re-run LLM classify on existing papers (apply new pre-filter / band rules) |
+| `python -m ndif_citations re-enrich [--ids X,Y] [--fields …] [--dry-run]` | No-LLM: reconcile abstract/authors/affiliations/year + identifiers from authoritative sources (OpenAlex/arXiv) — fixes thin Google-Scholar metadata. Respects `manual_override`. `--dry-run` previews. |
+| `python -m ndif_citations backfill-evidence [--ids X,Y] [--dry-run]` | No-LLM: populate each paper's NDIF context windows (`ndif_context_windows`) from its cached PDF, shown in the web Evidence panel |
+| `python -m ndif_citations serve [--port 8723] [--no-open]` | Launch the local web app (FastAPI + React) — see [Web app](#web-app) |
 | `python -m ndif_citations promote <id>` | Move paper to verified, freeze with `manual_override=True` |
 | `python -m ndif_citations demote <id> --reason ...` | Move paper to pending, freeze with `manual_override=True` |
 | `python -m ndif_citations discard <id>` | Move paper to discarded, freeze with `manual_override=True` |
 | `python -m ndif_citations debug <id>` | Read-only trace for one paper (PDF cache, keyword hits, classification state) |
 
 All commands accept `--output-dir <path>` and `--verbose` flags.
+
+## Web app
+
+A local single-user web UI wraps the same pipeline — no database, no auth, localhost
+only. The existing JSON output files stay the source of truth.
+
+```bash
+python -m ndif_citations serve          # → http://127.0.0.1:8723 (opens a browser)
+python -m ndif_citations serve --no-open # don't auto-open
+python -m ndif_citations serve --port 9000
+```
+
+The server (FastAPI) hosts a React SPA plus a JSON API at `/api` (`/docs` for Swagger).
+It runs **one pipeline at a time**; mutating endpoints return `409` while a run is active.
+
+| Screen | What it does |
+|--------|--------------|
+| **Dashboard** | Catalog KPIs and category breakdown |
+| **Papers** | Browse / filter the catalog, inline-edit 16 curated fields, promote / demote / discard, batch-reprocess, manage thumbnails. Flags column marks curator-locked (🔒) and missing-metadata (⚠) rows |
+| **Runs** | Trigger a run, watch live progress over SSE (phase stepper, per-source rate-limit cooldowns, event log), cancel, browse history. **Incremental runs pause at a review gate before any LLM spend** so you approve candidates first |
+| **Repos** | Browse / edit / exclude discovered GitHub repos |
+| **Settings** | Edit pipeline knobs and known venues; **publish** the catalog to the `ndif-web-beta` site (dry-run diff first, then apply) |
+
+Everything the UI does maps to a CLI command, so the two workflows are interchangeable.
 
 ### Classification confidence bands
 
@@ -326,6 +360,14 @@ Controls repo tagging, linked-paper detection, and shared-paper template cleanup
 ## Development
 
 Run tests: `pytest tests/` (after `pip install -e ".[dev]"`).
+
+The web UI lives in `web/` (Vite + React + Tailwind). Rebuild after frontend edits —
+`serve` ships the prebuilt `web/dist`:
+
+```bash
+cd web && bun install && bun run build   # → web/dist (served by `serve`)
+bun run dev                              # Vite dev server, proxies /api → :8723
+```
 
 ## License
 

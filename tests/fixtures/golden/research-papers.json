@@ -1,0 +1,40 @@
+[
+  {
+    "title": "Fake New Paper for Test Harness",
+    "authors": "Test Author",
+    "venue": "TestConf 2099",
+    "year": 2099,
+    "url": "",
+    "description": "Fake summary for: Fake New Paper for Test Harness",
+    "category": "uses_nnsight"
+  },
+  {
+    "title": "Activation Steering via Generative Causal Mediation",
+    "authors": "Aruna Sankaranarayanan, Amir Zur, Atticus Geiger, Dylan Hadfield-Menell",
+    "venue": "ICLR 2026",
+    "year": 2026,
+    "url": "https://arxiv.org/abs/2602.16080",
+    "description": "Introduces Generative Causal Mediation for precise intervention in language models.",
+    "category": "uses_nnsight",
+    "image": "/images/Activation-Steering-via-Generative-Causal-Mediation.png"
+  },
+  {
+    "title": "ADAG: Automatically Describing Attribution Graphs",
+    "authors": "Aryaman Arora, Zhengxuan Wu, Jacob Steinhardt, Sarah Schwettmann",
+    "venue": "ArXiv 2026",
+    "year": 2026,
+    "url": "https://arxiv.org/abs/2604.07615",
+    "description": "Automated pipeline for describing attribution graphs in language model interpretability.",
+    "category": "referencing",
+    "image": "/images/ADAG-Automatically-Describing-Attribution-Graphs.png"
+  },
+  {
+    "title": "Behind the Scenes: Mechanistic Interpretability of LoRA-adapted Whisper for Speech Emotion Recognition",
+    "authors": "Y Ma, X Lu, J Sang, X Jiang, R Li",
+    "venue": "ArXiv 2026",
+    "year": 2026,
+    "url": "https://ieeexplore.ieee.org/abstract/document/11464049/",
+    "description": "Mechanistic interpretability study of LoRA within Whisper encoder for speech emotion recognition.",
+    "category": "uses_nnsight"
+  }
+]

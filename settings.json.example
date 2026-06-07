@@ -1,0 +1,17 @@
+{
+  "min_paper_year": 2024,
+  "shared_paper_threshold": 5,
+  "excluded_github_repos": ["ndif-team/nnsight"],
+  "known_course_sources": ["callummcdougall/ARENA_3.0"],
+  "course_name_patterns": ["ARENA", "MATS", "CBAI", " course ", "course project", "coursework", "exercises", "capstone", "homework", "assignment"],
+  "ndif_keywords": ["nnsight", "NNsight", "NDIF", "ndif.us", "nnsight.net", "import nnsight"],
+  "ndif_readme_keywords_regex": ["\\bNDIF\\b"],
+  "ndif_readme_keywords_substr": ["ndif.us", "NDIF cluster", "hosted on NDIF"],
+  "ndif_readme_negative_patterns": ["NDIF Discord", "NDIF Pilot Program", "join the NDIF"],
+  "llm_model": "meta/llama-3.1-70b-instruct",
+  "llm_base_url": "https://integrate.api.nvidia.com/v1",
+  "llm_rate_limit_sleep": 12.0,
+  "s2_rate_limit_sleep": 3.0,
+  "github_rate_limit_sleep": 2.0,
+  "publish_target": null
+}

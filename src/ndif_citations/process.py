@@ -5,9 +5,10 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
-from ndif_citations import config
+from ndif_citations import config, events
+from ndif_citations.events import RunCancelled
 from ndif_citations.models import (
     Bucket, Category, Confidence, DiscoveredPaper, DiscoveredRepo, PaperReason,
 )
@@ -321,18 +322,31 @@ def _augment_prompt_with_tier(prompt: str, tier: Optional[int]) -> str:
     return prompt + _TIER_AUGMENTATION_TEMPLATE.format(tier=tier, descriptor=descriptor)
 
 
-def classify_category(
-    paper: DiscoveredPaper, output_dir: Path,
+def compute_context(
+    paper: DiscoveredPaper,
+    out: Path,
     pdf_path: Path | None = None,
-) -> tuple[Category, float, Confidence]:
-    """Classify a paper's relationship to NDIF/NNsight.
+) -> tuple[list[str], str, Optional[str]]:
+    """Resolve context windows for a paper without calling the LLM.
 
-    Returns (category, float_confidence, band). The float is derived from
-    the band via _BAND_TO_FLOAT for backwards-compat callers. Sets
-    paper.unclassified_reason on UNCLASSIFIED outcomes and
-    paper.classification_signal to the label used by _compute_confidence_band.
+    Attempts PDF extraction first (using *pdf_path* if provided, otherwise
+    calling get_cached_pdf), then falls back to the abstract.
+
+    Returns:
+        (surviving_windows, context_source, prefilter_signal)
+
+    * surviving_windows — list of context window strings that survived
+      pre-filtering.  Empty list means no usable evidence was found or all
+      windows were eliminated by pre-filters.
+    * context_source — "pdf" | "abstract" | "none"
+    * prefilter_signal — set only when ALL windows were eliminated by a
+      pre-filter rule (e.g. "pre_filter:negative_evidence"), or a sentinel
+      when early-exit conditions are met ("no_keywords" | "no_evidence").
+      None when surviving_windows is non-empty.
     """
-    from ndif_citations.models import _BAND_TO_FLOAT  # local import to avoid cycle
+    if pdf_path is None:
+        from ndif_citations.pdf_cache import get_cached_pdf as _get_cached_pdf
+        pdf_path = _get_cached_pdf(paper, out)
 
     context = ""
     context_source = "none"
@@ -352,16 +366,10 @@ def classify_category(
                 logger.debug(f"Using abstract as context for '{paper.title}'")
             else:
                 logger.info(f"No NDIF/nnsight mentions found for '{paper.title}' — UNCLASSIFIED")
-                paper.unclassified_reason = "no_keywords_anywhere"
-                paper.classification_signal = "no_keywords"
-                band = Confidence.NONE
-                return Category.UNCLASSIFIED, _BAND_TO_FLOAT[band], band
+                return [], "none", "no_keywords"
         else:
             logger.info(f"No extractable evidence for '{paper.title}' — UNCLASSIFIED")
-            paper.unclassified_reason = "no_evidence_extractable"
-            paper.classification_signal = "no_evidence"
-            band = Confidence.NONE
-            return Category.UNCLASSIFIED, _BAND_TO_FLOAT[band], band
+            return [], "none", "no_evidence"
     else:
         context_source = "pdf"
 
@@ -373,7 +381,41 @@ def classify_category(
     # Pre-filters: split context into windows and filter each one
     windows = context.split("\n---\n")
     surviving_windows, prefilter_signal = _apply_prefilters(windows, paper)
+
+    return surviving_windows, context_source, prefilter_signal
+
+
+def classify_category(
+    paper: DiscoveredPaper, output_dir: Path,
+    pdf_path: Path | None = None,
+) -> tuple[Category, float, Confidence]:
+    """Classify a paper's relationship to NDIF/NNsight.
+
+    Returns (category, float_confidence, band). The float is derived from
+    the band via _BAND_TO_FLOAT for backwards-compat callers. Sets
+    paper.unclassified_reason on UNCLASSIFIED outcomes and
+    paper.classification_signal to the label used by _compute_confidence_band.
+    """
+    from ndif_citations.models import _BAND_TO_FLOAT  # local import to avoid cycle
+
+    surviving_windows, context_source, prefilter_signal = compute_context(
+        paper, output_dir, pdf_path=pdf_path
+    )
+    paper.ndif_context_windows = surviving_windows
+    paper.context_source = context_source
     surviving_window_count = len(surviving_windows)
+
+    # Handle early-exit sentinels returned by compute_context
+    if prefilter_signal == "no_keywords":
+        paper.unclassified_reason = "no_keywords_anywhere"
+        paper.classification_signal = "no_keywords"
+        band = Confidence.NONE
+        return Category.UNCLASSIFIED, _BAND_TO_FLOAT[band], band
+    if prefilter_signal == "no_evidence":
+        paper.unclassified_reason = "no_evidence_extractable"
+        paper.classification_signal = "no_evidence"
+        band = Confidence.NONE
+        return Category.UNCLASSIFIED, _BAND_TO_FLOAT[band], band
 
     if not surviving_windows:
         # All windows eliminated by pre-filter — classify without LLM
@@ -764,7 +806,8 @@ def _check_discard_zero_pdf_hits(paper: DiscoveredPaper, pdf_path: Optional[Path
 def process_papers(
     decisions: list[RoutingDecision],
     output_dir: Path,
-    skip_llm: bool = False
+    skip_llm: bool = False,
+    cancel_check: "Callable[[], bool] | None" = None,
 ) -> list[DiscoveredPaper]:
     """Process papers based on routing decisions (selective processing).
 
@@ -787,9 +830,14 @@ def process_papers(
     results: list[DiscoveredPaper] = []
 
     for i, decision in enumerate(decisions):
+        if cancel_check is not None and cancel_check():
+            raise RunCancelled(completed=len(results), results=list(results))
+
         paper = decision.paper
         bucket = decision.bucket
         needs = decision.processing_needed
+
+        events.emit("item_start", stage="process", idx=i, total=len(decisions), title=paper.title, bucket=bucket.value)
 
         logger.info(f"[{i+1}/{len(decisions)}] {bucket.value}: {paper.title[:60]}...")
 
@@ -853,6 +901,7 @@ def process_papers(
             else:
                 paper.description = generate_summary(paper)
         paper.has_summary = bool(paper.description)
+        events.emit("item_step", stage="process", idx=i, step="summary")
 
         # Discard check: zero PDF keyword hits (US-D2)
         if needs.get("classify") and pdf_path:
@@ -873,6 +922,7 @@ def process_papers(
                 paper.category_confidence_band = band
                 paper.has_classification = category != Category.UNCLASSIFIED
                 paper.bucket, paper.reason = _decide_bucket(paper)
+        events.emit("item_step", stage="process", idx=i, step="classify")
 
         # Thumbnail extraction — guarded for manual_override
         if needs.get("thumbnail"):
@@ -886,6 +936,7 @@ def process_papers(
                     if extracted:
                         paper.image = extracted
         paper.has_thumbnail = bool(paper.image)
+        events.emit("item_step", stage="process", idx=i, step="thumbnail")
 
         # Affiliation extraction from PDF (heuristic, no LLM)
         if needs.get("affiliations") and not paper.affiliations and pdf_path and pdf_path.exists():
@@ -898,6 +949,7 @@ def process_papers(
             except Exception as e:
                 logger.debug(f"Affiliation extraction failed: {e}")
         paper.has_affiliations = bool(paper.affiliations)
+        events.emit("item_step", stage="process", idx=i, step="affiliations")
 
         results.append(paper)
 
@@ -942,7 +994,7 @@ def classify_repo(repo: "DiscoveredRepo") -> None:
     repo.has_classification = True
 
 
-def process_repos(decisions: list[RepoRoutingDecision]) -> list[DiscoveredRepo]:
+def process_repos(decisions: list[RepoRoutingDecision], cancel_check: "Callable[[], bool] | None" = None) -> list[DiscoveredRepo]:
     """Phase 3 for repos: apply classification per routing bucket.
 
     NEW / REPROCESS: recompute content_hash (classification already done in enrichment)
@@ -953,8 +1005,13 @@ def process_repos(decisions: list[RepoRoutingDecision]) -> list[DiscoveredRepo]:
     total = len(decisions)
 
     for i, decision in enumerate(decisions):
+        if cancel_check is not None and cancel_check():
+            raise RunCancelled(completed=len(results), results=list(results))
+
         repo = decision.repo
         bucket = decision.bucket
+
+        events.emit("item_start", stage="process", idx=i, total=total, title=f"{repo.owner}/{repo.repo}")
 
         try:
             if bucket in (ProcessingBucket.NEW, ProcessingBucket.REPROCESS):
@@ -992,6 +1049,7 @@ def process_repos(decisions: list[RepoRoutingDecision]) -> list[DiscoveredRepo]:
                 f"Failed to process repo {repo.owner}/{repo.repo}: {e}"
             )
 
+        events.emit("item_step", stage="process", idx=i, step="classify")
         results.append(repo)
 
     logger.info(f"Repo processing complete: {len(results)} repos processed")

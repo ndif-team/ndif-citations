@@ -10,10 +10,84 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 from ndif_citations import config
-from ndif_citations.models import PipelineRun
-from ndif_citations.router import route_papers, get_bucket_summary
+from ndif_citations.events import ProgressEvent
 
 console = Console()
+
+
+# --------------------------------------------------------------------------- #
+# Event -> Rich console renderer
+# --------------------------------------------------------------------------- #
+# `cli.run` drives `orchestrator.run_pipeline`, which emits ProgressEvents for
+# every console line the legacy inline pipeline used to print. This renderer maps
+# each event back to the exact Rich output the old `run()` produced — phase
+# headers, source/dedup counts, routing summaries, and per-stage log lines —
+# preserving the CLI UX. The final report is NOT an event; `run()` calls
+# `print_report(...)` directly.
+
+# orchestrator stage name -> legacy "Phase N: <Title>" header.
+_STAGE_HEADERS = {
+    "discover": "[bold]Phase 1:[/bold] Discovery",
+    "enrich": "[bold]Phase 2:[/bold] Metadata Enrichment",
+    "route": "[bold]Phase 2.5:[/bold] Routing",
+    "process": "[bold]Phase 3:[/bold] Content Processing",
+    "finalize": "[bold]Phase 4:[/bold] Output",
+}
+
+
+def _render_event(ev: ProgressEvent) -> None:
+    """Render a single orchestrator ProgressEvent as the legacy CLI console output.
+
+    Mirrors the wording/format of the inline pipeline that previously lived in
+    ``run()``. Unhandled event types (e.g. ``merge_result``, ``report`` — the
+    latter is rendered by ``print_report`` instead) are intentionally ignored.
+    """
+    t = ev.type
+    d = ev.data
+
+    if t == "stage_start":
+        header = _STAGE_HEADERS.get(ev.stage)
+        if header:
+            console.print(header)
+        return
+
+    if t == "stage_done":
+        # Every legacy phase block ended with a trailing blank line.
+        console.print()
+        return
+
+    if t == "source_count":
+        if "github" in d:
+            console.print(f"  GitHub dependents: [green]{d['github']}[/green] repos found")
+        else:
+            console.print(
+                f"  Papers — S2: {d.get('s2', 0)}, "
+                f"OpenAlex: {d.get('openalex', 0)}, "
+                f"Scholar: {d.get('scholar', 0)}"
+            )
+        return
+
+    if t == "dedup":
+        console.print(f"  After deduplication: [cyan]{d['before_year']}[/cyan] unique papers")
+        if d.get("dropped_old"):
+            console.print(
+                f"  After year filter (>= {d['min_year']}): "
+                f"[cyan]{d['after_year']}[/cyan] (dropped {d['dropped_old']} pre-{d['min_year']})"
+            )
+        return
+
+    if t == "route_summary":
+        label = "Papers" if d.get("kind") == "papers" else "Repos"
+        console.print(f"  {label} — {d['to_process']} to process, {d['skipped']} skipped")
+        return
+
+    if t == "log":
+        msg = d.get("message", "")
+        style = d.get("style")
+        console.print(f"  [{style}]{msg}[/{style}]" if style else f"  {msg}")
+        return
+
+    # merge_result / report / item_* / etc.: not part of the legacy line output.
 
 
 def _setup_logging(verbose: bool = False) -> None:
@@ -45,224 +119,31 @@ def run(output_dir: str | None, fresh: bool, skip_github: bool, skip_papers: boo
         console.print("[bold red]Error:[/bold red] --skip-github and --skip-papers cannot both be set (nothing to do)")
         raise SystemExit(1)
 
-    from ndif_citations.discover import (
-        deduplicate_papers,
-        discover_github_dependents,
-        discover_openalex,
-        discover_s2_citations,
-        discover_scholar,
-        enrich_repos_from_github_api,
-        filter_by_min_year,
-        link_repos_to_papers,
-        _tag_repo_type,
-        _unlink_shared_template_papers,
-    )
-    from ndif_citations.extract import check_venue_upgrades, enrich_papers
-    from ndif_citations.output import (
-        _write_repos_outputs,
-        _write_xlsx,
-        load_existing_papers,
-        load_existing_repos,
-        merge_papers,
-        merge_repos,
-        print_report,
-        write_outputs,
-    )
-    from ndif_citations.process import process_papers, process_repos
-    from ndif_citations.router import route_papers, route_repos
+    from ndif_citations import events, orchestrator
+    from ndif_citations.output import print_report
 
     out = config.get_output_dir(output_dir)
-    raw_dir = out / "raw"
-    run_stats = PipelineRun()
 
     console.print("\n[bold cyan]NDIF Citation Tracker[/bold cyan] — Starting full pipeline\n")
 
-    # ------------------------------------------------------------------ #
-    # Phase 1: Discovery
-    # ------------------------------------------------------------------ #
-    console.print("[bold]Phase 1:[/bold] Discovery")
-
-    unique_papers = []
-    if not skip_papers:
-        s2_papers = discover_s2_citations(raw_dir)
-        run_stats.s2_citations_found = len(s2_papers)
-
-        openalex_papers = discover_openalex(raw_dir)
-        run_stats.openalex_found = len(openalex_papers)
-
-        scholar_papers = discover_scholar(raw_dir, force_refresh=fresh)
-        run_stats.scholar_found = len(scholar_papers)
-
-        all_papers = s2_papers + openalex_papers + scholar_papers
-        unique_papers = deduplicate_papers(all_papers)
-        before_year = len(unique_papers)
-        unique_papers = filter_by_min_year(unique_papers, config.MIN_PAPER_YEAR)
-        dropped_old = before_year - len(unique_papers)
-        console.print(
-            f"  Papers — S2: {run_stats.s2_citations_found}, "
-            f"OpenAlex: {run_stats.openalex_found}, "
-            f"Scholar: {run_stats.scholar_found}"
+    events.set_sink(_render_event)
+    try:
+        result = orchestrator.run_pipeline(
+            out,
+            mode="fresh" if fresh else "incremental",
+            skip_papers=skip_papers,
+            skip_github=skip_github,
         )
-        console.print(f"  After deduplication: [cyan]{before_year}[/cyan] unique papers")
-        if dropped_old:
-            console.print(f"  After year filter (>= {config.MIN_PAPER_YEAR}): [cyan]{len(unique_papers)}[/cyan] (dropped {dropped_old} pre-{config.MIN_PAPER_YEAR})")
-    else:
-        console.print("  [dim]--skip-papers: skipping S2/OpenAlex/Scholar discovery[/dim]")
+    finally:
+        events.clear_sink()
 
-    discovered_repos = []
-    if not skip_github:
-        discovered_repos = discover_github_dependents(raw_dir)
-        run_stats.github_dependents_found = len(discovered_repos)
-        console.print(f"  GitHub dependents: [green]{len(discovered_repos)}[/green] repos found")
-    else:
-        console.print("  [dim]--skip-github: skipping GitHub discovery[/dim]")
-    console.print()
-
-    # ------------------------------------------------------------------ #
-    # Phase 2: Enrichment
-    # ------------------------------------------------------------------ #
-    console.print("[bold]Phase 2:[/bold] Metadata Enrichment")
-
-    if not skip_papers and unique_papers:
-        unique_papers = enrich_papers(unique_papers, raw_dir)
-        console.print(f"  Enriched {len(unique_papers)} papers")
-
-    repo_removal_counts: dict[str, int] = {"404": 0, "rename_redirect": 0, "archived": 0}
-    if not skip_github and discovered_repos:
-        console.print("  Enriching repos via GitHub API (stars, forks, last commit)...")
-        discovered_repos, repo_removal_counts = enrich_repos_from_github_api(discovered_repos)
-        console.print(f"  {len(discovered_repos)} repos retained after staleness check")
-
-        # Drop excluded repos (e.g. ndif-team/nnsight — the library itself)
-        pre_filter = len(discovered_repos)
-        discovered_repos = [r for r in discovered_repos if r.merge_key() not in config.EXCLUDED_GITHUB_REPOS]
-        if len(discovered_repos) < pre_filter:
-            console.print(f"  Excluded {pre_filter - len(discovered_repos)} repo(s) from EXCLUDED_GITHUB_REPOS")
-
-        # Cross-repo cleanup: unlink shared template papers (runs on merged set)
-        if not fresh:
-            existing_for_cross = load_existing_repos(out)
-            # Merge: discovered repos override existing by merge_key
-            by_key = {r.merge_key(): r for r in existing_for_cross}
-            by_key.update({r.merge_key(): r for r in discovered_repos})
-            all_for_cross = list(by_key.values())
-        else:
-            all_for_cross = discovered_repos
-
-        unlinked_set = _unlink_shared_template_papers(all_for_cross)
-        if unlinked_set:
-            console.print(f"  Shared-paper cleanup: {len(unlinked_set)} template links unlinked")
-
-        # Tag every repo (runs on the merged set for consistent cross-repo state)
-        course_cleared = 0
-        for repo in all_for_cross:
-            repo.repo_type = _tag_repo_type(repo, unlinked_set)
-            # Course repos cite many papers — none is canonical. Clear the link
-            # so they neither display a 📄 badge nor cross-link to any paper.
-            # Skip this side effect for curator-overridden repos: if a human
-            # set both repo_type AND linked_paper_url, trust them.
-            if (
-                repo.repo_type == "course"
-                and repo.linked_paper_url
-                and not repo.manual_override
-            ):
-                repo.linked_paper_url = None
-                repo.linked_paper_tier = None
-                course_cleared += 1
-        if course_cleared:
-            console.print(f"  Cleared linked_paper_url on {course_cleared} course repo(s)")
-
-        # Cross-link repos <-> papers (minimal URL fields)
-        if not skip_papers:
-            link_repos_to_papers(discovered_repos, unique_papers)
-            console.print("  Cross-linked repos and papers")
-    console.print()
-
-    # ------------------------------------------------------------------ #
-    # Phase 2.5: Routing
-    # ------------------------------------------------------------------ #
-    console.print("[bold]Phase 2.5:[/bold] Routing")
-
-    decisions = []
-    if not skip_papers:
-        existing_papers = load_existing_papers(out) if not fresh else []
-        decisions = route_papers(unique_papers, existing_papers)
-        skipped = sum(1 for d in decisions if d.bucket.value in ("skip", "protected"))
-        console.print(f"  Papers — {len(decisions) - skipped} to process, {skipped} skipped")
-
-    repo_decisions = []
-    if not skip_github and discovered_repos:
-        existing_repos = load_existing_repos(out) if not fresh else []
-        repo_decisions = route_repos(discovered_repos, existing_repos)
-        repo_skipped = sum(1 for d in repo_decisions if d.bucket.value in ("skip", "protected"))
-        console.print(f"  Repos — {len(repo_decisions) - repo_skipped} to process, {repo_skipped} skipped")
-    console.print()
-
-    # ------------------------------------------------------------------ #
-    # Phase 3: Processing
-    # ------------------------------------------------------------------ #
-    console.print("[bold]Phase 3:[/bold] Content Processing")
-
-    processed_papers = []
-    if not skip_papers and decisions:
-        console.print("  Running LLM summaries, classification, thumbnails...")
-        processed_papers = process_papers(decisions, out)
-        console.print(f"  Processed {len(processed_papers)} papers")
-
-    processed_repos = []
-    if not skip_github and repo_decisions:
-        console.print("  Classifying repos (keyword-only)...")
-        processed_repos = process_repos(repo_decisions)
-        console.print(f"  Classified {len(processed_repos)} repos")
-    console.print()
-
-    # ------------------------------------------------------------------ #
-    # Phase 4: Output
-    # ------------------------------------------------------------------ #
-    console.print("[bold]Phase 4:[/bold] Output")
-
-    merged_papers = []
-    if not skip_papers:
-        if fresh:
-            console.print("  [yellow]--fresh flag: rebuilding papers from scratch[/yellow]")
-            existing_for_merge = []
-        else:
-            existing_for_merge = load_existing_papers(out)
-        merged_papers, run_stats = merge_papers(existing_for_merge, [d.paper for d in decisions], run_stats)
-
-        if existing_for_merge:
-            upgrades = check_venue_upgrades(unique_papers, existing_for_merge)
-            if upgrades:
-                console.print(f"  [green]{len(upgrades)} venue upgrade(s) detected[/green]")
-
-        write_outputs(merged_papers, out, run_stats)
-
-    merged_repos = []
-    if not skip_github:
-        if fresh:
-            console.print("  [yellow]--fresh flag: rebuilding repos from scratch[/yellow]")
-            existing_repos_for_merge = []
-        else:
-            existing_repos_for_merge = load_existing_repos(out)
-        merged_repos = merge_repos(processed_repos, existing_repos_for_merge)
-        _write_repos_outputs(merged_repos, out)
-
-    # Write combined XLSX (only if both sides ran, or just one)
-    _write_xlsx(
-        merged_papers if not skip_papers else [],
-        merged_repos if not skip_github else [],
-        out,
-        skip_papers=skip_papers,
-        skip_github=skip_github,
-    )
-
-    # Print final report
+    # Print final report (NOT an event — rendered directly, exactly as before).
     print_report(
-        run_stats, merged_papers, out,
-        repos=merged_repos,
+        result.run_stats, result.merged_papers, out,
+        repos=result.merged_repos,
         skip_github=skip_github,
         skip_papers=skip_papers,
-        repos_removed_counts=repo_removal_counts,
+        repos_removed_counts=result.removal_counts,
     )
 
 
@@ -353,82 +234,17 @@ def discover(output_dir: str | None, fresh: bool) -> None:
 @click.option("--output-dir", "-o", default=None, help="Custom output directory")
 def add(url: str, output_dir: str | None) -> None:
     """Process a single paper by URL and append it to the output."""
-    from ndif_citations.extract import enrich_papers
-    from ndif_citations.models import Category, DiscoveredPaper, DiscoverySource
-    from ndif_citations.output import load_existing_papers, merge_papers, write_outputs
-    from ndif_citations.process import process_papers
-    from ndif_citations.utils import extract_arxiv_id_from_url
+    from ndif_citations import manual_add
 
     out = config.get_output_dir(output_dir)
 
     console.print(f"\n[bold cyan]NDIF Citation Tracker[/bold cyan] — Adding paper: {url}\n")
 
-    # Create a paper from the URL
-    arxiv_id = extract_arxiv_id_from_url(url)
+    result = manual_add.add_paper_by_url(out, url)
 
-    paper = DiscoveredPaper(
-        title="[Pending metadata lookup]",
-        url=url,
-        arxiv_id=arxiv_id,
-        source=DiscoverySource.MANUAL_ADD,
-    )
+    console.print(f"  Title: [cyan]{result['title']}[/cyan]")
 
-    # Try to look up metadata via S2
-    if arxiv_id:
-        try:
-            from semanticscholar import SemanticScholar
-            sch = SemanticScholar(api_key=config.S2_API_KEY) if config.S2_API_KEY else SemanticScholar()
-            s2_paper = sch.get_paper(f"ARXIV:{arxiv_id}", fields=config.S2_FIELDS)
-            if s2_paper:
-                paper.title = getattr(s2_paper, "title", paper.title)
-                authors_list = getattr(s2_paper, "authors", []) or []
-                paper.authors = ", ".join(
-                    a.get("name", "") if isinstance(a, dict) else getattr(a, "name", str(a))
-                    for a in authors_list
-                )
-                paper.abstract = getattr(s2_paper, "abstract", None)
-                paper.venue = getattr(s2_paper, "venue", "") or ""
-                pub_date_str = getattr(s2_paper, "publicationDate", None)
-                if pub_date_str:
-                    from datetime import date
-                    try:
-                        if isinstance(pub_date_str, str):
-                            paper.publication_date = date.fromisoformat(pub_date_str)
-                        else:
-                            paper.publication_date = pub_date_str
-                        paper.year = paper.publication_date.year
-                    except (ValueError, AttributeError):
-                        pass
-                external_ids = getattr(s2_paper, "externalIds", {}) or {}
-                paper.doi = external_ids.get("DOI")
-                paper.s2_paper_id = getattr(s2_paper, "paperId", None)
-                open_access = getattr(s2_paper, "openAccessPdf", None)
-                if open_access:
-                    paper.pdf_url = (open_access.get("url")
-                                     if isinstance(open_access, dict)
-                                     else getattr(open_access, "url", None))
-        except Exception as e:
-            console.print(f"  [yellow]S2 lookup failed: {e}[/yellow]")
-
-    papers = [paper]
-
-    # Enrich
-    papers = enrich_papers(papers)
-    console.print(f"  Title: [cyan]{papers[0].title}[/cyan]")
-    console.print(f"  Authors: {papers[0].authors}")
-    console.print(f"  Venue: {papers[0].venue}")
-
-    # Process
-    papers = process_papers(papers, out)
-    console.print(f"  Category: [green]{papers[0].category.value}[/green]")
-    console.print(f"  Description: {papers[0].description[:100]}...")
-
-    # Merge and save
-    existing = load_existing_papers(out)
-    merged, run_stats = merge_papers(existing, papers)
-    write_outputs(merged, out, run_stats)
-
-    if run_stats.new_papers > 0:
+    if result["added"]:
         console.print(f"\n  ★ [bold green]Paper added successfully![/bold green]")
     else:
         console.print(f"\n  ─ [dim]Paper already exists in database[/dim]")
@@ -718,6 +534,116 @@ def reclassify(ids: str | None, output_dir: str | None, dry_run: bool) -> None:
         console.print("\n[dim]Dry run — no files written.[/dim]")
 
 
+@cli.command(name="re-enrich")
+@click.option("--ids", default=None, help="Comma-separated arXiv IDs, DOIs, or URLs to re-enrich")
+@click.option("--output-dir", "-o", default=None, help="Custom output directory")
+@click.option("--fields", default=None,
+              help="Comma-separated subset of: abstract,authors,affiliations,year")
+@click.option("--dry-run", is_flag=True, help="Print changes without writing files")
+def re_enrich(ids, output_dir, fields, dry_run):
+    """Reconcile metadata (abstract/authors/affiliations/year + identifiers) from
+    authoritative sources for existing papers. No LLM, no discovery. Respects
+    manual_override. (Venue is owned by the resolve_venue cascade, not re-enrich.)"""
+    from ndif_citations.output import load_existing_papers, write_outputs
+    from ndif_citations import config as cfg, enrichment
+    from ndif_citations.models import PipelineRun
+
+    _setup_logging(verbose=True)
+    out = cfg.get_output_dir(output_dir)
+    papers = load_existing_papers(out)
+    if not papers:
+        console.print(f"[bold red]No papers found in {out}[/bold red]")
+        return
+
+    field_tuple = enrichment._MANAGED_FIELDS
+    if fields:
+        field_tuple = tuple(f.strip() for f in fields.split(",") if f.strip())
+        unknown = [f for f in field_tuple if f not in enrichment._MANAGED_FIELDS]
+        if unknown:
+            raise click.UsageError(
+                f"Unknown --fields {unknown}; valid: {', '.join(enrichment._MANAGED_FIELDS)}")
+
+    targets = papers
+    if ids:
+        wanted = {x.strip() for x in ids.split(",") if x.strip()}
+        targets = [p for p in papers if p.arxiv_id in wanted or p.doi in wanted or p.url in wanted]
+        if not targets:
+            console.print(f"[yellow]No papers matched the given IDs: {sorted(wanted)}[/yellow]")
+            return
+
+    def _fmt(v: object) -> str:
+        s = str(v).replace("\n", " ")
+        if len(s) > 50:
+            return f'{len(s)}ch "{s[:40]}…"'   # show length so snippet->full is visible
+        return repr(s)
+
+    updated = 0
+    failed = 0
+    needs_review: list[str] = []
+    for p in targets:
+        try:
+            cs = enrichment.enrich_paper(p, dry_run=dry_run, fields=field_tuple)
+        except Exception as e:  # one paper's failure must not abort the batch
+            failed += 1
+            console.print(f"  [red]ERROR[/red] {p.title[:60]!r}: {e}")
+            continue
+        if cs.changes:
+            updated += 1
+            console.print(f"  [cyan]{p.title[:60]}[/cyan]")
+            for f, (old, new, src, low) in cs.changes.items():
+                tag = " [LOW-CONF]" if low else ""
+                console.print(f"    {f} <- {src}{tag}: {_fmt(old)} -> {_fmt(new)}")
+        elif (not p.arxiv_id and not p.doi):
+            needs_review.append(p.title)
+
+    unchanged = len(targets) - updated - failed
+    console.print(f"\n[bold]{updated} updated[/bold], {unchanged} unchanged"
+                  + (f", [red]{failed} failed[/red]" if failed else "") + ".")
+    if needs_review:
+        console.print(f"[yellow]{len(needs_review)} need manual review (no resolvable identifier).[/yellow]")
+    if not dry_run and updated:
+        run = PipelineRun()
+        write_outputs(papers, out, run)
+        console.print("[green]Catalog written.[/green]")
+    elif dry_run:
+        console.print("[dim]Dry run — no files written.[/dim]")
+
+
+@cli.command(name="backfill-evidence")
+@click.option("--ids", default=None, help="Comma-separated arXiv IDs, DOIs, or URLs")
+@click.option("--output-dir", "-o", default=None, help="Custom output directory")
+@click.option("--dry-run", is_flag=True, help="Print without writing files")
+def backfill_evidence(ids, output_dir, dry_run):
+    """Populate ndif_context_windows/context_source for existing papers (no LLM)."""
+    from ndif_citations.output import load_existing_papers, write_outputs
+    from ndif_citations import config as cfg, process
+    from ndif_citations.models import PipelineRun
+    _setup_logging(verbose=True)
+    out = cfg.get_output_dir(output_dir)
+    papers = load_existing_papers(out)
+    if not papers:
+        console.print(f"[bold red]No papers found in {out}[/bold red]"); return
+    targets = papers
+    if ids:
+        wanted = {x.strip() for x in ids.split(",") if x.strip()}
+        targets = [p for p in papers if p.arxiv_id in wanted or p.doi in wanted or p.url in wanted]
+    n = 0
+    for p in targets:
+        try:
+            windows, source, _ = process.compute_context(p, out)
+        except Exception as e:
+            console.print(f"  [red]ERROR[/red] {p.title[:50]!r}: {e}"); continue
+        if windows or source != "none":
+            if not dry_run:
+                p.ndif_context_windows = windows
+                p.context_source = source
+            n += 1
+    console.print(f"\n[bold]{n}[/bold] papers with evidence" + (" (dry-run)" if dry_run else ""))
+    if not dry_run and n:
+        write_outputs(papers, out, PipelineRun())
+        console.print("[green]Catalog written.[/green]")
+
+
 def _resolve_paper(papers, paper_id: str):
     """Return (index, paper) matching paper_id (arXiv ID, DOI, or URL). Returns (None, None) if not found."""
     from ndif_citations.utils import normalize_arxiv_id, extract_arxiv_id_from_url
@@ -985,6 +911,27 @@ def edit(paper_id: str, output_dir: str | None,
     run = PipelineRun()
     write_outputs(papers, out, run)
     console.print("\n[green][OK] Saved.[/green]")
+
+
+@cli.command()
+@click.option("--port", default=8723, show_default=True, help="Port to bind on localhost")
+@click.option("--host", default="127.0.0.1", show_default=True, help="Host to bind (localhost only by default)")
+@click.option("--no-open", is_flag=True, default=False, help="Don't auto-open the browser")
+def serve(port, host, no_open):
+    """Launch the local web app (FastAPI) and open it in the browser."""
+    import threading
+    import uvicorn
+    import webbrowser
+
+    url = f"http://{host}:{port}"
+    console.print(f"[bold cyan]NDIF Citations[/bold cyan] — serving at {url}")
+
+    if not no_open:
+        timer = threading.Timer(1.0, lambda: webbrowser.open(url))
+        timer.daemon = True
+        timer.start()
+
+    uvicorn.run("ndif_citations.server.app:app", host=host, port=port, log_level="info")
 
 
 if __name__ == "__main__":
