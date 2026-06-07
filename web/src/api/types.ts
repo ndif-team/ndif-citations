@@ -86,6 +86,10 @@ export interface PaperDetail {
   processing_bucket: string
   confidence_band: ConfidenceBand
   has_image: boolean
+  missing?: string[]
+  has_pdf?: boolean
+  ndif_context_windows?: string[]
+  context_source?: string
 }
 
 // Reprocess job response

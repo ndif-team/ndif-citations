@@ -229,3 +229,9 @@ export async function putPublishTarget(path: string): Promise<{ publish_target: 
 export async function runPublish(dry_run: boolean): Promise<PublishDryRunResponse | PublishResponse> {
   return post<PublishDryRunResponse | PublishResponse>('/publish', { dry_run })
 }
+
+// ---------------------------------------------------------------------------
+// Paper PDF URL helper
+// ---------------------------------------------------------------------------
+
+export const paperPdfUrl = (id: string) => `/api/papers/${encodeURIComponent(id)}/pdf`
