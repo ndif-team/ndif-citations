@@ -609,6 +609,41 @@ def re_enrich(ids, output_dir, fields, dry_run):
         console.print("[dim]Dry run — no files written.[/dim]")
 
 
+@cli.command(name="backfill-evidence")
+@click.option("--ids", default=None, help="Comma-separated arXiv IDs, DOIs, or URLs")
+@click.option("--output-dir", "-o", default=None, help="Custom output directory")
+@click.option("--dry-run", is_flag=True, help="Print without writing files")
+def backfill_evidence(ids, output_dir, dry_run):
+    """Populate ndif_context_windows/context_source for existing papers (no LLM)."""
+    from ndif_citations.output import load_existing_papers, write_outputs
+    from ndif_citations import config as cfg, process
+    from ndif_citations.models import PipelineRun
+    _setup_logging(verbose=True)
+    out = cfg.get_output_dir(output_dir)
+    papers = load_existing_papers(out)
+    if not papers:
+        console.print(f"[bold red]No papers found in {out}[/bold red]"); return
+    targets = papers
+    if ids:
+        wanted = {x.strip() for x in ids.split(",") if x.strip()}
+        targets = [p for p in papers if p.arxiv_id in wanted or p.doi in wanted or p.url in wanted]
+    n = 0
+    for p in targets:
+        try:
+            windows, source, _ = process.compute_context(p, out)
+        except Exception as e:
+            console.print(f"  [red]ERROR[/red] {p.title[:50]!r}: {e}"); continue
+        if windows or source != "none":
+            if not dry_run:
+                p.ndif_context_windows = windows
+                p.context_source = source
+            n += 1
+    console.print(f"\n[bold]{n}[/bold] papers with evidence" + (" (dry-run)" if dry_run else ""))
+    if not dry_run and n:
+        write_outputs(papers, out, PipelineRun())
+        console.print("[green]Catalog written.[/green]")
+
+
 def _resolve_paper(papers, paper_id: str):
     """Return (index, paper) matching paper_id (arXiv ID, DOI, or URL). Returns (None, None) if not found."""
     from ndif_citations.utils import normalize_arxiv_id, extract_arxiv_id_from_url
