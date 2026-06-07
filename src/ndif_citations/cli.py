@@ -575,9 +575,15 @@ def re_enrich(ids, output_dir, fields, dry_run):
         return s[:n] + ("…" if len(s) > n else "")
 
     updated = 0
+    failed = 0
     needs_review: list[str] = []
     for p in targets:
-        cs = enrichment.enrich_paper(p, dry_run=dry_run, fields=field_tuple)
+        try:
+            cs = enrichment.enrich_paper(p, dry_run=dry_run, fields=field_tuple)
+        except Exception as e:  # one paper's failure must not abort the batch
+            failed += 1
+            console.print(f"  [red]ERROR[/red] {p.title[:60]!r}: {e}")
+            continue
         if cs.changes:
             updated += 1
             console.print(f"  [cyan]{p.title[:60]}[/cyan]")
@@ -587,7 +593,9 @@ def re_enrich(ids, output_dir, fields, dry_run):
         elif (not p.arxiv_id and not p.doi):
             needs_review.append(p.title)
 
-    console.print(f"\n[bold]{updated} updated[/bold], {len(targets) - updated} unchanged.")
+    unchanged = len(targets) - updated - failed
+    console.print(f"\n[bold]{updated} updated[/bold], {unchanged} unchanged"
+                  + (f", [red]{failed} failed[/red]" if failed else "") + ".")
     if needs_review:
         console.print(f"[yellow]{len(needs_review)} need manual review (no resolvable identifier).[/yellow]")
     if not dry_run and updated:
