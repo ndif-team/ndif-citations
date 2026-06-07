@@ -253,6 +253,7 @@ function EditFieldRow({ field, value, error, disabled, onChange }: EditFieldRowP
 
 interface BucketActionsProps {
   paper: PaperDetail
+  paperId: string
   disabled: boolean
   onMutate: (updater: (prev: PaperDetail) => PaperDetail) => void
 }
@@ -272,7 +273,7 @@ const BUCKET_REASON_OPTIONS = [
   { value: 'manual_demote',            label: 'Manual demote' },
 ]
 
-function BucketActions({ paper, disabled, onMutate }: BucketActionsProps) {
+function BucketActions({ paper, paperId, disabled, onMutate }: BucketActionsProps) {
   const [demoteReason, setDemoteReason] = useState(SELECT_NONE)
   const [discardOpen, setDiscardOpen] = useState(false)
   const [demoteOpen, setDemoteOpen] = useState(false)
@@ -287,7 +288,7 @@ function BucketActions({ paper, disabled, onMutate }: BucketActionsProps) {
     const prevBucket = paper.bucket
     const prevReason = paper.reason ?? undefined
     try {
-      const updated = await setPaperBucket(paper.id, {
+      const updated = await setPaperBucket(paperId, {
         bucket,
         reason: reason || undefined,
         detail,
@@ -298,7 +299,7 @@ function BucketActions({ paper, disabled, onMutate }: BucketActionsProps) {
           label: 'Undo',
           onClick: async () => {
             try {
-              const reverted = await setPaperBucket(paper.id, {
+              const reverted = await setPaperBucket(paperId, {
                 bucket: prevBucket,
                 reason: prevReason,
               })
@@ -445,12 +446,12 @@ function BucketActions({ paper, disabled, onMutate }: BucketActionsProps) {
 // ---------------------------------------------------------------------------
 
 interface ImageActionsProps {
-  paper: PaperDetail
+  paperId: string
   disabled: boolean
   onMutate: (updater: (prev: PaperDetail) => PaperDetail) => void
 }
 
-function ImageActions({ paper, disabled, onMutate }: ImageActionsProps) {
+function ImageActions({ paperId, disabled, onMutate }: ImageActionsProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
 
@@ -460,7 +461,7 @@ function ImageActions({ paper, disabled, onMutate }: ImageActionsProps) {
     if (fileInputRef.current) fileInputRef.current.value = ''
     setUploading(true)
     try {
-      const updated = await uploadPaperImage(paper.id, file)
+      const updated = await uploadPaperImage(paperId, file)
       onMutate(() => updated)
       toast.success('Image replaced')
     } catch (err) {
@@ -471,11 +472,11 @@ function ImageActions({ paper, disabled, onMutate }: ImageActionsProps) {
     } finally {
       setUploading(false)
     }
-  }, [paper.id, onMutate])
+  }, [paperId, onMutate])
 
   const handleReextract = useCallback(async () => {
     try {
-      await reextractThumbnail(paper.id)
+      await reextractThumbnail(paperId)
       toast.info('Re-extracting thumbnail… check the run indicator for progress')
     } catch (err) {
       const msg = (err as { status?: number }).status === 409
@@ -483,7 +484,7 @@ function ImageActions({ paper, disabled, onMutate }: ImageActionsProps) {
         : (err as Error).message
       toast.error(msg)
     }
-  }, [paper.id])
+  }, [paperId])
 
   return (
     <div>
@@ -579,6 +580,8 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
       ) return
       // Skip if edit form is open
       if (editMode) return
+      // Skip if lightbox overlay is open
+      if (lightbox) return
       if (e.key === 'ArrowLeft') {
         e.preventDefault()
         onPrev?.()
@@ -589,7 +592,7 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
     }
     document.addEventListener('keydown', handleNavKey)
     return () => document.removeEventListener('keydown', handleNavKey)
-  }, [isOpen, editMode, onPrev, onNext])
+  }, [isOpen, editMode, lightbox, onPrev, onNext])
 
   // When paperId changes (new paper selected), exit edit mode
   const prevPaperId = useRef<string | null>(null)
@@ -614,10 +617,10 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
 
   const handleSave = useCallback(
     async (changed: Record<string, string>) => {
-      if (!paper) return
+      if (!paper || !paperId) return
       setSaving(true)
       try {
-        const updated = await editPaper(paper.id, changed)
+        const updated = await editPaper(paperId, changed)
         handleMutate(() => updated)
         setEditMode(false)
         toast.success('Saved')
@@ -636,7 +639,7 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
         setSaving(false)
       }
     },
-    [paper, handleMutate],
+    [paper, paperId, handleMutate],
   )
 
   return (
@@ -910,13 +913,14 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
                   {/* Bucket actions */}
                   <BucketActions
                     paper={paper}
+                    paperId={paperId ?? ''}
                     disabled={hasActiveRun}
                     onMutate={handleMutate}
                   />
 
                   {/* Image management */}
                   <ImageActions
-                    paper={paper}
+                    paperId={paperId ?? ''}
                     disabled={hasActiveRun}
                     onMutate={handleMutate}
                   />
