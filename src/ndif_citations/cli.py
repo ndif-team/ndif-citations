@@ -534,6 +534,58 @@ def reclassify(ids: str | None, output_dir: str | None, dry_run: bool) -> None:
         console.print("\n[dim]Dry run — no files written.[/dim]")
 
 
+@cli.command(name="re-enrich")
+@click.option("--ids", default=None, help="Comma-separated arXiv IDs, DOIs, or URLs to re-enrich")
+@click.option("--output-dir", "-o", default=None, help="Custom output directory")
+@click.option("--fields", default=None,
+              help="Comma-separated subset of: abstract,authors,affiliations,venue,year")
+@click.option("--dry-run", is_flag=True, help="Print changes without writing files")
+def re_enrich(ids, output_dir, fields, dry_run):
+    """Reconcile metadata (abstract/authors/affiliations/venue/year + identifiers) from
+    authoritative sources for existing papers. No LLM, no discovery. Respects manual_override."""
+    from ndif_citations.output import load_existing_papers, write_outputs
+    from ndif_citations import config as cfg, enrichment
+    from ndif_citations.models import PipelineRun
+
+    _setup_logging(verbose=True)
+    out = cfg.get_output_dir(output_dir)
+    papers = load_existing_papers(out)
+    if not papers:
+        console.print(f"[bold red]No papers found in {out}[/bold red]")
+        return
+
+    field_tuple = enrichment._MANAGED_FIELDS
+    if fields:
+        field_tuple = tuple(f.strip() for f in fields.split(",") if f.strip())
+
+    targets = papers
+    if ids:
+        wanted = {x.strip() for x in ids.split(",") if x.strip()}
+        targets = [p for p in papers if p.arxiv_id in wanted or p.doi in wanted or p.url in wanted]
+
+    updated = 0
+    needs_review: list[str] = []
+    for p in targets:
+        cs = enrichment.enrich_paper(p, dry_run=dry_run, fields=field_tuple)
+        if cs.changes:
+            updated += 1
+            for f, (old, new, src, low) in cs.changes.items():
+                tag = " [LOW-CONF]" if low else ""
+                console.print(f"  {p.title[:50]!r}: {f} <- {src}{tag}")
+        elif (not p.arxiv_id and not p.doi):
+            needs_review.append(p.title)
+
+    console.print(f"\n[bold]{updated} updated[/bold], {len(targets) - updated} unchanged.")
+    if needs_review:
+        console.print(f"[yellow]{len(needs_review)} need manual review (no resolvable identifier).[/yellow]")
+    if not dry_run and updated:
+        run = PipelineRun()
+        write_outputs(papers, out, run)
+        console.print("[green]Catalog written.[/green]")
+    elif dry_run:
+        console.print("[dim]Dry run — no files written.[/dim]")
+
+
 def _resolve_paper(papers, paper_id: str):
     """Return (index, paper) matching paper_id (arXiv ID, DOI, or URL). Returns (None, None) if not found."""
     from ndif_citations.utils import normalize_arxiv_id, extract_arxiv_id_from_url
