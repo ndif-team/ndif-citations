@@ -31,6 +31,18 @@ def test_enrich_locked_paper_fills_only_empty(monkeypatch):
     assert p.affiliations == "MIT, Stanford"        # locked, was empty: filled
 
 
+def test_enrich_locked_broken_nonempty_is_untouched(monkeypatch):
+    # A curator-locked paper with a truncated (broken) BUT non-empty abstract must
+    # not be replaced — manual_override protects even low-quality curated values.
+    p = make_paper(arxiv_id="2401.5", abstract="Curator-truncated abstract …", manual_override=True)
+    monkeypatch.setattr(enrichment, "resolve_identifiers", lambda paper: enrichment.ResolveResult(resolved=False))
+    monkeypatch.setattr(enrichment, "fetch_records",
+                        _stub_records(Record("openalex", {"abstract": "Full replacement abstract. " * 40})))
+    enrich_paper(p)
+    assert p.abstract == "Curator-truncated abstract …"
+    assert "abstract" not in p.enrichment_provenance
+
+
 def test_enrich_clean_paper_unchanged(monkeypatch):
     good = "A clean complete abstract. " * 40
     p = make_paper(arxiv_id="2401.3", abstract=good)

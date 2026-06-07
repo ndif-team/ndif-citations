@@ -10,6 +10,7 @@ import logging
 import re
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+from typing import NamedTuple
 
 from ndif_citations.venue import _WEAK_VENUE_RE
 from ndif_citations.extract import _openalex_fetch_work, detect_peer_review, detect_venue_type
@@ -86,6 +87,9 @@ def _score(field: str, c: Candidate) -> tuple[int, int, int]:
 
 def reconcile_field(field: str, current: Candidate, candidates: list[Candidate],
                     low_confidence_sources: set[str] | None = None) -> Resolution:
+    # NOTE: this primitive may pick a higher-trust winner even when `current` is
+    # not broken (a trust upgrade). `reconcile_paper` layers fill-gaps-only policy
+    # on top (it discards such upgrades), but a different caller could allow them.
     low_confidence_sources = low_confidence_sources or set()
     valid = [c for c in candidates if c.value not in (None, "", 0)]
     if not valid:
@@ -202,15 +206,26 @@ def fetch_records(paper) -> list[Record]:
     return records
 
 
-@dataclass
+class FieldChange(NamedTuple):
+    old: object
+    new: object
+    source: str
+    low_confidence: bool
+
+
+@dataclass(frozen=True)
 class ChangeSet:
-    changes: dict  # field -> (old, new, source, low_confidence)
+    changes: dict[str, FieldChange]  # field name -> FieldChange
 
 
 def reconcile_paper(paper, records: list[Record], *, locked: bool,
                     low_confidence: bool, fields: tuple[str, ...] = _MANAGED_FIELDS) -> ChangeSet:
+    """Apply authoritative records to `paper` with REPAIR-ONLY semantics: a
+    non-broken, non-empty value is never replaced (no churn of good data), and a
+    curator-locked paper (`locked`) fills only empty fields. `reconcile_field`
+    chooses the best candidate; the guards below decide whether to apply it."""
     low_conf_sources = {r.source for r in records} if low_confidence else set()
-    changes: dict = {}
+    changes: dict[str, FieldChange] = {}
     for field in fields:
         current_value = getattr(paper, field)
         cands = [Candidate(r.fields[field], r.source) for r in records if field in r.fields]
@@ -221,14 +236,15 @@ def reconcile_paper(paper, records: list[Record], *, locked: bool,
                               cands, low_confidence_sources=low_conf_sources)
         if not res.changed:
             continue
-        # Never replace a non-broken value — enrich only fills gaps/fixes truncations.
+        # Repair-only: never replace a non-broken value — enrich only fills
+        # gaps / fixes truncations, it does not churn good data for a trust bump.
         if not is_broken(field, current_value) and current_value not in (None, "", 0):
             continue
         if locked and (current_value not in (None, "", 0)):
             continue  # fill-gaps only for curator-locked papers
         setattr(paper, field, res.value)
         paper.enrichment_provenance[field] = res.source
-        changes[field] = (current_value, res.value, res.source, res.low_confidence)
+        changes[field] = FieldChange(current_value, res.value, res.source, res.low_confidence)
     return ChangeSet(changes=changes)
 
 
