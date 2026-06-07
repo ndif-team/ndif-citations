@@ -171,6 +171,10 @@ def _openalex_record(paper) -> "Record | None":
     if paper.openalex_id:
         work = _openalex_fetch_work(paper.openalex_id.replace("https://openalex.org/", ""), by="id")
     if not work and paper.arxiv_id:
+        # OpenAlex indexes arXiv works under their arXiv DOI — a reliable direct fetch
+        # (the landing_page_url filter misses many; this is the primary arXiv path).
+        work = _openalex_fetch_work(f"doi:10.48550/arXiv.{paper.arxiv_id}", by="id")
+    if not work and paper.arxiv_id:
         work = _openalex_fetch_work(
             f"locations.landing_page_url:https://arxiv.org/abs/{paper.arxiv_id}", by="filter")
     if not work and paper.doi:

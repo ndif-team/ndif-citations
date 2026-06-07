@@ -14,6 +14,22 @@ def test_fetch_records_from_openalex(monkeypatch):
     assert oa and oa[0].fields["abstract"] == "A" * 600
 
 
+def test_openalex_record_tries_arxiv_doi_first(monkeypatch):
+    # arXiv papers must be looked up via their arXiv DOI (reliable) before the
+    # landing_page_url filter (which misses many).
+    p = make_paper(arxiv_id="2407.14561")
+    p.openalex_id = None
+    seen = []
+    def _fake(ident, by="id"):
+        seen.append(ident)
+        return None
+    monkeypatch.setattr(enrichment, "_openalex_fetch_work", _fake)
+    enrichment._openalex_record(p)
+    assert "doi:10.48550/arXiv.2407.14561" in seen
+    assert seen.index("doi:10.48550/arXiv.2407.14561") < \
+        next(i for i, s in enumerate(seen) if "landing_page_url" in s)
+
+
 def test_fetch_records_arxiv_authors(monkeypatch):
     p = make_paper(arxiv_id="2401.00002")
     monkeypatch.setattr(enrichment, "_openalex_fetch_work", lambda ident, by="id": None)
