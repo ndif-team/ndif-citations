@@ -39,7 +39,9 @@
       "unclassified_reason": "no_keywords_anywhere",
       "classification_signal": null,
       "processing_bucket": "new",
-      "enrichment_provenance": {}
+      "enrichment_provenance": {},
+      "ndif_context_windows": [],
+      "context_source": "none"
     }
   ],
   "verified": [
@@ -82,7 +84,9 @@
       "unclassified_reason": null,
       "classification_signal": null,
       "processing_bucket": "new",
-      "enrichment_provenance": {}
+      "enrichment_provenance": {},
+      "ndif_context_windows": [],
+      "context_source": "none"
     },
     {
       "title": "Activation Steering via Generative Causal Mediation",
@@ -123,7 +127,9 @@
       "unclassified_reason": null,
       "classification_signal": null,
       "processing_bucket": "new",
-      "enrichment_provenance": {}
+      "enrichment_provenance": {},
+      "ndif_context_windows": [],
+      "context_source": "none"
     },
     {
       "title": "ADAG: Automatically Describing Attribution Graphs",
@@ -164,7 +170,9 @@
       "unclassified_reason": null,
       "classification_signal": "pre_filter:negative_evidence",
       "processing_bucket": "new",
-      "enrichment_provenance": {}
+      "enrichment_provenance": {},
+      "ndif_context_windows": [],
+      "context_source": "none"
     },
     {
       "title": "Behind the Scenes: Mechanistic Interpretability of LoRA-adapted Whisper for Speech Emotion Recognition",
@@ -205,7 +213,9 @@
       "unclassified_reason": "no_keywords_anywhere",
       "classification_signal": null,
       "processing_bucket": "new",
-      "enrichment_provenance": {}
+      "enrichment_provenance": {},
+      "ndif_context_windows": [],
+      "context_source": "none"
     }
   ],
   "discarded": [
@@ -248,7 +258,9 @@
       "unclassified_reason": null,
       "classification_signal": null,
       "processing_bucket": "new",
-      "enrichment_provenance": {}
+      "enrichment_provenance": {},
+      "ndif_context_windows": [],
+      "context_source": "none"
     }
   ]
 }

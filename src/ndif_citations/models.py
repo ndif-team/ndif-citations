@@ -156,6 +156,10 @@ class DiscoveredPaper(BaseModel):
     # (e.g. {"abstract": "openalex", "authors": "arxiv"}). Mirrors `venue_source`.
     enrichment_provenance: dict[str, str] = Field(default_factory=dict)
 
+    # NDIF evidence the classifier used (persisted at classify time for the UI).
+    ndif_context_windows: list[str] = Field(default_factory=list)
+    context_source: str = "none"  # "pdf" | "abstract" | "none"
+
     # Change detection
     content_hash: str = ""  # SHA256(title + "::" + abstract)[:16]
 
