@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from ndif_citations.jobs import JobRunner, RunActiveError
@@ -205,6 +206,39 @@ def list_papers(
         Sort order: ``year_desc`` (default), ``year_asc``, or ``title``.
     """
     return papers_svc.list_rows(out, bucket=bucket, q=q, sort=sort)
+
+
+@router.get("/papers/{paper_id:path}/pdf")
+def get_paper_pdf(
+    paper_id: str,
+    out: Path = Depends(deps.get_output_dir),
+) -> FileResponse:
+    """Serve the cached PDF for a paper identified by *paper_id*.
+
+    Returns the PDF file with ``Content-Type: application/pdf``.
+
+    * 404 — no paper with the given merge_key.
+    * 404 — paper exists but no PDF has been cached.
+    * 404 — internal path-traversal guard triggered (should not happen in practice).
+    """
+    from ndif_citations.pdf_cache import cached_pdf_path
+    from ndif_citations.server.services import papers_svc
+
+    paper = papers_svc.resolve(out, paper_id)
+    if paper is None:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    path = cached_pdf_path(paper, out)
+    if path is None:
+        raise HTTPException(status_code=404, detail="No cached PDF")
+
+    # Path-traversal guard: resolved file must live directly inside out/pdfs/
+    resolved = path.resolve()
+    pdfs_dir = (out / "pdfs").resolve()
+    if resolved.parent != pdfs_dir:
+        raise HTTPException(status_code=404, detail="Invalid PDF path")
+
+    return FileResponse(str(resolved), media_type="application/pdf")
 
 
 @router.get("/papers/{paper_id:path}")

@@ -160,6 +160,29 @@ def _download_pdf(url: str, dest_path: Path, timeout: int = 30) -> Optional[Path
         return None
 
 
+def _cache_filename(paper: DiscoveredPaper) -> str:
+    """Return the canonical cache filename for *paper* (no directory component).
+
+    Naming convention:
+    - arxiv-{arxiv_id}.pdf for arXiv papers
+    - doi-{slugify(doi)}.pdf for DOI papers
+    - {slugify(title[:50])}.pdf for others
+    """
+    if paper.arxiv_id:
+        return f"arxiv-{paper.arxiv_id}.pdf"
+    elif paper.doi:
+        return f"doi-{slugify(paper.doi)}.pdf"
+    else:
+        return f"{slugify(paper.title[:50])}.pdf"
+
+
+def cached_pdf_path(paper: DiscoveredPaper, output_dir: Path) -> Optional[Path]:
+    """Path to the already-cached PDF for *paper*, or None. No mkdir, no download."""
+    cache_dir = output_dir / "pdfs"
+    p = cache_dir / _cache_filename(paper)
+    return p if p.exists() else None
+
+
 def get_cached_pdf(paper: DiscoveredPaper, output_dir: Path) -> Optional[Path]:
     """Get cached PDF path, downloading if necessary.
 
@@ -173,13 +196,8 @@ def get_cached_pdf(paper: DiscoveredPaper, output_dir: Path) -> Optional[Path]:
     cache_dir = output_dir / "pdfs"
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    # Determine cache file name
-    if paper.arxiv_id:
-        cache_path = cache_dir / f"arxiv-{paper.arxiv_id}.pdf"
-    elif paper.doi:
-        cache_path = cache_dir / f"doi-{slugify(paper.doi)}.pdf"
-    else:
-        cache_path = cache_dir / f"{slugify(paper.title[:50])}.pdf"
+    # Determine cache file name (shared with cached_pdf_path)
+    cache_path = cache_dir / _cache_filename(paper)
 
     # Cache hit
     if cache_path.exists():
