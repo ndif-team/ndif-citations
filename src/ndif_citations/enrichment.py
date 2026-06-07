@@ -152,7 +152,12 @@ def resolve_identifiers(paper) -> ResolveResult:
     return ResolveResult(resolved=True, via_title=True)
 
 
-_MANAGED_FIELDS = ("abstract", "authors", "affiliations", "venue", "year")
+# Fields the reconciliation engine repairs from authoritative sources. NOTE: `venue`
+# is deliberately EXCLUDED — it is owned by the smarter `resolve_venue` cascade that
+# runs earlier in `extract.enrich_papers` (DOI/arXiv-comment/OpenAlex/S2/CrossRef/
+# OpenReview). Reconciling venue here would override it with OpenAlex's raw source
+# label (e.g. "arXiv (Cornell University)"), which is a regression.
+_MANAGED_FIELDS = ("abstract", "authors", "affiliations", "year")
 
 
 @dataclass(frozen=True)

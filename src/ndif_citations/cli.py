@@ -570,9 +570,11 @@ def re_enrich(ids, output_dir, fields, dry_run):
             console.print(f"[yellow]No papers matched the given IDs: {sorted(wanted)}[/yellow]")
             return
 
-    def _short(v: object, n: int = 50) -> str:
+    def _fmt(v: object) -> str:
         s = str(v).replace("\n", " ")
-        return s[:n] + ("…" if len(s) > n else "")
+        if len(s) > 50:
+            return f'{len(s)}ch "{s[:40]}…"'   # show length so snippet->full is visible
+        return repr(s)
 
     updated = 0
     failed = 0
@@ -589,7 +591,7 @@ def re_enrich(ids, output_dir, fields, dry_run):
             console.print(f"  [cyan]{p.title[:60]}[/cyan]")
             for f, (old, new, src, low) in cs.changes.items():
                 tag = " [LOW-CONF]" if low else ""
-                console.print(f"    {f} <- {src}{tag}: {_short(old)!r} -> {_short(new)!r}")
+                console.print(f"    {f} <- {src}{tag}: {_fmt(old)} -> {_fmt(new)}")
         elif (not p.arxiv_id and not p.doi):
             needs_review.append(p.title)
 
