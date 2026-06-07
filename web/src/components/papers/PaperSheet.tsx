@@ -1,5 +1,5 @@
 import { ExternalLink, Copy, Check, AlertCircle, Pencil, X, Upload, RotateCcw, ChevronUp, ChevronDown, Trash2, Lock } from 'lucide-react'
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   Sheet,
   SheetContent,
@@ -26,7 +26,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { bucketBadge, confidenceBadge, categoryBadge, categoryLabel } from '@/lib/tokens'
 import { EDITABLE_FIELDS, SELECT_NONE } from '@/lib/editable'
 import type { EditableFieldMeta } from '@/lib/editable'
-import { editPaper, setPaperBucket, uploadPaperImage, reextractThumbnail } from '@/api/client'
+import { editPaper, setPaperBucket, uploadPaperImage, reextractThumbnail, paperPdfUrl } from '@/api/client'
 import type { Bucket, ConfidenceBand, Category, PaperDetail } from '@/api/types'
 import { toast } from 'sonner'
 
@@ -524,6 +524,21 @@ function ImageActions({ paper, disabled, onMutate }: ImageActionsProps) {
 // Main PaperSheet
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Needs-attention strip helpers
+// ---------------------------------------------------------------------------
+
+const MISSING_FIELD_LABELS: Record<string, string> = {
+  image: 'Thumbnail',
+  affiliations: 'Affiliations',
+  abstract: 'Abstract',
+  summary: 'Summary',
+  venue: 'Venue',
+}
+
+// Fields that can be fixed by entering edit mode
+const EDITABLE_MISSING_FIELDS = new Set(['venue', 'affiliations', 'summary', 'abstract'])
+
 export function PaperSheet({ paperId, onClose }: Props) {
   const qc = useQueryClient()
   const { data: paper, isLoading, error } = usePaper(paperId)
@@ -532,6 +547,17 @@ export function PaperSheet({ paperId, onClose }: Props) {
 
   const [editMode, setEditMode] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [lightbox, setLightbox] = useState(false)
+
+  // Close lightbox on Escape
+  useEffect(() => {
+    if (!lightbox) return
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setLightbox(false)
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [lightbox])
 
   const isOpen = !!paperId
 
@@ -611,15 +637,38 @@ export function PaperSheet({ paperId, onClose }: Props) {
 
         {paper && (
           <>
+            {/* Lightbox overlay */}
+            {lightbox && paper.image && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6"
+                onClick={() => setLightbox(false)}
+                role="dialog"
+                aria-modal="true"
+              >
+                <img
+                  src={`/api/images/${encodeURIComponent(paper.image.split('/').pop() ?? '')}`}
+                  alt=""
+                  className="max-h-full max-w-full rounded shadow-2xl"
+                />
+              </div>
+            )}
+
             {/* Thumbnail */}
             {paper.image ? (
               <div className="p-4 bg-muted/30 border-b">
-                <img
-                  src={`/api/images/${encodeURIComponent(paper.image.split('/').pop() ?? '')}`}
-                  alt={`Thumbnail for ${paper.title}`}
-                  className="w-full max-h-48 object-contain rounded-md"
-                  loading="lazy"
-                />
+                <button
+                  type="button"
+                  className="w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
+                  onClick={() => setLightbox(true)}
+                  aria-label="Zoom thumbnail"
+                >
+                  <img
+                    src={`/api/images/${encodeURIComponent(paper.image.split('/').pop() ?? '')}`}
+                    alt={`Thumbnail for ${paper.title}`}
+                    className="w-full max-h-48 object-contain rounded-md"
+                    loading="lazy"
+                  />
+                </button>
               </div>
             ) : (
               <div className="p-4 border-b flex items-center justify-center h-24 bg-muted/20">
@@ -649,6 +698,27 @@ export function PaperSheet({ paperId, onClose }: Props) {
                 </SheetDescription>
               )}
             </SheetHeader>
+
+            {/* Needs-attention strip */}
+            {(paper.missing ?? []).length > 0 && (
+              <div className="px-5 pb-2 flex flex-wrap gap-1.5">
+                {(paper.missing ?? []).map(field => {
+                  const label = MISSING_FIELD_LABELS[field] ?? field
+                  const isEditable = EDITABLE_MISSING_FIELDS.has(field)
+                  return (
+                    <button
+                      key={field}
+                      type="button"
+                      onClick={isEditable ? () => setEditMode(true) : undefined}
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:ring-amber-800 ${isEditable ? 'cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900' : 'cursor-default'}`}
+                      aria-label={isEditable ? `Missing ${label} — click to edit` : `Missing ${label}`}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
 
             <div className="px-5 pb-5 space-y-4 flex-1">
               {editMode ? (
@@ -719,24 +789,63 @@ export function PaperSheet({ paperId, onClose }: Props) {
                   )}
 
                   {/* Abstract */}
-                  {paper.abstract && (
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Abstract</p>
-                      <p className="text-xs leading-relaxed text-foreground line-clamp-[12]">{paper.abstract}</p>
-                    </div>
-                  )}
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Abstract</p>
+                    {paper.abstract ? (
+                      <div className="max-h-64 overflow-y-auto pr-1">
+                        <p className="text-xs leading-relaxed text-foreground">{paper.abstract}</p>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic">No abstract available.</p>
+                    )}
+                  </div>
 
                   {/* Links */}
-                  {(paper.url || paper.pdf_url || paper.project_url) && (
+                  {(paper.url || paper.pdf_url || paper.project_url || paper.has_pdf) && (
                     <div>
                       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Links</p>
                       <div className="flex flex-wrap gap-3">
                         {paper.url && <ExternalLinkButton href={paper.url} label="Paper" />}
                         {paper.pdf_url && <ExternalLinkButton href={paper.pdf_url} label="PDF" />}
                         {paper.project_url && <ExternalLinkButton href={paper.project_url} label="Project" />}
+                        {paper.has_pdf && <ExternalLinkButton href={paperPdfUrl(paperId ?? '')} label="Cached PDF" />}
                       </div>
                     </div>
                   )}
+
+                  {/* Evidence */}
+                  <details className="group">
+                    <summary className="flex items-center gap-2 cursor-pointer list-none text-xs font-medium text-muted-foreground uppercase tracking-wider select-none">
+                      <span>Evidence</span>
+                      {paper.context_source === 'pdf' ? (
+                        <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:ring-blue-800">
+                          from PDF
+                        </span>
+                      ) : paper.context_source === 'abstract' ? (
+                        <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset bg-green-50 text-green-700 ring-green-200 dark:bg-green-950 dark:text-green-300 dark:ring-green-800">
+                          from abstract
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset bg-muted text-muted-foreground ring-border">
+                          no evidence
+                        </span>
+                      )}
+                    </summary>
+                    <div className="mt-2 space-y-2">
+                      {(paper.ndif_context_windows ?? []).length > 0 ? (
+                        (paper.ndif_context_windows ?? []).map((window, i) => (
+                          <p
+                            key={i}
+                            className="font-mono text-xs whitespace-pre-wrap bg-muted/60 text-muted-foreground rounded-md p-2.5 border border-border/50"
+                          >
+                            {window}
+                          </p>
+                        ))
+                      ) : (
+                        <p className="text-xs text-muted-foreground italic">No NDIF evidence found in the source.</p>
+                      )}
+                    </div>
+                  </details>
 
                   {/* Bucket actions */}
                   <BucketActions
