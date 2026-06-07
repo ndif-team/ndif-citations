@@ -38,6 +38,9 @@ python -m ndif_citations run
 | `python -m ndif_citations edit <id>` | Interactively override any of 16 curated fields on one paper (sets `manual_override=True`) |
 | `python -m ndif_citations edit <id> --set field=value` | One-shot field edit, scriptable. Repeat `--set` for multiple fields. Add `--yes` to skip confirm. |
 | `python -m ndif_citations reclassify [--ids X,Y]` | Re-run LLM classify on existing papers (apply new pre-filter / band rules) |
+| `python -m ndif_citations re-enrich [--ids X,Y] [--fields …] [--dry-run]` | No-LLM: reconcile abstract/authors/affiliations/year + identifiers from authoritative sources (OpenAlex/arXiv) — fixes thin Google-Scholar metadata. Respects `manual_override`. `--dry-run` previews. |
+| `python -m ndif_citations backfill-evidence [--ids X,Y] [--dry-run]` | No-LLM: populate each paper's NDIF context windows (`ndif_context_windows`) from its cached PDF, shown in the web Evidence panel |
+| `python -m ndif_citations serve [--port 8723] [--no-open]` | Launch the local web app (FastAPI + React) — see [Web app](#web-app) |
 | `python -m ndif_citations promote <id>` | Move paper to verified, freeze with `manual_override=True` |
 | `python -m ndif_citations demote <id> --reason ...` | Move paper to pending, freeze with `manual_override=True` |
 | `python -m ndif_citations discard <id>` | Move paper to discarded, freeze with `manual_override=True` |
