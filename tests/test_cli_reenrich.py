@@ -23,6 +23,14 @@ def test_reenrich_dry_run_writes_nothing(tmp_path, monkeypatch):
     assert (out / "research-papers-full.json").read_text() == before  # unchanged
 
 
+def test_reenrich_rejects_unknown_fields(tmp_path):
+    out = tmp_path / "output"
+    _write_catalog(out, [{"title": "P", "arxiv_id": "2401.1", "abstract": "x", "source": "scholar"}])
+    res = CliRunner().invoke(cli, ["re-enrich", "-o", str(out), "--fields", "venue,bogus"])
+    assert res.exit_code != 0
+    assert "venue" in res.output and "bogus" in res.output  # both flagged as unknown
+
+
 def test_reenrich_applies_and_is_idempotent(tmp_path, monkeypatch):
     out = tmp_path / "output"
     _write_catalog(out, [{"title": "P", "arxiv_id": "2401.1", "abstract": "snippet …",

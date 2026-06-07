@@ -538,11 +538,12 @@ def reclassify(ids: str | None, output_dir: str | None, dry_run: bool) -> None:
 @click.option("--ids", default=None, help="Comma-separated arXiv IDs, DOIs, or URLs to re-enrich")
 @click.option("--output-dir", "-o", default=None, help="Custom output directory")
 @click.option("--fields", default=None,
-              help="Comma-separated subset of: abstract,authors,affiliations,venue,year")
+              help="Comma-separated subset of: abstract,authors,affiliations,year")
 @click.option("--dry-run", is_flag=True, help="Print changes without writing files")
 def re_enrich(ids, output_dir, fields, dry_run):
-    """Reconcile metadata (abstract/authors/affiliations/venue/year + identifiers) from
-    authoritative sources for existing papers. No LLM, no discovery. Respects manual_override."""
+    """Reconcile metadata (abstract/authors/affiliations/year + identifiers) from
+    authoritative sources for existing papers. No LLM, no discovery. Respects
+    manual_override. (Venue is owned by the resolve_venue cascade, not re-enrich.)"""
     from ndif_citations.output import load_existing_papers, write_outputs
     from ndif_citations import config as cfg, enrichment
     from ndif_citations.models import PipelineRun
