@@ -557,11 +557,22 @@ def re_enrich(ids, output_dir, fields, dry_run):
     field_tuple = enrichment._MANAGED_FIELDS
     if fields:
         field_tuple = tuple(f.strip() for f in fields.split(",") if f.strip())
+        unknown = [f for f in field_tuple if f not in enrichment._MANAGED_FIELDS]
+        if unknown:
+            raise click.UsageError(
+                f"Unknown --fields {unknown}; valid: {', '.join(enrichment._MANAGED_FIELDS)}")
 
     targets = papers
     if ids:
         wanted = {x.strip() for x in ids.split(",") if x.strip()}
         targets = [p for p in papers if p.arxiv_id in wanted or p.doi in wanted or p.url in wanted]
+        if not targets:
+            console.print(f"[yellow]No papers matched the given IDs: {sorted(wanted)}[/yellow]")
+            return
+
+    def _short(v: object, n: int = 50) -> str:
+        s = str(v).replace("\n", " ")
+        return s[:n] + ("…" if len(s) > n else "")
 
     updated = 0
     needs_review: list[str] = []
@@ -569,9 +580,10 @@ def re_enrich(ids, output_dir, fields, dry_run):
         cs = enrichment.enrich_paper(p, dry_run=dry_run, fields=field_tuple)
         if cs.changes:
             updated += 1
+            console.print(f"  [cyan]{p.title[:60]}[/cyan]")
             for f, (old, new, src, low) in cs.changes.items():
                 tag = " [LOW-CONF]" if low else ""
-                console.print(f"  {p.title[:50]!r}: {f} <- {src}{tag}")
+                console.print(f"    {f} <- {src}{tag}: {_short(old)!r} -> {_short(new)!r}")
         elif (not p.arxiv_id and not p.doi):
             needs_review.append(p.title)
 
