@@ -367,3 +367,45 @@ def test_list_papers_missing_with_image_not_flagged(client: TestClient):
     assert "image" not in row["missing"], (
         f"'image' should NOT be in missing for a paper with a thumbnail; got {row['missing']}"
     )
+
+
+# ---------------------------------------------------------------------------
+# 9. GET /api/papers/{paper_id} — detail includes missing + has_pdf (Task 5)
+# ---------------------------------------------------------------------------
+
+def test_paper_detail_includes_missing_and_has_pdf(client: TestClient, fixture_state: Path):
+    """Paper detail endpoint must include 'missing' list and 'has_pdf' boolean.
+
+    Uses the discarded paper arxiv:2604.08058 ("Machine Learning the
+    order-disorder Jahn-Teller...") which has no image and no affiliations set
+    in the fixture, and no PDF cached in fixture_state/pdfs/.
+
+    Expected:
+      missing == ['image', 'affiliations']
+      has_pdf  == False
+    """
+    from ndif_citations.server.services import papers_svc
+    from ndif_citations.output import load_existing_papers
+
+    # Resolve the fixture paper to compute the ground-truth missing list.
+    papers = load_existing_papers(fixture_state)
+    paper = next(p for p in papers if p.merge_key() == ARXIV_DISCARDED_ID)
+    expected_missing = papers_svc._compute_missing(paper)
+
+    resp = client.get(f"/api/papers/{ARXIV_DISCARDED_ID}")
+    assert resp.status_code == 200
+    body = resp.json()
+
+    # The two new keys must be present
+    assert "missing" in body, "'missing' key absent from paper detail response"
+    assert "has_pdf" in body, "'has_pdf' key absent from paper detail response"
+
+    # 'missing' must match _compute_missing output
+    assert body["missing"] == expected_missing, (
+        f"Expected missing={expected_missing!r}, got {body['missing']!r}"
+    )
+
+    # No PDF cached in fixture_state — has_pdf must be False
+    assert body["has_pdf"] is False, (
+        f"Expected has_pdf=False (no cached PDF in fixture), got {body['has_pdf']!r}"
+    )

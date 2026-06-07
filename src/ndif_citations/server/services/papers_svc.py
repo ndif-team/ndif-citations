@@ -121,11 +121,20 @@ def list_rows(
 
 
 def get_paper(out: Path, paper_id: str) -> dict | None:
-    """Return ``to_full_dict()`` for the paper with the given merge_key, or None."""
+    """Return ``to_full_dict()`` for the paper with the given merge_key, or None.
+
+    Adds two computed keys:
+    - ``missing``: list of important empty fields (from ``_compute_missing``).
+    - ``has_pdf``: True if a cached PDF exists in ``out/pdfs/``.
+    """
     paper = resolve(out, paper_id)
     if paper is None:
         return None
-    return paper.to_full_dict()
+    from ndif_citations.pdf_cache import cached_pdf_path
+    d = paper.to_full_dict()
+    d["missing"] = _compute_missing(paper)
+    d["has_pdf"] = cached_pdf_path(paper, out) is not None
+    return d
 
 
 # ---------------------------------------------------------------------------
