@@ -10,7 +10,7 @@ Replaces a manual workflow of checking Google Scholar, copying metadata into spr
 
 ## Releases
 
-- **v1.0.0 — CLI app.** Discovery (S2 / OpenAlex / Scholar / GitHub), metadata enrichment, LLM classification with confidence bands, and catalog + spreadsheet output.
+- **v1.9.0 — CLI app.** Discovery (S2 / OpenAlex / Scholar / GitHub), metadata enrichment, LLM classification with confidence bands, and catalog + spreadsheet output.
 - **v2.0.0 — adds the local web app** (`serve`): data-dense dashboard, a curation workspace (browse / edit / promote / discard / reprocess, cached-PDF + figure + evidence views), a run console with a pre-LLM review gate, robust metadata re-enrichment (`re-enrich`), and one-click publish to the site. The CLI is unchanged.
 
 See [Releases](https://github.com/ndif-team/ndif-citations/releases) for notes.
