@@ -5,7 +5,7 @@ import {
   flexRender,
   type ColumnDef,
 } from '@tanstack/react-table'
-import { Search, AlertCircle, FileText, ChevronDown, ChevronUp, Trash2, Lock, AlertTriangle } from 'lucide-react'
+import { Search, AlertCircle, FileText, ChevronDown, ChevronUp, Trash2, Lock, AlertTriangle, TriangleAlert } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -284,6 +284,7 @@ export function Papers() {
   const [sort, setSort] = useState<SortOption>('year_desc')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set())
+  const [needsAttention, setNeedsAttention] = useState(false)
 
   const { data: activeRunData } = useActiveRun()
   const hasActiveRun = !!(activeRunData?.active)
@@ -302,7 +303,18 @@ export function Papers() {
 
   const clearSelection = useCallback(() => setSelectedRowIds(new Set()), [])
 
-  const allIds = useMemo(() => (papers ?? []).map(p => p.id), [papers])
+  // Client-side "needs attention" filter on top of server-side results
+  const filteredPapers = useMemo(() => {
+    if (!needsAttention) return papers ?? []
+    return (papers ?? []).filter(p => (p.missing ?? []).length > 0)
+  }, [papers, needsAttention])
+
+  const needsAttentionCount = useMemo(
+    () => (papers ?? []).filter(p => (p.missing ?? []).length > 0).length,
+    [papers],
+  )
+
+  const allIds = useMemo(() => filteredPapers.map(p => p.id), [filteredPapers])
   const allSelected = allIds.length > 0 && allIds.every(id => selectedRowIds.has(id))
   const someSelected = !allSelected && allIds.some(id => selectedRowIds.has(id))
 
@@ -497,10 +509,30 @@ export function Papers() {
   )
 
   const table = useReactTable({
-    data: papers ?? [],
+    data: filteredPapers,
     columns,
     getCoreRowModel: getCoreRowModel(),
   })
+
+  // Ordered IDs matching the visible table rows (respects needs-attention filter + sort)
+  const orderedIds = useMemo(
+    () => table.getRowModel().rows.map(r => r.original.id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [table.getRowModel().rows],
+  )
+
+  const currentIndex = selectedId !== null ? orderedIds.indexOf(selectedId) : -1
+  const hasPrev = currentIndex > 0
+  const hasNext = currentIndex !== -1 && currentIndex < orderedIds.length - 1
+
+  const handlePrev = useCallback(() => {
+    if (currentIndex > 0) setSelectedId(orderedIds[currentIndex - 1])
+  }, [currentIndex, orderedIds])
+
+  const handleNext = useCallback(() => {
+    if (currentIndex !== -1 && currentIndex < orderedIds.length - 1)
+      setSelectedId(orderedIds[currentIndex + 1])
+  }, [currentIndex, orderedIds])
 
   const selectedIdsList = useMemo(() => Array.from(selectedRowIds), [selectedRowIds])
   const hasSelection = selectedIdsList.length > 0
@@ -558,10 +590,30 @@ export function Papers() {
           </SelectContent>
         </Select>
 
+        {/* Needs attention toggle */}
+        <button
+          type="button"
+          onClick={() => setNeedsAttention(v => !v)}
+          aria-pressed={needsAttention}
+          className={[
+            'inline-flex items-center gap-1.5 h-8 rounded-md px-3 text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring border',
+            needsAttention
+              ? 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-700'
+              : 'bg-background text-muted-foreground border-border hover:text-foreground hover:border-border',
+          ].join(' ')}
+          aria-label={`Filter by needs attention${needsAttentionCount > 0 ? ` (${needsAttentionCount})` : ''}`}
+        >
+          <TriangleAlert className="h-3.5 w-3.5" aria-hidden="true" />
+          Needs attention
+          {needsAttentionCount > 0 && (
+            <span className="tabular-nums">{needsAttentionCount}</span>
+          )}
+        </button>
+
         {/* Count */}
         {!isLoading && papers && (
           <span className="text-xs text-muted-foreground tabular-nums ml-auto">
-            {papers.length} papers
+            {needsAttention ? `${filteredPapers.length} / ${papers.length}` : papers.length} papers
           </span>
         )}
       </div>
@@ -663,6 +715,10 @@ export function Papers() {
       <PaperSheet
         paperId={selectedId}
         onClose={() => setSelectedId(null)}
+        onPrev={handlePrev}
+        onNext={handleNext}
+        hasPrev={hasPrev}
+        hasNext={hasNext}
       />
     </div>
   )

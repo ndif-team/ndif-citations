@@ -1,4 +1,4 @@
-import { ExternalLink, Copy, Check, AlertCircle, Pencil, X, Upload, RotateCcw, ChevronUp, ChevronDown, Trash2, Lock } from 'lucide-react'
+import { ExternalLink, Copy, Check, AlertCircle, Pencil, X, Upload, RotateCcw, ChevronUp, ChevronDown, Trash2, Lock, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   Sheet,
@@ -33,6 +33,10 @@ import { toast } from 'sonner'
 interface Props {
   paperId: string | null
   onClose: () => void
+  onPrev?: () => void
+  onNext?: () => void
+  hasPrev?: boolean
+  hasNext?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -539,7 +543,7 @@ const MISSING_FIELD_LABELS: Record<string, string> = {
 // Fields that can be fixed by entering edit mode
 const EDITABLE_MISSING_FIELDS = new Set(['venue', 'affiliations', 'summary', 'abstract'])
 
-export function PaperSheet({ paperId, onClose }: Props) {
+export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext }: Props) {
   const qc = useQueryClient()
   const { data: paper, isLoading, error } = usePaper(paperId)
   const { data: activeRunData } = useActiveRun()
@@ -548,6 +552,8 @@ export function PaperSheet({ paperId, onClose }: Props) {
   const [editMode, setEditMode] = useState(false)
   const [saving, setSaving] = useState(false)
   const [lightbox, setLightbox] = useState(false)
+
+  const isOpen = !!paperId
 
   // Close lightbox on Escape
   useEffect(() => {
@@ -559,7 +565,31 @@ export function PaperSheet({ paperId, onClose }: Props) {
     return () => document.removeEventListener('keydown', handleKey)
   }, [lightbox])
 
-  const isOpen = !!paperId
+  // Arrow key navigation (while sheet is open and not in edit mode)
+  useEffect(() => {
+    if (!isOpen) return
+    function handleNavKey(e: KeyboardEvent) {
+      // Skip if user is typing in a form field or content-editable
+      const target = e.target as HTMLElement
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        target.isContentEditable
+      ) return
+      // Skip if edit form is open
+      if (editMode) return
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        onPrev?.()
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        onNext?.()
+      }
+    }
+    document.addEventListener('keydown', handleNavKey)
+    return () => document.removeEventListener('keydown', handleNavKey)
+  }, [isOpen, editMode, onPrev, onNext])
 
   // When paperId changes (new paper selected), exit edit mode
   const prevPaperId = useRef<string | null>(null)
@@ -681,16 +711,46 @@ export function PaperSheet({ paperId, onClose }: Props) {
                 <SheetTitle className="text-sm font-semibold leading-snug flex-1">
                   {paper.title}
                 </SheetTitle>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 flex-none mt-0.5"
-                  onClick={() => setEditMode(e => !e)}
-                  aria-label={editMode ? 'Cancel editing' : 'Edit paper'}
-                  title={editMode ? 'Cancel editing' : 'Edit paper'}
-                >
-                  {editMode ? <X className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
-                </Button>
+                <div className="flex items-center gap-0.5 flex-none mt-0.5">
+                  {/* Prev / Next navigation */}
+                  {(onPrev || onNext) && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={onPrev}
+                        disabled={!hasPrev}
+                        aria-label="Previous paper"
+                        title="Previous paper (←)"
+                      >
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={onNext}
+                        disabled={!hasNext}
+                        aria-label="Next paper"
+                        title="Next paper (→)"
+                      >
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
+                  {/* Edit toggle */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => setEditMode(e => !e)}
+                    aria-label={editMode ? 'Cancel editing' : 'Edit paper'}
+                    title={editMode ? 'Cancel editing' : 'Edit paper'}
+                  >
+                    {editMode ? <X className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+                  </Button>
+                </div>
               </div>
               {paper.authors && paper.authors.trim().length > 0 && (
                 <SheetDescription className="text-xs">
