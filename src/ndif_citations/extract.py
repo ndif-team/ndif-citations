@@ -38,6 +38,14 @@ def enrich_papers(papers: list[DiscoveredPaper], raw_dir: Path | None = None) ->
     # enriches venue from OpenAlex's primary_location.source.display_name).
     _enrich_affiliations_from_openalex(papers, raw_dir)
 
+    # Step 2.5: reconcile abstract/authors/identifiers from authoritative sources.
+    from ndif_citations import enrichment  # local import avoids circular dependency
+    for paper in papers:
+        try:
+            enrichment.enrich_paper(paper)
+        except Exception as e:
+            logger.warning(f"enrich_paper failed for {paper.title!r}: {e}")
+
     # Step 3: Per-paper post-processing — peer-review, venue_type, bibtex, URL.
     for paper in papers:
         paper.peer_reviewed = detect_peer_review(paper.venue)

@@ -126,3 +126,18 @@ class TestYearReconciliation:
         enrich_via_external_apis([paper])
         assert paper.venue == "EMNLP 2025"
         assert paper.year == 2025
+
+
+from ndif_citations import extract as extract_mod
+
+
+def test_enrich_papers_invokes_enrich_paper(monkeypatch):
+    called = []
+    monkeypatch.setattr("ndif_citations.enrichment.enrich_paper",
+                        lambda paper, **kw: called.append(paper.title))
+    # neutralize the network passes already in enrich_papers
+    monkeypatch.setattr(extract_mod, "enrich_via_external_apis", lambda papers: None)
+    monkeypatch.setattr(extract_mod, "_enrich_affiliations_from_openalex", lambda papers, raw: None)
+    papers = [make_paper(title="P1"), make_paper(title="P2")]
+    extract_mod.enrich_papers(papers)
+    assert set(called) == {"P1", "P2"}
