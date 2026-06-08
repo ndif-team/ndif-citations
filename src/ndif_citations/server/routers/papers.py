@@ -450,3 +450,20 @@ def upload_pdf(
         raise HTTPException(status_code=404, detail=f"Paper {paper_id!r} not found")
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
+
+
+@router.post("/papers/{paper_id:path}/evidence")
+def backfill_evidence(
+    paper_id: str,
+    out: Path = Depends(deps.get_output_dir),
+    _guard: None = Depends(deps.require_no_active_run),
+) -> dict:
+    """Populate the paper's NDIF context windows from its cached PDF (no LLM, sync).
+
+    * 404 — no paper with the given merge_key.
+    * 409 — a run/job is already active.
+    """
+    try:
+        return papers_svc.backfill_evidence(out, paper_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Paper {paper_id!r} not found")

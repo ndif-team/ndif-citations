@@ -277,6 +277,29 @@ def attach_pdf(out: Path, paper_id: str, data: bytes) -> dict:
     return d
 
 
+def backfill_evidence(out: Path, paper_id: str) -> dict:
+    """Populate one paper's NDIF context windows from its cached PDF/abstract (no LLM).
+
+    Mutates the paper's ``ndif_context_windows`` + ``context_source`` and persists.
+    Raises ``KeyError`` if no paper matches *paper_id*.
+    """
+    from ndif_citations import process
+    from ndif_citations.pdf_cache import cached_pdf_path
+
+    papers = load_existing_papers(out)
+    paper = next((p for p in papers if p.merge_key() == paper_id), None)
+    if paper is None:
+        raise KeyError(paper_id)
+    windows, source, _ = process.compute_context(paper, out)
+    paper.ndif_context_windows = windows
+    paper.context_source = source
+    write_outputs(papers, out, PipelineRun())
+    d = paper.to_full_dict()
+    d["missing"] = _compute_missing(paper)
+    d["has_pdf"] = cached_pdf_path(paper, out) is not None
+    return d
+
+
 def upload_image(out: Path, paper_id: str, file: "UploadFile") -> dict:
     """Save an uploaded PNG as a paper's thumbnail and persist.
 
