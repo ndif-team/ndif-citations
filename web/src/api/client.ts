@@ -235,3 +235,27 @@ export async function runPublish(dry_run: boolean): Promise<PublishDryRunRespons
 // ---------------------------------------------------------------------------
 
 export const paperPdfUrl = (id: string) => `/api/papers/${encodeURIComponent(id)}/pdf`
+
+// ---------------------------------------------------------------------------
+// Paper PDF upload + evidence backfill
+// ---------------------------------------------------------------------------
+
+export async function attachPdf(paperId: string, file: File): Promise<PaperDetail> {
+  const fd = new FormData()
+  fd.append('file', file)
+  const res = await fetch(`/api/papers/${encodeURIComponent(paperId)}/pdf`, { method: 'POST', body: fd })
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw Object.assign(new Error(`API error ${res.status}: ${text}`), { status: res.status })
+  }
+  return res.json() as Promise<PaperDetail>
+}
+
+export async function backfillEvidence(paperId: string): Promise<PaperDetail> {
+  const res = await fetch(`/api/papers/${encodeURIComponent(paperId)}/evidence`, { method: 'POST' })
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw Object.assign(new Error(`API error ${res.status}: ${text}`), { status: res.status })
+  }
+  return res.json() as Promise<PaperDetail>
+}
