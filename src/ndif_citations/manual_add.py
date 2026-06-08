@@ -44,6 +44,25 @@ def seed_from_pdf(
     )
 
 
+def run_manual_add_seed(out, seed_papers, *, pdf_bytes=None, cancel_check=None):
+    """Synchronously enrich -> (cache pdf) -> route -> process -> finalize a seed list (no gate).
+
+    Caches pdf_bytes AFTER enrichment (so the filename matches any resolved
+    arXiv/DOI). Used by the CLI add-pdf (terminal has no interactive gate).
+    Returns the orchestrator FinalizeResult.
+    """
+    from ndif_citations import orchestrator
+    from ndif_citations.models import PipelineRun
+    from ndif_citations.pdf_cache import write_pdf_to_cache
+    d = orchestrator.DiscoverResult(papers=list(seed_papers), repos=[], run_stats=PipelineRun())
+    e = orchestrator.enrich_stage(out, d, skip_papers=False, skip_github=True, fresh=False)
+    if pdf_bytes is not None and e.papers:
+        write_pdf_to_cache(e.papers[0], pdf_bytes, out)
+    r = orchestrator.route_stage(out, e, skip_papers=False, skip_github=True, fresh=False)
+    completed = orchestrator.process_stage(out, r, skip_papers=False, skip_github=True, cancel_check=cancel_check)
+    return orchestrator.finalize_stage(out, r, d.run_stats, skip_papers=False, skip_github=True, fresh=False, completed=completed)
+
+
 def add_paper_by_url(
     out: Path,
     url: str,

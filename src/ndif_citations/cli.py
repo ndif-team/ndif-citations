@@ -720,6 +720,22 @@ def attach_pdf(paper_id: str, pdf_path: str, output_dir: str | None) -> None:
     console.print(f"  [green]✓ Attached PDF → {path}[/green]")
 
 
+@cli.command(name="add-pdf")
+@click.argument("pdf_path", type=click.Path(exists=True, dir_okay=False))
+@click.option("--title", required=True, help="Paper title (required)")
+@click.option("--arxiv", "arxiv_id", default=None, help="arXiv ID, if known")
+@click.option("--doi", default=None, help="DOI, if known")
+@click.option("--output-dir", "-o", default=None, help="Custom output directory")
+def add_pdf(pdf_path, title, arxiv_id, doi, output_dir):
+    """Add a new paper from a local PDF (+ title), process it, and append to output."""
+    from ndif_citations.manual_add import seed_from_pdf, run_manual_add_seed
+    out = config.get_output_dir(output_dir)
+    seed = seed_from_pdf(title=title, arxiv_id=arxiv_id, doi=doi)
+    data = Path(pdf_path).read_bytes()
+    run_manual_add_seed(out, [seed], pdf_bytes=data)
+    console.print(f"  [green]✓ Added + processed:[/green] {title}")
+
+
 @cli.command()
 @click.argument("paper_id")
 @click.option("--reason", "reason_str", required=True,
