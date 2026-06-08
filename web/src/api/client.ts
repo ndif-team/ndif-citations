@@ -190,8 +190,8 @@ export async function batchReprocess(ids: string[], fields: string[]): Promise<R
   return post<ReprocessResponse>('/papers/reprocess', { ids, fields })
 }
 
-export async function reprocessPaper(paperId: string, fields: string[]): Promise<{ run_id: string; state: string }> {
-  return post<{ run_id: string; state: string }>(`/papers/${encodeURIComponent(paperId)}/reprocess`, { fields })
+export async function reprocessPaper(paperId: string, fields: string[]): Promise<ReprocessResponse> {
+  return post<ReprocessResponse>(`/papers/${encodeURIComponent(paperId)}/reprocess`, { fields })
 }
 
 // ---------------------------------------------------------------------------

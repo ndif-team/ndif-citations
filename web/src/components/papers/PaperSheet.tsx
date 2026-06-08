@@ -555,12 +555,14 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
   const [lightbox, setLightbox] = useState(false)
   const [postAttachOpen, setPostAttachOpen] = useState(false)
   const [confirmField, setConfirmField] = useState<null | 'summary' | 'classify'>(null)
+  const [processingBusy, setProcessingBusy] = useState(false)
   const pdfInputRef = useRef<HTMLInputElement>(null)
 
   const isOpen = !!paperId
 
   async function runReprocess(field: 'summary' | 'classify') {
     if (!paperId) return
+    setProcessingBusy(true)
     try {
       await reprocessPaper(paperId, [field])
       toast.success(field === 'summary' ? 'Summarize started' : 'Categorize started')
@@ -569,6 +571,7 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
       toast.error(status === 409 ? 'A run is already active — wait for it to finish.' : (e as Error).message || 'Reprocess failed')
     } finally {
       setConfirmField(null)
+      setProcessingBusy(false)
     }
   }
 
@@ -1035,13 +1038,13 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Processing</p>
                     <div className="flex flex-wrap gap-2">
                       <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
-                              disabled={hasActiveRun}
+                              disabled={hasActiveRun || processingBusy}
                               title={hasActiveRun ? 'A run is already active' : undefined}
                               onClick={() => setConfirmField('summary')}>
                         <RefreshCw className="h-3 w-3" /> Summarize
                       </Button>
                       <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
-                              disabled={hasActiveRun}
+                              disabled={hasActiveRun || processingBusy}
                               title={hasActiveRun ? 'A run is already active' : undefined}
                               onClick={() => setConfirmField('classify')}>
                         <RefreshCw className="h-3 w-3" /> Categorize
@@ -1061,7 +1064,10 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel onClick={() => setConfirmField(null)}>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => confirmField && runReprocess(confirmField)}>
+                        <AlertDialogAction
+                          className="bg-primary text-primary-foreground hover:bg-primary/90"
+                          onClick={() => confirmField && runReprocess(confirmField)}
+                        >
                           {confirmField === 'summary' ? 'Summarize' : 'Categorize'}
                         </AlertDialogAction>
                       </AlertDialogFooter>
