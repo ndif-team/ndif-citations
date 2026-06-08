@@ -557,6 +557,7 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
   const [confirmField, setConfirmField] = useState<null | 'summary' | 'classify'>(null)
   const [processingBusy, setProcessingBusy] = useState(false)
   const pdfInputRef = useRef<HTMLInputElement>(null)
+  const lightboxRef = useRef<HTMLDivElement>(null)
 
   const isOpen = !!paperId
 
@@ -575,14 +576,46 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
     }
   }
 
-  // Close lightbox on Escape
+  // Lightbox: Escape to close + focus trap. The parent Radix Sheet is told to
+  // ignore Escape while the lightbox is open (see onEscapeKeyDown on SheetContent
+  // below), so this handler closes only the lightbox — not the whole panel. On
+  // open we move focus into the dialog; Tab/Shift+Tab cycle within it; on close
+  // focus is restored to the trigger (deferred a frame so it wins any Radix
+  // focus-scope re-assertion after the dialog node is removed).
   useEffect(() => {
     if (!lightbox) return
+    const trigger = document.activeElement as HTMLElement | null
+    const node = lightboxRef.current
+    node?.focus()
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setLightbox(false)
+      if (e.key === 'Escape') {
+        setLightbox(false)
+        return
+      }
+      if (e.key !== 'Tab' || !node) return
+      const focusable = Array.from(
+        node.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      )
+      e.preventDefault()
+      if (focusable.length === 0) {
+        node.focus()
+        return
+      }
+      const idx = focusable.indexOf(document.activeElement as HTMLElement)
+      const next = e.shiftKey
+        ? (idx <= 0 ? focusable[focusable.length - 1] : focusable[idx - 1])
+        : (idx === -1 || idx === focusable.length - 1 ? focusable[0] : focusable[idx + 1])
+      next.focus()
     }
     document.addEventListener('keydown', handleKey)
-    return () => document.removeEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('keydown', handleKey)
+      requestAnimationFrame(() => {
+        if (trigger && trigger.isConnected) trigger.focus()
+      })
+    }
   }, [lightbox])
 
   // Arrow key navigation (while sheet is open and not in edit mode)
@@ -682,7 +715,11 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
         onClose()
       }
     }}>
-      <SheetContent side="right" className="overflow-y-auto p-0 flex flex-col w-[420px] sm:max-w-[420px]">
+      <SheetContent
+        side="right"
+        className="overflow-y-auto p-0 flex flex-col w-[420px] sm:max-w-[420px]"
+        onEscapeKeyDown={(e) => { if (lightbox) e.preventDefault() }}
+      >
         {isLoading && (
           <div className="p-6 space-y-4">
             <Skeleton className="h-5 w-3/4" />
@@ -706,14 +743,25 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
             {/* Lightbox overlay */}
             {lightbox && paper.image && (
               <div
-                className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6"
+                ref={lightboxRef}
+                tabIndex={-1}
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6 outline-none"
                 onClick={() => setLightbox(false)}
                 role="dialog"
                 aria-modal="true"
+                aria-label={`Thumbnail preview — ${paper.title}`}
               >
+                <button
+                  type="button"
+                  className="absolute right-4 top-4 rounded-md bg-white/10 p-2 text-white hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                  onClick={(e) => { e.stopPropagation(); setLightbox(false) }}
+                  aria-label="Close preview"
+                >
+                  <X className="h-5 w-5" />
+                </button>
                 <img
                   src={`/api/images/${encodeURIComponent(paper.image.split('/').pop() ?? '')}`}
-                  alt=""
+                  alt={`Thumbnail for ${paper.title}`}
                   className="max-h-full max-w-full rounded shadow-2xl"
                 />
               </div>

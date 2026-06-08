@@ -644,6 +644,77 @@ def backfill_evidence(ids, output_dir, dry_run):
         console.print("[green]Catalog written.[/green]")
 
 
+@cli.command(name="backfill-thumbnails")
+@click.option("--ids", default=None, help="Comma-separated arXiv IDs, DOIs, or URLs")
+@click.option("--output-dir", "-o", default=None, help="Custom output directory")
+@click.option("--dry-run", is_flag=True,
+              help="Classify candidates without downloading/rendering/writing")
+def backfill_thumbnails(ids, output_dir, dry_run):
+    """Render a figure thumbnail (PyMuPDF + Surya) for papers missing an image. No LLM.
+
+    Papers with an arXiv ID or DOI use their cached PDF (downloading if needed);
+    id-less papers are skipped and reported. Dry-run classifies each candidate as
+    cached / would-download / skipped without any network or render work."""
+    from ndif_citations.output import load_existing_papers, write_outputs
+    from ndif_citations import config as cfg, process, pdf_cache
+    from ndif_citations.models import PipelineRun
+    _setup_logging(verbose=True)
+    out = cfg.get_output_dir(output_dir)
+    papers = load_existing_papers(out)
+    if not papers:
+        console.print(f"[bold red]No papers found in {out}[/bold red]"); return
+
+    targets = papers
+    if ids:
+        wanted = {x.strip() for x in ids.split(",") if x.strip()}
+        targets = [p for p in papers if p.arxiv_id in wanted or p.doi in wanted or p.url in wanted]
+        if not targets:
+            console.print(f"[yellow]No papers matched the given IDs: {sorted(wanted)}[/yellow]"); return
+
+    missing = [p for p in targets if not p.image]
+    extracted = 0
+    failed = 0
+    skipped: list[str] = []
+    for p in missing:
+        if not p.arxiv_id and not p.doi:  # no resolvable identifier -> can't fetch a PDF
+            skipped.append(p.title)
+            continue
+        try:
+            if dry_run:
+                where = "cached" if pdf_cache.cached_pdf_path(p, out) else "would download"
+                console.print(f"  [dim]{where}[/dim] {p.title[:60]}")
+                extracted += 1
+                continue
+            pdf_path = pdf_cache.get_cached_pdf(p, out)
+            if not pdf_path:
+                failed += 1
+                console.print(f"  [yellow]NO PDF[/yellow] {p.title[:50]!r}")
+                continue
+            image = process.extract_thumbnail(p, out, pdf_path=pdf_path)
+            if image:
+                p.image = image
+                p.has_thumbnail = True
+                extracted += 1
+                console.print(f"  [green]✓[/green] {p.title[:60]}")
+            else:
+                failed += 1
+                console.print(f"  [yellow]no figure found[/yellow] {p.title[:50]!r}")
+        except Exception as e:  # one paper's failure must not abort the batch
+            failed += 1
+            console.print(f"  [red]ERROR[/red] {p.title[:50]!r}: {e}")
+
+    verb = "would get" if dry_run else "got"
+    console.print(
+        f"\n[bold]{extracted}[/bold] papers {verb} thumbnails"
+        + (f", [red]{failed} failed[/red]" if failed else "")
+        + (f", [yellow]{len(skipped)} skipped (no identifier)[/yellow]" if skipped else "")
+        + (" (dry-run)" if dry_run else "") + "."
+    )
+    if not dry_run and extracted:
+        write_outputs(papers, out, PipelineRun())
+        console.print("[green]Catalog written.[/green]")
+
+
 def _resolve_paper(papers, paper_id: str):
     """Return (index, paper) matching paper_id (arXiv ID, DOI, or URL). Returns (None, None) if not found."""
     from ndif_citations.utils import normalize_arxiv_id, extract_arxiv_id_from_url

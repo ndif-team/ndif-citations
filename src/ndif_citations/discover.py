@@ -984,8 +984,11 @@ def deduplicate_papers(all_papers: list[DiscoveredPaper]) -> list[DiscoveredPape
     all_papers.sort(key=lambda p: source_priority.get(p.source, 4))
 
     for paper in all_papers:
-        # Ignore exactly excluded seed papers
-        if paper.title.lower().strip() in config.EXCLUDED_PAPER_TITLES:
+        # Ignore the seed paper itself — by title OR arXiv ID. The title can be
+        # corrupted or arrive in a variant form (the seed has leaked into the
+        # catalog under a wrong title before), so the arXiv ID is the robust guard.
+        if (paper.title.lower().strip() in config.EXCLUDED_PAPER_TITLES
+                or (paper.arxiv_id and paper.arxiv_id == config.SEED_ARXIV_ID)):
             continue
 
         # Check arXiv ID

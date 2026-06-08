@@ -150,3 +150,17 @@ class TestDeduplicatePapers:
         result = deduplicate_papers([excluded, other])
         assert len(result) == 1
         assert result[0].arxiv_id == "2407.00002"
+
+    def test_seed_excluded_by_arxiv_id_despite_corrupted_title(self):
+        # The seed paper once leaked into the catalog under a corrupted title
+        # ("AutoDiff: A Scalable Framework…"), so the title-only exclusion missed
+        # it. Its arXiv ID must exclude it regardless of what the title says.
+        from ndif_citations import config
+        seed = make_paper(
+            title="AutoDiff: A Scalable Framework for Automated Model Comparison",
+            arxiv_id=config.SEED_ARXIV_ID,
+        )
+        other = make_paper(title="Other Paper", arxiv_id="2407.00002")
+        result = deduplicate_papers([seed, other])
+        assert len(result) == 1
+        assert result[0].arxiv_id == "2407.00002"

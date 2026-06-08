@@ -26,12 +26,26 @@ def test_is_broken_authors(value, expected):
 
 def test_is_broken_venue_and_affiliations_and_year():
     assert is_broken("venue", "") is True
-    assert is_broken("venue", "arXiv") is True          # weak (via venue._WEAK_VENUE_RE)
+    assert is_broken("venue", "arXiv") is True          # weak (via venue.is_preprint_sentinel)
     assert is_broken("venue", "NeurIPS 2024") is False
     assert is_broken("affiliations", "") is True
     assert is_broken("affiliations", "MIT") is False
     assert is_broken("year", 0) is True
     assert is_broken("year", 2024) is False
+
+
+@pytest.mark.parametrize("venue,expected", [
+    ("arXiv preprint", True),                        # multi-word preprint phrase
+    ("arXiv preprint 2024", True),                   # phrase + year
+    ("arXiv preprint arXiv:2401.12345", True),       # BibTeX-style
+    ("arXiv preprint arXiv … 2026", True),           # real mangled Scholar string in the catalog
+    ("arXiv", True),
+    ("ArXiv 2025", True),
+    ("NeurIPS 2024", False),                         # real venue — must NOT be flagged
+    ("ICML 2023", False),
+])
+def test_is_broken_venue_detects_preprint_phrases(venue, expected):
+    assert is_broken("venue", venue) is expected
 
 
 def _c(value, source): return Candidate(value=value, source=source)
