@@ -729,9 +729,16 @@ def attach_pdf(paper_id: str, pdf_path: str, output_dir: str | None) -> None:
 def add_pdf(pdf_path, title, arxiv_id, doi, output_dir):
     """Add a new paper from a local PDF (+ title), process it, and append to output."""
     from ndif_citations.manual_add import seed_from_pdf, run_manual_add_seed
+    from ndif_citations.pdf_cache import _PDF_MAGIC, _MAX_PDF_BYTES
     out = config.get_output_dir(output_dir)
     seed = seed_from_pdf(title=title, arxiv_id=arxiv_id, doi=doi)
     data = Path(pdf_path).read_bytes()
+    if data[:5] != _PDF_MAGIC:
+        console.print("[bold red]Error: file is not a PDF[/bold red]")
+        return
+    if len(data) > _MAX_PDF_BYTES:
+        console.print("[bold red]Error: PDF exceeds the 50 MB limit[/bold red]")
+        return
     run_manual_add_seed(out, [seed], pdf_bytes=data)
     console.print(f"  [green]✓ Added + processed:[/green] {title}")
 

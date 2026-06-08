@@ -35,7 +35,7 @@ def seed_from_pdf(
     """Build a manual-add seed paper from user-provided fields for a PDF upload."""
     from ndif_citations.models import DiscoveredPaper, DiscoverySource
 
-    # No url for a PDF-only seed; enrich_papers fills it from arxiv_id/doi when resolvable.
+    # No url for a PDF-only seed (e.g. a paywalled paper) — left blank intentionally.
     return DiscoveredPaper(
         title=title,
         arxiv_id=arxiv_id or None,
