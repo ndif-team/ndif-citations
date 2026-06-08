@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from ndif_citations.models import Bucket, Category, DiscoveredPaper, PaperReason, PipelineRun
 from ndif_citations.output import load_existing_papers, write_outputs
 from ndif_citations.utils import slugify
-from ndif_citations.venue import _WEAK_VENUE_RE
+from ndif_citations.venue import is_preprint_sentinel
 
 if TYPE_CHECKING:
     from fastapi import UploadFile
@@ -47,7 +47,7 @@ def _compute_missing(paper: DiscoveredPaper) -> list[str]:
         missing.append("abstract")
     if not paper.description:
         missing.append("summary")
-    if not paper.venue or _WEAK_VENUE_RE.match(paper.venue):
+    if is_preprint_sentinel(paper.venue or ""):
         missing.append("venue")
     return missing
 

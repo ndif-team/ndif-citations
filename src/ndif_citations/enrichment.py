@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 from typing import NamedTuple
 
-from ndif_citations.venue import _WEAK_VENUE_RE
+from ndif_citations.venue import is_preprint_sentinel
 from ndif_citations.extract import _openalex_fetch_work, detect_peer_review, detect_venue_type
 from ndif_citations.utils import extract_arxiv_id_from_url, query_arxiv_api, rate_limit_sleep
 from ndif_citations.discover import _openalex_work_to_discovered
@@ -37,7 +37,9 @@ def is_broken(field: str, value) -> bool:
         stripped = text.rstrip(". ")
         return text.endswith(_ELLIPSIS) or "…" in text or stripped.endswith("et al")
     if field == "venue":
-        return bool(_WEAK_VENUE_RE.match(text))
+        # is_preprint_sentinel flags preprint-server / URL / mangled placeholder
+        # venues — including multi-word forms like "arXiv preprint 2024".
+        return is_preprint_sentinel(text)
     if field == "affiliations":
         return False  # non-empty affiliations are acceptable
     return False
