@@ -731,8 +731,9 @@ export function Papers() {
               <TabsContent value="link">
                 <div className="space-y-3">
                   <div>
-                    <label className="text-xs font-medium text-foreground mb-1.5 block">URL</label>
+                    <label htmlFor="add-link-url" className="text-xs font-medium text-foreground mb-1.5 block">URL</label>
                     <Input
+                      id="add-link-url"
                       type="url"
                       placeholder="https://arxiv.org/abs/…"
                       value={linkUrl}
@@ -756,10 +757,11 @@ export function Papers() {
               <TabsContent value="pdf">
                 <div className="space-y-3">
                   <div>
-                    <label className="text-xs font-medium text-foreground mb-1.5 block">
+                    <label htmlFor="add-pdf-title" className="text-xs font-medium text-foreground mb-1.5 block">
                       Title <span className="text-destructive">*</span>
                     </label>
                     <Input
+                      id="add-pdf-title"
                       placeholder="Paper title"
                       value={pdfTitle}
                       onChange={e => setPdfTitle(e.target.value)}
@@ -767,8 +769,9 @@ export function Papers() {
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-foreground mb-1.5 block">arXiv ID <span className="text-muted-foreground font-normal">(optional)</span></label>
+                    <label htmlFor="add-pdf-arxiv" className="text-xs font-medium text-foreground mb-1.5 block">arXiv ID <span className="text-muted-foreground font-normal">(optional)</span></label>
                     <Input
+                      id="add-pdf-arxiv"
                       placeholder="e.g. 2301.00001"
                       value={pdfArxiv}
                       onChange={e => setPdfArxiv(e.target.value)}
@@ -776,8 +779,9 @@ export function Papers() {
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-foreground mb-1.5 block">DOI <span className="text-muted-foreground font-normal">(optional)</span></label>
+                    <label htmlFor="add-pdf-doi" className="text-xs font-medium text-foreground mb-1.5 block">DOI <span className="text-muted-foreground font-normal">(optional)</span></label>
                     <Input
+                      id="add-pdf-doi"
                       placeholder="e.g. 10.1234/example"
                       value={pdfDoi}
                       onChange={e => setPdfDoi(e.target.value)}
@@ -785,10 +789,11 @@ export function Papers() {
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-foreground mb-1.5 block">
+                    <label htmlFor="add-pdf-file" className="text-xs font-medium text-foreground mb-1.5 block">
                       PDF file <span className="text-destructive">*</span>
                     </label>
                     <input
+                      id="add-pdf-file"
                       ref={fileInputRef}
                       type="file"
                       accept="application/pdf"
