@@ -899,8 +899,9 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
                       ref={pdfInputRef}
                       type="file"
                       accept="application/pdf"
-                      hidden
+                      className="hidden"
                       onChange={handlePdfFile}
+                      aria-hidden="true"
                     />
                     <Button
                       size="sm"

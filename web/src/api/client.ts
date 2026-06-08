@@ -243,7 +243,7 @@ export const paperPdfUrl = (id: string) => `/api/papers/${encodeURIComponent(id)
 export async function attachPdf(paperId: string, file: File): Promise<PaperDetail> {
   const fd = new FormData()
   fd.append('file', file)
-  const res = await fetch(`/api/papers/${encodeURIComponent(paperId)}/pdf`, { method: 'POST', body: fd })
+  const res = await fetch(`${BASE}/papers/${encodeURIComponent(paperId)}/pdf`, { method: 'POST', body: fd })
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText)
     throw Object.assign(new Error(`API error ${res.status}: ${text}`), { status: res.status })
@@ -252,7 +252,7 @@ export async function attachPdf(paperId: string, file: File): Promise<PaperDetai
 }
 
 export async function backfillEvidence(paperId: string): Promise<PaperDetail> {
-  const res = await fetch(`/api/papers/${encodeURIComponent(paperId)}/evidence`, { method: 'POST' })
+  const res = await fetch(`${BASE}/papers/${encodeURIComponent(paperId)}/evidence`, { method: 'POST' })
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText)
     throw Object.assign(new Error(`API error ${res.status}: ${text}`), { status: res.status })
