@@ -264,14 +264,17 @@ def attach_pdf(out: Path, paper_id: str, data: bytes) -> dict:
     Raises ``KeyError`` if no paper matches *paper_id*; ``ValueError`` if the
     bytes are not a PDF or exceed the size cap.
     """
-    from ndif_citations.pdf_cache import write_pdf_to_cache
+    from ndif_citations.pdf_cache import cached_pdf_path, write_pdf_to_cache
 
     papers = load_existing_papers(out)
     paper = next((p for p in papers if p.merge_key() == paper_id), None)
     if paper is None:
         raise KeyError(paper_id)
     write_pdf_to_cache(paper, data, out)
-    return get_paper(out, paper_id)
+    d = paper.to_full_dict()
+    d["missing"] = _compute_missing(paper)
+    d["has_pdf"] = cached_pdf_path(paper, out) is not None
+    return d
 
 
 def upload_image(out: Path, paper_id: str, file: "UploadFile") -> dict:
