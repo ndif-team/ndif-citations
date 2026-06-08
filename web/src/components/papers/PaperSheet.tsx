@@ -1,4 +1,4 @@
-import { ExternalLink, Copy, Check, AlertCircle, Pencil, X, Upload, RotateCcw, ChevronUp, ChevronDown, Trash2, Lock, ChevronLeft, ChevronRight, FileText } from 'lucide-react'
+import { ExternalLink, Copy, Check, AlertCircle, Pencil, X, Upload, RotateCcw, ChevronUp, ChevronDown, Trash2, Lock, ChevronLeft, ChevronRight, FileText, RefreshCw } from 'lucide-react'
 import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   Sheet,
@@ -26,7 +26,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { bucketBadge, confidenceBadge, categoryBadge, categoryLabel } from '@/lib/tokens'
 import { EDITABLE_FIELDS, SELECT_NONE } from '@/lib/editable'
 import type { EditableFieldMeta } from '@/lib/editable'
-import { editPaper, setPaperBucket, uploadPaperImage, reextractThumbnail, paperPdfUrl, attachPdf, backfillEvidence } from '@/api/client'
+import { editPaper, setPaperBucket, uploadPaperImage, reextractThumbnail, paperPdfUrl, attachPdf, backfillEvidence, reprocessPaper } from '@/api/client'
 import type { Bucket, ConfidenceBand, Category, PaperDetail } from '@/api/types'
 import { toast } from 'sonner'
 
@@ -554,9 +554,23 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
   const [saving, setSaving] = useState(false)
   const [lightbox, setLightbox] = useState(false)
   const [postAttachOpen, setPostAttachOpen] = useState(false)
+  const [confirmField, setConfirmField] = useState<null | 'summary' | 'classify'>(null)
   const pdfInputRef = useRef<HTMLInputElement>(null)
 
   const isOpen = !!paperId
+
+  async function runReprocess(field: 'summary' | 'classify') {
+    if (!paperId) return
+    try {
+      await reprocessPaper(paperId, [field])
+      toast.success(field === 'summary' ? 'Summarize started' : 'Categorize started')
+    } catch (e) {
+      const status = (e as { status?: number }).status
+      toast.error(status === 409 ? 'A run is already active — wait for it to finish.' : (e as Error).message || 'Reprocess failed')
+    } finally {
+      setConfirmField(null)
+    }
+  }
 
   // Close lightbox on Escape
   useEffect(() => {
@@ -1015,6 +1029,44 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
                     disabled={hasActiveRun}
                     onMutate={handleMutate}
                   />
+
+                  {/* Processing */}
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Processing</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                              disabled={hasActiveRun}
+                              title={hasActiveRun ? 'A run is already active' : undefined}
+                              onClick={() => setConfirmField('summary')}>
+                        <RefreshCw className="h-3 w-3" /> Summarize
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                              disabled={hasActiveRun}
+                              title={hasActiveRun ? 'A run is already active' : undefined}
+                              onClick={() => setConfirmField('classify')}>
+                        <RefreshCw className="h-3 w-3" /> Categorize
+                      </Button>
+                    </div>
+                  </div>
+
+                  <AlertDialog open={confirmField !== null} onOpenChange={(o) => !o && setConfirmField(null)}>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>
+                          {confirmField === 'summary' ? 'Re-summarize this paper?' : 'Re-categorize this paper?'}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This runs the LLM (spends an API call) on this paper. Continue?
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setConfirmField(null)}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => confirmField && runReprocess(confirmField)}>
+                          {confirmField === 'summary' ? 'Summarize' : 'Categorize'}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
 
                   {/* ID */}
                   {(() => {
