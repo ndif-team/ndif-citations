@@ -254,6 +254,26 @@ def set_bucket(
     return paper.to_full_dict()
 
 
+def attach_pdf(out: Path, paper_id: str, data: bytes) -> dict:
+    """Attach uploaded PDF bytes to an existing paper's on-disk cache.
+
+    Writes ``out/pdfs/{cache_filename}`` (no catalog mutation — only a file is
+    added, which ``get_cached_pdf`` picks up). Returns the paper's detail dict
+    (now with ``has_pdf=True``).
+
+    Raises ``KeyError`` if no paper matches *paper_id*; ``ValueError`` if the
+    bytes are not a PDF or exceed the size cap.
+    """
+    from ndif_citations.pdf_cache import write_pdf_to_cache
+
+    papers = load_existing_papers(out)
+    paper = next((p for p in papers if p.merge_key() == paper_id), None)
+    if paper is None:
+        raise KeyError(paper_id)
+    write_pdf_to_cache(paper, data, out)
+    return get_paper(out, paper_id)
+
+
 def upload_image(out: Path, paper_id: str, file: "UploadFile") -> dict:
     """Save an uploaded PNG as a paper's thumbnail and persist.
 
