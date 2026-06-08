@@ -15,7 +15,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from ndif_citations.server.routers import images, papers, publish, repos, runs, settings, stats
+from ndif_citations.server.routers import images, keys, papers, publish, repos, runs, settings, stats
 
 # SPA dist directory — populated by the frontend build (Task 3+).
 _WEB_DIST = Path(__file__).resolve().parent.parent.parent.parent / "web" / "dist"
@@ -43,6 +43,7 @@ def create_app() -> FastAPI:
     app.include_router(images.router)
     app.include_router(publish.router)
     app.include_router(settings.router)
+    app.include_router(keys.router)
 
     # SPA — only if the dist directory exists (optional; absent before the
     # frontend is built). Hashed assets are served from /assets; every other

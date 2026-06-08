@@ -5,6 +5,7 @@ Endpoints
 POST  /api/runs                  Start a new pipeline run.
 GET   /api/runs                  List all persisted run records (history).
 GET   /api/runs/active           Return the currently active run (if any).
+GET   /api/runs/preflight        Credential preflight check (no side-effects).
 GET   /api/runs/{run_id}         Fetch a single run record by ID.
 GET   /api/runs/{run_id}/events  Server-Sent Events stream of progress events.
 POST  /api/runs/{run_id}/cancel  Request cancellation of a run.
@@ -22,6 +23,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from ndif_citations.jobs import GateError, JobRunner, RunActiveError
+from ndif_citations.preflight import preflight as run_preflight
 from ndif_citations.server.deps import get_output_dir, get_runner
 
 router = APIRouter(prefix="/api", tags=["runs"])
@@ -66,6 +68,16 @@ def start_run(
     Returns 422 if *mode* is not ``"fresh"`` or ``"incremental"`` (Pydantic
     validation via ``Literal``).
     """
+    pf = run_preflight(skip_papers=body.skip_papers, skip_github=body.skip_github)
+    if not pf["ok"]:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "missing required keys",
+                "blocking": pf["blocking"],
+                "warnings": pf["warnings"],
+            },
+        )
     try:
         run_id = runner.start(
             out,
@@ -101,6 +113,19 @@ def get_active_run(
             return {"active": None}
         return {"active": record.to_dict()}
     return {"active": None}
+
+
+@router.get("/runs/preflight")
+def get_preflight(skip_papers: bool = False, skip_github: bool = False) -> dict:
+    """Return preflight credential check for the requested entity set.
+
+    Query params mirror ``StartRunRequest.skip_papers`` / ``skip_github``.
+    Response: ``{ok: bool, blocking: list[str], warnings: list[str]}``.
+
+    **Route ordering:** declared BEFORE ``GET /runs/{run_id}`` so the literal
+    path segment ``"preflight"`` is never captured as a run_id.
+    """
+    return run_preflight(skip_papers=skip_papers, skip_github=skip_github)
 
 
 @router.get("/runs/{run_id}")

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Play,
   Square,
@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useRuns, useActiveRun } from '@/api/hooks'
 import { useRunEvents } from '@/hooks/useRunEvents'
-import { startRun, cancelRun, submitGate, fetchRun } from '@/api/client'
+import { startRun, cancelRun, submitGate, fetchRun, getPreflight } from '@/api/client'
 import { runStateBadge, runStateLabel } from '@/lib/tokens'
 import { cn } from '@/lib/utils'
 import type { RunRecord, PipelineStage, PaperCandidate, RepoCandidate, RunMode, ProgressEvent } from '@/api/types'
@@ -713,6 +713,13 @@ function TriggerPanel({ onStarted }: TriggerPanelProps) {
   const [skipGithub, setSkipGithub] = useState(false)
   const [starting, setStarting] = useState(false)
 
+  // Preflight check — refetches when skip toggles change
+  const { data: preflight, isLoading: preflightLoading, isError: preflightError } = useQuery({
+    queryKey: ['preflight', skipPapers, skipGithub],
+    queryFn: () => getPreflight(skipPapers, skipGithub),
+    staleTime: 30_000,
+  })
+
   // Mutual exclusion: can't skip both
   function handleSkipPapers(v: boolean) {
     setSkipPapers(v)
@@ -744,6 +751,8 @@ function TriggerPanel({ onStarted }: TriggerPanelProps) {
       setStarting(false)
     }
   }
+
+  const preflightBlocked = !!preflight && !preflight.ok
 
   return (
     <div className="space-y-5">
@@ -815,8 +824,40 @@ function TriggerPanel({ onStarted }: TriggerPanelProps) {
         <p className="text-xs text-muted-foreground">Skip toggles are mutually exclusive.</p>
       </div>
 
+      {/* Preflight blockers */}
+      {preflight && preflight.blocking.length > 0 && (
+        <div className="space-y-1">
+          {preflight.blocking.map((msg, i) => (
+            <div key={i} className="flex items-start gap-1.5 text-xs text-destructive">
+              <AlertCircle className="h-3.5 w-3.5 flex-none mt-px" aria-hidden="true" />
+              <span>{msg}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Preflight warnings */}
+      {preflight && preflight.warnings.length > 0 && (
+        <div className="space-y-1">
+          {preflight.warnings.map((msg, i) => (
+            <div key={i} className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+              <AlertCircle className="h-3.5 w-3.5 flex-none mt-px" aria-hidden="true" />
+              <span>{msg}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Preflight status (locking stays safe-default: a failed/loading check never blocks) */}
+      {preflightLoading && (
+        <p className="text-xs text-muted-foreground">Checking credentials…</p>
+      )}
+      {preflightError && (
+        <p className="text-xs text-amber-700 dark:text-amber-400">Could not verify credentials — proceed with caution.</p>
+      )}
+
       {/* Start button */}
-      <Button onClick={handleStart} disabled={starting} className="gap-1.5">
+      <Button onClick={handleStart} disabled={starting || preflightBlocked} className="gap-1.5">
         {starting ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
         ) : (

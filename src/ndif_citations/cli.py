@@ -767,6 +767,53 @@ def promote(paper_id: str, output_dir: str | None, detail: str | None, dry_run: 
     console.print("  [green]✓ Promoted and saved.[/green]")
 
 
+@cli.command(name="attach-pdf")
+@click.argument("paper_id")
+@click.argument("pdf_path", type=click.Path(exists=True, dir_okay=False))
+@click.option("--output-dir", "-o", default=None, help="Custom output directory")
+def attach_pdf(paper_id: str, pdf_path: str, output_dir: str | None) -> None:
+    """Attach a local PDF file to an existing paper's cache (by arXiv ID / DOI / URL)."""
+    from ndif_citations.output import load_existing_papers
+    from ndif_citations.pdf_cache import write_pdf_to_cache
+
+    out = config.get_output_dir(output_dir)
+    papers = load_existing_papers(out)
+    _idx, paper = _resolve_paper(papers, paper_id)
+    if paper is None:
+        console.print(f"[bold yellow]WARNING:[/bold yellow] Paper not found for ID {paper_id!r}")
+        return
+    data = Path(pdf_path).read_bytes()
+    try:
+        path = write_pdf_to_cache(paper, data, out)
+    except ValueError as e:
+        console.print(f"[bold red]{e}[/bold red]")
+        return
+    console.print(f"  [green]✓ Attached PDF → {path}[/green]")
+
+
+@cli.command(name="add-pdf")
+@click.argument("pdf_path", type=click.Path(exists=True, dir_okay=False))
+@click.option("--title", required=True, help="Paper title (required)")
+@click.option("--arxiv", "arxiv_id", default=None, help="arXiv ID, if known")
+@click.option("--doi", default=None, help="DOI, if known")
+@click.option("--output-dir", "-o", default=None, help="Custom output directory")
+def add_pdf(pdf_path, title, arxiv_id, doi, output_dir):
+    """Add a new paper from a local PDF (+ title), process it, and append to output."""
+    from ndif_citations.manual_add import seed_from_pdf, run_manual_add_seed
+    from ndif_citations.pdf_cache import _PDF_MAGIC, _MAX_PDF_BYTES
+    out = config.get_output_dir(output_dir)
+    seed = seed_from_pdf(title=title, arxiv_id=arxiv_id, doi=doi)
+    data = Path(pdf_path).read_bytes()
+    if data[:5] != _PDF_MAGIC:
+        console.print("[bold red]Error: file is not a PDF[/bold red]")
+        return
+    if len(data) > _MAX_PDF_BYTES:
+        console.print("[bold red]Error: PDF exceeds the 50 MB limit[/bold red]")
+        return
+    run_manual_add_seed(out, [seed], pdf_bytes=data)
+    console.print(f"  [green]✓ Added + processed:[/green] {title}")
+
+
 @cli.command()
 @click.argument("paper_id")
 @click.option("--reason", "reason_str", required=True,

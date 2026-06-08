@@ -190,6 +190,10 @@ export async function batchReprocess(ids: string[], fields: string[]): Promise<R
   return post<ReprocessResponse>('/papers/reprocess', { ids, fields })
 }
 
+export async function reprocessPaper(paperId: string, fields: string[]): Promise<ReprocessResponse> {
+  return post<ReprocessResponse>(`/papers/${encodeURIComponent(paperId)}/reprocess`, { fields })
+}
+
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------
@@ -231,7 +235,76 @@ export async function runPublish(dry_run: boolean): Promise<PublishDryRunRespons
 }
 
 // ---------------------------------------------------------------------------
+// API Keys (write-only secrets)
+// ---------------------------------------------------------------------------
+
+export async function getKeys(): Promise<Record<string, { configured: boolean }>> {
+  return get<Record<string, { configured: boolean }>>('/settings/keys')
+}
+
+export async function putKeys(changes: Record<string, string>): Promise<Record<string, { configured: boolean }>> {
+  return put<Record<string, { configured: boolean }>>('/settings/keys', changes)
+}
+
+export async function testKey(provider: 'llm' | 'github' | 's2'): Promise<{ ok: boolean; detail: string }> {
+  return post<{ ok: boolean; detail: string }>('/settings/keys/test', { provider })
+}
+
+export async function getPreflight(skipPapers: boolean, skipGithub: boolean): Promise<{ ok: boolean; blocking: string[]; warnings: string[] }> {
+  const sp = new URLSearchParams()
+  sp.set('skip_papers', String(skipPapers))
+  sp.set('skip_github', String(skipGithub))
+  return get<{ ok: boolean; blocking: string[]; warnings: string[] }>(`/runs/preflight?${sp.toString()}`)
+}
+
+// ---------------------------------------------------------------------------
 // Paper PDF URL helper
 // ---------------------------------------------------------------------------
 
 export const paperPdfUrl = (id: string) => `/api/papers/${encodeURIComponent(id)}/pdf`
+
+// ---------------------------------------------------------------------------
+// Manual add (by URL or PDF)
+// ---------------------------------------------------------------------------
+
+export async function addPaper(url: string): Promise<{ run_id: string; state: string }> {
+  return post<{ run_id: string; state: string }>('/papers/add', { url })
+}
+
+export async function addPaperPdf(args: { title: string; arxiv_id?: string; doi?: string; file: File }): Promise<{ run_id: string; state: string }> {
+  const fd = new FormData()
+  fd.append('title', args.title)
+  if (args.arxiv_id) fd.append('arxiv_id', args.arxiv_id)
+  if (args.doi) fd.append('doi', args.doi)
+  fd.append('file', args.file)
+  const res = await fetch(`${BASE}/papers/add-pdf`, { method: 'POST', body: fd })
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw Object.assign(new Error(`API error ${res.status}: ${text}`), { status: res.status })
+  }
+  return res.json() as Promise<{ run_id: string; state: string }>
+}
+
+// ---------------------------------------------------------------------------
+// Paper PDF upload + evidence backfill
+// ---------------------------------------------------------------------------
+
+export async function attachPdf(paperId: string, file: File): Promise<PaperDetail> {
+  const fd = new FormData()
+  fd.append('file', file)
+  const res = await fetch(`${BASE}/papers/${encodeURIComponent(paperId)}/pdf`, { method: 'POST', body: fd })
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw Object.assign(new Error(`API error ${res.status}: ${text}`), { status: res.status })
+  }
+  return res.json() as Promise<PaperDetail>
+}
+
+export async function backfillEvidence(paperId: string): Promise<PaperDetail> {
+  const res = await fetch(`${BASE}/papers/${encodeURIComponent(paperId)}/evidence`, { method: 'POST' })
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw Object.assign(new Error(`API error ${res.status}: ${text}`), { status: res.status })
+  }
+  return res.json() as Promise<PaperDetail>
+}

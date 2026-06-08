@@ -25,6 +25,25 @@ from tests.helpers.fakes import install_pipeline_fakes
 
 
 # ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _preflight_keys(monkeypatch):
+    """Guarantee the required API keys are set for every test in this file.
+
+    The new preflight backstop on POST /api/runs will 422 when LLM_API_KEY or
+    GITHUB_TOKEN are absent.  ``install_pipeline_fakes`` patches out everything
+    that would actually *use* these values, so dummy strings are safe.  This
+    fixture makes the suite hermetic against a clean CI environment that has no
+    real .env.
+    """
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("GITHUB_TOKEN", "test-token")
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 

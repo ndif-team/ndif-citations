@@ -16,7 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -86,14 +86,14 @@ def add_paper(
     out: Path = Depends(deps.get_output_dir),
     runner: JobRunner = Depends(deps.get_runner),
 ) -> AddPaperResponse:
-    """Add a single paper by URL via the JobRunner.
+    """Start a gated manual-add run parked at the review gate.
 
     The URL must be non-empty and either:
     * yield a parseable arXiv ID (e.g. ``https://arxiv.org/abs/2407.14561``), or
     * look like a generic http/https URL.
 
-    Heavy work (S2 lookup, enrichment, LLM classification) runs on the
-    JobRunner worker — the client watches progress via
+    The run parks at the review gate — the curator must approve or discard
+    via ``POST /api/runs/{run_id}/gate``.  The client watches progress via
     ``GET /api/runs/{run_id}`` or the SSE events stream.
 
     Returns ``{"run_id": ..., "state": "running"}``.
@@ -114,13 +114,47 @@ def add_paper(
             detail="url must be an http/https URL or a recognisable arXiv URL",
         )
 
-    from ndif_citations import manual_add
+    from ndif_citations.manual_add import seed_from_url
 
     try:
-        run_id = runner.start_job(
+        run_id = runner.start_manual_add(out, seed_from_url(url))
+    except RunActiveError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return AddPaperResponse(run_id=run_id, state="running")
+
+
+@router.post("/papers/add-pdf", response_model=AddPaperResponse)
+def add_paper_pdf(
+    title: str = Form(...),
+    arxiv_id: str | None = Form(None),
+    doi: str | None = Form(None),
+    file: UploadFile = File(...),
+    out: Path = Depends(deps.get_output_dir),
+    runner: JobRunner = Depends(deps.get_runner),
+) -> AddPaperResponse:
+    """Start a gated manual-add run from an uploaded PDF + provided metadata.
+
+    The PDF is cached after enrichment; the entry parks at the review gate.
+
+    * 422 — no title or non-PDF upload.
+    * 409 — a run is active.
+    """
+    from ndif_citations.manual_add import seed_from_pdf
+    from ndif_citations.pdf_cache import _MAX_PDF_BYTES, _PDF_MAGIC
+
+    if not title.strip():
+        raise HTTPException(status_code=422, detail="title is required")
+    data = file.file.read()
+    if data[:5] != _PDF_MAGIC:
+        raise HTTPException(status_code=422, detail="uploaded file is not a PDF")
+    if len(data) > _MAX_PDF_BYTES:
+        raise HTTPException(status_code=422, detail="PDF exceeds the 50 MB limit")
+    try:
+        run_id = runner.start_manual_add(
             out,
-            lambda cc: manual_add.add_paper_by_url(out, url, cancel_check=cc),
-            kind="add",
+            seed_from_pdf(title=title, arxiv_id=arxiv_id, doi=doi),
+            pdf_bytes=data,
         )
     except RunActiveError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -424,3 +458,46 @@ def upload_image(
         raise HTTPException(status_code=404, detail=f"Paper {paper_id!r} not found")
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.post("/papers/{paper_id:path}/pdf")
+def upload_pdf(
+    paper_id: str,
+    file: UploadFile = File(...),
+    out: Path = Depends(deps.get_output_dir),
+    _guard: None = Depends(deps.require_no_active_run),
+) -> dict:
+    """Attach an uploaded PDF to an existing paper's cache (synchronous file write).
+
+    Mirrors ``/image``: requires no active run (409) so it can't race a pipeline
+    write. The bytes are saved to ``out/pdfs/{cache_filename}``; downstream
+    consumers (viewer, re-extract, evidence) pick it up via ``get_cached_pdf``.
+
+    * 404 — no paper with the given merge_key.
+    * 422 — the upload is not a PDF (magic bytes) or exceeds 50 MB.
+    * 409 — a run/job is already active.
+    """
+    data = file.file.read()
+    try:
+        return papers_svc.attach_pdf(out, paper_id, data)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Paper {paper_id!r} not found")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+@router.post("/papers/{paper_id:path}/evidence")
+def backfill_evidence(
+    paper_id: str,
+    out: Path = Depends(deps.get_output_dir),
+    _guard: None = Depends(deps.require_no_active_run),
+) -> dict:
+    """Populate the paper's NDIF context windows from its cached PDF or abstract (no LLM, sync).
+
+    * 404 — no paper with the given merge_key.
+    * 409 — a run/job is already active.
+    """
+    try:
+        return papers_svc.backfill_evidence(out, paper_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Paper {paper_id!r} not found")

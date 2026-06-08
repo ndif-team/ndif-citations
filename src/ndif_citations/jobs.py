@@ -61,7 +61,7 @@ from pathlib import Path
 
 from ndif_citations import edit_schema, events, orchestrator
 from ndif_citations.events import ProgressEvent, RunCancelled
-from ndif_citations.models import Bucket, PaperReason
+from ndif_citations.models import Bucket, DiscoveredPaper, PaperReason, PipelineRun
 from ndif_citations.router import ProcessingBucket
 
 logger = logging.getLogger(__name__)
@@ -156,6 +156,8 @@ class RunRecord:
     paper_candidates: list[dict] = field(default_factory=list)
     repo_candidates: list[dict] = field(default_factory=list)
     gate_selection: dict | None = None
+    seed_papers: "list[DiscoveredPaper] | None" = None
+    pdf_bytes: "bytes | None" = None
 
     def to_dict(self) -> dict:
         """Serialize for persistence; events go through ``ProgressEvent.to_dict``.
@@ -261,6 +263,56 @@ class JobRunner:
                 "mode": mode,
                 "skip_papers": skip_papers,
                 "skip_github": skip_github,
+            },
+            name=f"pipeline-run-{run_id}",
+            daemon=True,
+        )
+        thread.start()
+        return run_id
+
+    def start_manual_add(
+        self,
+        out: "Path",
+        seed: "DiscoveredPaper",
+        *,
+        pdf_bytes: "bytes | None" = None,
+    ) -> str:
+        """Start a gated manual-add run seeded with one paper; return its run_id.
+
+        Same gated loop as incremental (enrich -> route -> gate -> process) but
+        skips discovery and injects *seed*. If *pdf_bytes* is given it is cached
+        AFTER enrichment (so the filename matches any resolved arXiv/DOI).
+        Raises RunActiveError if a run is already active.
+        """
+        self._warm_imports()
+
+        with self._lock:
+            if (
+                self._current is not None
+                and self._current.state in self._ACTIVE_STATES
+            ):
+                raise RunActiveError("a pipeline run is already active")
+
+            run_id = self._new_run_id()
+            record = RunRecord(
+                run_id=run_id,
+                state="running",
+                mode="manual",
+                skip_papers=False,
+                skip_github=True,
+                started_at=datetime.now().isoformat(),
+                seed_papers=[seed],
+                pdf_bytes=pdf_bytes,
+            )
+            self._current = record
+
+        thread = threading.Thread(
+            target=self._run,
+            args=(record, out),
+            kwargs={
+                "mode": "manual",
+                "skip_papers": False,
+                "skip_github": True,
             },
             name=f"pipeline-run-{run_id}",
             daemon=True,
@@ -473,7 +525,7 @@ class JobRunner:
                 raise KeyError(run_id)
             record = current
             snapshot = list(record.events)
-            is_running = record.state == "running"
+            is_running = record.state in ("running", "awaiting_review")
             q: queue.Queue | None = None
             if is_running:
                 q = queue.Queue()
@@ -563,11 +615,13 @@ class JobRunner:
         # disk already exists (no read-your-write race for callers).
         terminal_state = "done"
         try:
-            if mode == "incremental":
+            if mode in ("incremental", "manual"):
                 # Stage-driven path with the human-in-the-loop gate (Task 3.1).
                 # Returns None if the run was cancelled at the gate (no finalize).
+                # For "manual" mode, seed_papers / pdf_bytes bypass discovery.
                 result = self._run_incremental_with_gate(
-                    record, out, skip_papers=skip_papers, skip_github=skip_github
+                    record, out, skip_papers=skip_papers, skip_github=skip_github,
+                    seed_papers=record.seed_papers, pdf_bytes=record.pdf_bytes,
                 )
                 if result is None:
                     terminal_state = "cancelled"
@@ -689,6 +743,8 @@ class JobRunner:
         *,
         skip_papers: bool,
         skip_github: bool,
+        seed_papers: "list[DiscoveredPaper] | None" = None,
+        pdf_bytes: "bytes | None" = None,
     ) -> orchestrator.FinalizeResult | None:
         """Drive discover -> enrich -> route, PAUSE at the gate, then process.
 
@@ -708,12 +764,18 @@ class JobRunner:
         """
         fresh = False  # incremental mode always merges against existing state
 
-        d = orchestrator.discover_stage(
-            out, skip_papers=skip_papers, skip_github=skip_github, fresh=fresh
-        )
+        if seed_papers is not None:
+            d = orchestrator.DiscoverResult(papers=seed_papers, repos=[], run_stats=PipelineRun())
+        else:
+            d = orchestrator.discover_stage(
+                out, skip_papers=skip_papers, skip_github=skip_github, fresh=fresh
+            )
         e = orchestrator.enrich_stage(
             out, d, skip_papers=skip_papers, skip_github=skip_github, fresh=fresh
         )
+        if pdf_bytes is not None and e.papers:
+            from ndif_citations.pdf_cache import write_pdf_to_cache
+            write_pdf_to_cache(e.papers[0], pdf_bytes, out)
         route_result = orchestrator.route_stage(
             out, e, skip_papers=skip_papers, skip_github=skip_github, fresh=fresh
         )

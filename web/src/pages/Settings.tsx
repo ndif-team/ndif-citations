@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import type { KeyboardEvent } from 'react'
-import { AlertCircle, X, Plus, Settings as SettingsIcon, Building2, Upload } from 'lucide-react'
+import { AlertCircle, X, Plus, Settings as SettingsIcon, Building2, Upload, KeyRound, CheckCircle2, XCircle } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -18,9 +18,10 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useSettings, useVenues, usePublishTarget, useActiveRun } from '@/api/hooks'
-import { useQueryClient } from '@tanstack/react-query'
-import { putSettings, putVenues, putPublishTarget, runPublish } from '@/api/client'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { putSettings, putVenues, putPublishTarget, runPublish, getKeys, putKeys, testKey } from '@/api/client'
 import { toast } from 'sonner'
+import { Badge } from '@/components/ui/badge'
 import type { SettingsResponse, VenueEntry, VenueType, PublishDryRunResponse, PublishResponse } from '@/api/types'
 
 // ---------------------------------------------------------------------------
@@ -159,9 +160,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
+function FieldLabel({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
   return (
-    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider block mb-1">
+    <label htmlFor={htmlFor} className="text-xs font-medium text-muted-foreground uppercase tracking-wider block mb-1">
       {children}
     </label>
   )
@@ -912,6 +913,197 @@ function PublishSection({ hasActiveRun }: { hasActiveRun: boolean }) {
 }
 
 // ---------------------------------------------------------------------------
+// Section 4 — API Keys (write-only)
+// ---------------------------------------------------------------------------
+
+type KeyName = 'LLM_API_KEY' | 'S2_API_KEY' | 'GITHUB_TOKEN' | 'SERPAPI_API_KEY'
+type TestProvider = 'llm' | 'github' | 's2'
+
+const KEY_META: { name: KeyName; label: string; provider?: TestProvider }[] = [
+  { name: 'LLM_API_KEY',      label: 'LLM API Key',       provider: 'llm' },
+  { name: 'S2_API_KEY',       label: 'S2 API Key',        provider: 's2' },
+  { name: 'GITHUB_TOKEN',     label: 'GitHub Token',      provider: 'github' },
+  { name: 'SERPAPI_API_KEY',  label: 'SerpAPI API Key' },
+]
+
+function ApiKeysSection({ hasActiveRun }: { hasActiveRun: boolean }) {
+  const qc = useQueryClient()
+  const { data: keys, isLoading, error } = useQuery({
+    queryKey: ['settings', 'keys'],
+    queryFn: getKeys,
+    staleTime: 30_000,
+  })
+
+  // Draft: one input string per key (empty = keep existing)
+  const [draft, setDraft] = useState<Record<KeyName, string>>({
+    LLM_API_KEY: '',
+    S2_API_KEY: '',
+    GITHUB_TOKEN: '',
+    SERPAPI_API_KEY: '',
+  })
+
+  // Per-key test result
+  const [testResults, setTestResults] = useState<Record<string, { ok: boolean; detail: string } | null>>({})
+  const [testingKey, setTestingKey] = useState<KeyName | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  function setKeyDraft(name: KeyName, value: string) {
+    setDraft(d => ({ ...d, [name]: value }))
+    // Clear test result for this key when user types
+    setTestResults(r => ({ ...r, [name]: null }))
+  }
+
+  async function handleTest(name: KeyName, provider: TestProvider) {
+    setTestingKey(name)
+    setTestResults(r => ({ ...r, [name]: null }))
+    try {
+      const result = await testKey(provider)
+      setTestResults(r => ({ ...r, [name]: result }))
+    } catch (err) {
+      toastApiError(err, 'Test request failed')
+    } finally {
+      setTestingKey(null)
+    }
+  }
+
+  async function handleSave() {
+    const changes: Record<string, string> = {}
+    for (const { name } of KEY_META) {
+      const v = draft[name].trim()
+      if (v) changes[name] = v
+    }
+    if (Object.keys(changes).length === 0) {
+      toast.info('No keys to save — enter a value in at least one field')
+      return
+    }
+    setSaving(true)
+    try {
+      const updated = await putKeys(changes)
+      qc.setQueryData(['settings', 'keys'], updated)
+      // Refresh the run-start preflight gate so a newly-saved key unblocks runs immediately
+      qc.invalidateQueries({ queryKey: ['preflight'] })
+      // Clear inputs
+      setDraft({ LLM_API_KEY: '', S2_API_KEY: '', GITHUB_TOKEN: '', SERPAPI_API_KEY: '' })
+      setTestResults({})
+      toast.success('API keys saved')
+    } catch (err) {
+      toastApiError(err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3 max-w-2xl">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-12 bg-muted animate-pulse rounded-md" />
+        ))}
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center gap-2 text-destructive text-sm">
+        <AlertCircle className="h-4 w-4 flex-none" />
+        <span>Failed to load key status: {(error as Error).message}</span>
+      </div>
+    )
+  }
+
+  const disabled = hasActiveRun || saving
+
+  return (
+    <div className="space-y-5 max-w-2xl">
+      <SectionLabel>Secrets</SectionLabel>
+      <p className="text-xs text-muted-foreground -mt-2">
+        Values are write-only — leave a field blank to keep the existing key.
+      </p>
+
+      <div className="space-y-4">
+        {KEY_META.map(({ name, label, provider }) => {
+          const configured = keys?.[name]?.configured ?? false
+          const testResult = testResults[name] ?? null
+          const isTesting = testingKey === name
+
+          return (
+            <div key={name} className="grid gap-1.5">
+              <FieldLabel htmlFor={`apikey-${name}`}>{label}</FieldLabel>
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Configured badge */}
+                {configured ? (
+                  <Badge className="shrink-0 bg-green-50 text-green-800 ring-green-200 dark:bg-green-950 dark:text-green-300 dark:ring-green-800 gap-1">
+                    <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+                    Configured
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="shrink-0 text-muted-foreground gap-1">
+                    <XCircle className="h-3 w-3" aria-hidden="true" />
+                    Not set
+                  </Badge>
+                )}
+
+                {/* Password input */}
+                <Input
+                  id={`apikey-${name}`}
+                  type="password"
+                  placeholder="leave blank to keep"
+                  value={draft[name]}
+                  onChange={e => setKeyDraft(name, e.target.value)}
+                  disabled={disabled}
+                  className="h-7 text-xs font-mono flex-1 min-w-[180px]"
+                  autoComplete="new-password"
+                />
+
+                {/* Test button (not for SERPAPI) */}
+                {provider && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs shrink-0"
+                    disabled={disabled || isTesting}
+                    onClick={() => handleTest(name, provider)}
+                    title="Tests the saved key — save first to test a new value"
+                  >
+                    {isTesting ? 'Testing…' : 'Test'}
+                  </Button>
+                )}
+              </div>
+
+              {/* Test result inline */}
+              {testResult && (
+                <p className={`text-xs flex items-center gap-1 ${testResult.ok ? 'text-green-700 dark:text-green-400' : 'text-destructive'}`}>
+                  {testResult.ok
+                    ? <CheckCircle2 className="h-3 w-3 flex-none" aria-hidden="true" />
+                    : <XCircle className="h-3 w-3 flex-none" aria-hidden="true" />}
+                  {testResult.detail}
+                </p>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="flex gap-2 pt-2 border-t">
+        <Button
+          size="sm"
+          onClick={handleSave}
+          disabled={disabled}
+        >
+          {saving ? 'Saving…' : 'Save keys'}
+        </Button>
+        {hasActiveRun && (
+          <span className="text-xs text-muted-foreground self-center ml-2">
+            Disabled during active run
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Settings page (root)
 // ---------------------------------------------------------------------------
 
@@ -945,6 +1137,10 @@ export function Settings() {
             <Upload className="h-3 w-3" aria-hidden="true" />
             Publish
           </TabsTrigger>
+          <TabsTrigger value="keys" className="gap-1.5">
+            <KeyRound className="h-3 w-3" aria-hidden="true" />
+            API Keys
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="settings">
@@ -976,6 +1172,17 @@ export function Settings() {
             </CardHeader>
             <CardContent>
               <PublishSection hasActiveRun={hasActiveRun} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="keys">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">API Keys</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ApiKeysSection hasActiveRun={hasActiveRun} />
             </CardContent>
           </Card>
         </TabsContent>

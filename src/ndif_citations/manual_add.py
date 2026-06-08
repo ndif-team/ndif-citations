@@ -16,6 +16,53 @@ from typing import Callable, Optional
 logger = logging.getLogger(__name__)
 
 
+def seed_from_url(url: str) -> "DiscoveredPaper":
+    """Build a manual-add seed paper from a URL (arXiv ID extracted if present)."""
+    from ndif_citations.models import DiscoveredPaper, DiscoverySource
+    from ndif_citations.utils import extract_arxiv_id_from_url
+
+    return DiscoveredPaper(
+        title="[Pending metadata lookup]",
+        url=url,
+        arxiv_id=extract_arxiv_id_from_url(url),
+        source=DiscoverySource.MANUAL_ADD,
+    )
+
+
+def seed_from_pdf(
+    *, title: str, arxiv_id: str | None = None, doi: str | None = None
+) -> "DiscoveredPaper":
+    """Build a manual-add seed paper from user-provided fields for a PDF upload."""
+    from ndif_citations.models import DiscoveredPaper, DiscoverySource
+
+    # No url for a PDF-only seed (e.g. a paywalled paper) — left blank intentionally.
+    return DiscoveredPaper(
+        title=title,
+        arxiv_id=arxiv_id or None,
+        doi=doi or None,
+        source=DiscoverySource.MANUAL_ADD,
+    )
+
+
+def run_manual_add_seed(out, seed_papers, *, pdf_bytes=None, cancel_check=None):
+    """Synchronously enrich -> (cache pdf) -> route -> process -> finalize a seed list (no gate).
+
+    Caches pdf_bytes AFTER enrichment (so the filename matches any resolved
+    arXiv/DOI). Used by the CLI add-pdf (terminal has no interactive gate).
+    Returns the orchestrator FinalizeResult.
+    """
+    from ndif_citations import orchestrator
+    from ndif_citations.models import PipelineRun
+    from ndif_citations.pdf_cache import write_pdf_to_cache
+    d = orchestrator.DiscoverResult(papers=list(seed_papers), repos=[], run_stats=PipelineRun())
+    e = orchestrator.enrich_stage(out, d, skip_papers=False, skip_github=True, fresh=False)
+    if pdf_bytes is not None and e.papers:
+        write_pdf_to_cache(e.papers[0], pdf_bytes, out)
+    r = orchestrator.route_stage(out, e, skip_papers=False, skip_github=True, fresh=False)
+    completed = orchestrator.process_stage(out, r, skip_papers=False, skip_github=True, cancel_check=cancel_check)
+    return orchestrator.finalize_stage(out, r, d.run_stats, skip_papers=False, skip_github=True, fresh=False, completed=completed)
+
+
 def add_paper_by_url(
     out: Path,
     url: str,
