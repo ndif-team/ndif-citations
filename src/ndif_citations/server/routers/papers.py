@@ -424,3 +424,29 @@ def upload_image(
         raise HTTPException(status_code=404, detail=f"Paper {paper_id!r} not found")
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.post("/papers/{paper_id:path}/pdf")
+def upload_pdf(
+    paper_id: str,
+    file: UploadFile = File(...),
+    out: Path = Depends(deps.get_output_dir),
+    _guard: None = Depends(deps.require_no_active_run),
+) -> dict:
+    """Attach an uploaded PDF to an existing paper's cache (synchronous file write).
+
+    Mirrors ``/image``: requires no active run (409) so it can't race a pipeline
+    write. The bytes are saved to ``out/pdfs/{cache_filename}``; downstream
+    consumers (viewer, re-extract, evidence) pick it up via ``get_cached_pdf``.
+
+    * 404 — no paper with the given merge_key.
+    * 422 — the upload is not a PDF (magic bytes) or exceeds 50 MB.
+    * 409 — a run/job is already active.
+    """
+    data = file.file.read()
+    try:
+        return papers_svc.attach_pdf(out, paper_id, data)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"paper {paper_id!r} not found")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
