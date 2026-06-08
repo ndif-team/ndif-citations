@@ -64,7 +64,7 @@ def test_manual_add_caches_pdf_after_enrich(tmp_path, monkeypatch):
     _fake_stages(monkeypatch)
     seed = DiscoveredPaper(title="Paywalled", arxiv_id="2402.99999", source=DiscoverySource.MANUAL_ADD)
     runner = JobRunner()
-    pdf = b"%PDF-1.4\nmanual\n"
+    pdf = b"%PDF-1.4\nmanual\n"  # MUST start with %PDF- magic — write_pdf_to_cache rejects otherwise
     run_id = runner.start_manual_add(out, seed, pdf_bytes=pdf)
     assert _wait(lambda: runner.status().state == "awaiting_review"), runner.status().state
     assert (out / "pdfs" / "arxiv-2402.99999.pdf").read_bytes() == pdf

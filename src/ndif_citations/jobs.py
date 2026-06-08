@@ -61,7 +61,7 @@ from pathlib import Path
 
 from ndif_citations import edit_schema, events, orchestrator
 from ndif_citations.events import ProgressEvent, RunCancelled
-from ndif_citations.models import Bucket, PaperReason, PipelineRun
+from ndif_citations.models import Bucket, DiscoveredPaper, PaperReason, PipelineRun
 from ndif_citations.router import ProcessingBucket
 
 logger = logging.getLogger(__name__)
@@ -525,7 +525,7 @@ class JobRunner:
                 raise KeyError(run_id)
             record = current
             snapshot = list(record.events)
-            is_running = record.state == "running"
+            is_running = record.state in ("running", "awaiting_review")
             q: queue.Queue | None = None
             if is_running:
                 q = queue.Queue()
