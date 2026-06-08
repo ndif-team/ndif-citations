@@ -16,6 +16,33 @@ from typing import Callable, Optional
 logger = logging.getLogger(__name__)
 
 
+def seed_from_url(url: str) -> "DiscoveredPaper":
+    """Build a manual-add seed paper from a URL (arXiv ID extracted if present)."""
+    from ndif_citations.models import DiscoveredPaper, DiscoverySource
+    from ndif_citations.utils import extract_arxiv_id_from_url
+
+    return DiscoveredPaper(
+        title="[Pending metadata lookup]",
+        url=url,
+        arxiv_id=extract_arxiv_id_from_url(url),
+        source=DiscoverySource.MANUAL_ADD,
+    )
+
+
+def seed_from_pdf(
+    *, title: str, arxiv_id: str | None = None, doi: str | None = None
+) -> "DiscoveredPaper":
+    """Build a manual-add seed paper from user-provided fields for a PDF upload."""
+    from ndif_citations.models import DiscoveredPaper, DiscoverySource
+
+    return DiscoveredPaper(
+        title=title,
+        arxiv_id=arxiv_id or None,
+        doi=doi or None,
+        source=DiscoverySource.MANUAL_ADD,
+    )
+
+
 def add_paper_by_url(
     out: Path,
     url: str,
