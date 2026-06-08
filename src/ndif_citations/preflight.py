@@ -10,6 +10,8 @@ import os
 
 
 def preflight(*, skip_papers: bool, skip_github: bool) -> dict:
+    # Reads the live os.environ — kept in sync with config by secrets_store.set_keys()
+    # (which writes os.environ + calls config.reload_settings before any run starts).
     blocking: list[str] = []
     warnings: list[str] = []
     if not skip_papers:

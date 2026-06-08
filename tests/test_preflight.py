@@ -28,6 +28,16 @@ def test_full_run_ok_when_both_present(monkeypatch):
 def test_optional_keys_warn(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "x")
     monkeypatch.delenv("S2_API_KEY", raising=False)
+    monkeypatch.delenv("SERPAPI_API_KEY", raising=False)
     r = preflight.preflight(skip_papers=False, skip_github=True)
     assert r["ok"] is True
     assert any("S2_API_KEY" in w for w in r["warnings"])
+    assert any("SERPAPI_API_KEY" in w for w in r["warnings"])
+
+
+def test_skip_both_always_ok():
+    # Both skipped -> nothing runs -> no credentials needed (no monkeypatch needed)
+    r = preflight.preflight(skip_papers=True, skip_github=True)
+    assert r["ok"] is True
+    assert r["blocking"] == []
+    assert r["warnings"] == []
