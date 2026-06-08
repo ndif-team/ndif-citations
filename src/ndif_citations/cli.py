@@ -696,6 +696,30 @@ def promote(paper_id: str, output_dir: str | None, detail: str | None, dry_run: 
     console.print("  [green]✓ Promoted and saved.[/green]")
 
 
+@cli.command(name="attach-pdf")
+@click.argument("paper_id")
+@click.argument("pdf_path", type=click.Path(exists=True, dir_okay=False))
+@click.option("--output-dir", "-o", default=None, help="Custom output directory")
+def attach_pdf(paper_id: str, pdf_path: str, output_dir: str | None) -> None:
+    """Attach a local PDF file to an existing paper's cache (by arXiv ID / DOI / URL)."""
+    from ndif_citations.output import load_existing_papers
+    from ndif_citations.pdf_cache import write_pdf_to_cache
+
+    out = config.get_output_dir(output_dir)
+    papers = load_existing_papers(out)
+    _idx, paper = _resolve_paper(papers, paper_id)
+    if paper is None:
+        console.print(f"[bold yellow]WARNING:[/bold yellow] Paper not found for ID {paper_id!r}")
+        return
+    data = Path(pdf_path).read_bytes()
+    try:
+        path = write_pdf_to_cache(paper, data, out)
+    except ValueError as e:
+        console.print(f"[bold red]{e}[/bold red]")
+        return
+    console.print(f"  [green]✓ Attached PDF → {path}[/green]")
+
+
 @cli.command()
 @click.argument("paper_id")
 @click.option("--reason", "reason_str", required=True,
