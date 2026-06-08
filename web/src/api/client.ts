@@ -235,6 +235,29 @@ export async function runPublish(dry_run: boolean): Promise<PublishDryRunRespons
 }
 
 // ---------------------------------------------------------------------------
+// API Keys (write-only secrets)
+// ---------------------------------------------------------------------------
+
+export async function getKeys(): Promise<Record<string, { configured: boolean }>> {
+  return get<Record<string, { configured: boolean }>>('/settings/keys')
+}
+
+export async function putKeys(changes: Record<string, string>): Promise<Record<string, { configured: boolean }>> {
+  return put<Record<string, { configured: boolean }>>('/settings/keys', changes)
+}
+
+export async function testKey(provider: 'llm' | 'github' | 's2'): Promise<{ ok: boolean; detail: string }> {
+  return post<{ ok: boolean; detail: string }>('/settings/keys/test', { provider })
+}
+
+export async function getPreflight(skipPapers: boolean, skipGithub: boolean): Promise<{ ok: boolean; blocking: string[]; warnings: string[] }> {
+  const sp = new URLSearchParams()
+  sp.set('skip_papers', String(skipPapers))
+  sp.set('skip_github', String(skipGithub))
+  return get<{ ok: boolean; blocking: string[]; warnings: string[] }>(`/runs/preflight?${sp.toString()}`)
+}
+
+// ---------------------------------------------------------------------------
 // Paper PDF URL helper
 // ---------------------------------------------------------------------------
 
