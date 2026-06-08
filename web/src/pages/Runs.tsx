@@ -714,7 +714,7 @@ function TriggerPanel({ onStarted }: TriggerPanelProps) {
   const [starting, setStarting] = useState(false)
 
   // Preflight check — refetches when skip toggles change
-  const { data: preflight } = useQuery({
+  const { data: preflight, isLoading: preflightLoading, isError: preflightError } = useQuery({
     queryKey: ['preflight', skipPapers, skipGithub],
     queryFn: () => getPreflight(skipPapers, skipGithub),
     staleTime: 30_000,
@@ -846,6 +846,14 @@ function TriggerPanel({ onStarted }: TriggerPanelProps) {
             </div>
           ))}
         </div>
+      )}
+
+      {/* Preflight status (locking stays safe-default: a failed/loading check never blocks) */}
+      {preflightLoading && (
+        <p className="text-xs text-muted-foreground">Checking credentials…</p>
+      )}
+      {preflightError && (
+        <p className="text-xs text-amber-700 dark:text-amber-400">Could not verify credentials — proceed with caution.</p>
       )}
 
       {/* Start button */}

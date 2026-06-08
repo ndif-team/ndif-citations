@@ -160,9 +160,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
+function FieldLabel({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
   return (
-    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider block mb-1">
+    <label htmlFor={htmlFor} className="text-xs font-medium text-muted-foreground uppercase tracking-wider block mb-1">
       {children}
     </label>
   )
@@ -980,6 +980,8 @@ function ApiKeysSection({ hasActiveRun }: { hasActiveRun: boolean }) {
     try {
       const updated = await putKeys(changes)
       qc.setQueryData(['settings', 'keys'], updated)
+      // Refresh the run-start preflight gate so a newly-saved key unblocks runs immediately
+      qc.invalidateQueries({ queryKey: ['preflight'] })
       // Clear inputs
       setDraft({ LLM_API_KEY: '', S2_API_KEY: '', GITHUB_TOKEN: '', SERPAPI_API_KEY: '' })
       setTestResults({})
@@ -1027,7 +1029,7 @@ function ApiKeysSection({ hasActiveRun }: { hasActiveRun: boolean }) {
 
           return (
             <div key={name} className="grid gap-1.5">
-              <FieldLabel>{label}</FieldLabel>
+              <FieldLabel htmlFor={`apikey-${name}`}>{label}</FieldLabel>
               <div className="flex items-center gap-2 flex-wrap">
                 {/* Configured badge */}
                 {configured ? (
@@ -1044,6 +1046,7 @@ function ApiKeysSection({ hasActiveRun }: { hasActiveRun: boolean }) {
 
                 {/* Password input */}
                 <Input
+                  id={`apikey-${name}`}
                   type="password"
                   placeholder="leave blank to keep"
                   value={draft[name]}
@@ -1061,6 +1064,7 @@ function ApiKeysSection({ hasActiveRun }: { hasActiveRun: boolean }) {
                     className="h-7 text-xs shrink-0"
                     disabled={disabled || isTesting}
                     onClick={() => handleTest(name, provider)}
+                    title="Tests the saved key — save first to test a new value"
                   >
                     {isTesting ? 'Testing…' : 'Test'}
                   </Button>
