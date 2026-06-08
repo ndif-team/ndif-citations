@@ -47,6 +47,7 @@ python -m ndif_citations run
 | `python -m ndif_citations reclassify [--ids X,Y]` | Re-run LLM classify on existing papers (apply new pre-filter / band rules) |
 | `python -m ndif_citations re-enrich [--ids X,Y] [--fields …] [--dry-run]` | No-LLM: reconcile abstract/authors/affiliations/year + identifiers from authoritative sources (OpenAlex/arXiv) — fixes thin Google-Scholar metadata. Respects `manual_override`. `--dry-run` previews. |
 | `python -m ndif_citations backfill-evidence [--ids X,Y] [--dry-run]` | No-LLM: populate each paper's NDIF context windows (`ndif_context_windows`) from its cached PDF, shown in the web Evidence panel |
+| `python -m ndif_citations backfill-thumbnails [--ids X,Y] [--dry-run]` | No-LLM: render a figure thumbnail (PyMuPDF + Surya) for papers missing an image, using the cached PDF (downloads if needed). Id-less papers are skipped. `--dry-run` classifies candidates without downloading/rendering. |
 | `python -m ndif_citations serve [--port 8723] [--no-open]` | Launch the local web app (FastAPI + React) — see [Web app](#web-app) |
 | `python -m ndif_citations promote <id>` | Move paper to verified, freeze with `manual_override=True` |
 | `python -m ndif_citations demote <id> --reason ...` | Move paper to pending, freeze with `manual_override=True` |
