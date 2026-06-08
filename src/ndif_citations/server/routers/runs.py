@@ -5,6 +5,7 @@ Endpoints
 POST  /api/runs                  Start a new pipeline run.
 GET   /api/runs                  List all persisted run records (history).
 GET   /api/runs/active           Return the currently active run (if any).
+GET   /api/runs/preflight        Credential preflight check (no side-effects).
 GET   /api/runs/{run_id}         Fetch a single run record by ID.
 GET   /api/runs/{run_id}/events  Server-Sent Events stream of progress events.
 POST  /api/runs/{run_id}/cancel  Request cancellation of a run.
@@ -69,7 +70,14 @@ def start_run(
     """
     pf = run_preflight(skip_papers=body.skip_papers, skip_github=body.skip_github)
     if not pf["ok"]:
-        raise HTTPException(status_code=422, detail={"message": "missing required keys", **pf})
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "missing required keys",
+                "blocking": pf["blocking"],
+                "warnings": pf["warnings"],
+            },
+        )
     try:
         run_id = runner.start(
             out,
