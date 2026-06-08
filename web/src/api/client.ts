@@ -237,6 +237,37 @@ export async function runPublish(dry_run: boolean): Promise<PublishDryRunRespons
 export const paperPdfUrl = (id: string) => `/api/papers/${encodeURIComponent(id)}/pdf`
 
 // ---------------------------------------------------------------------------
+// Manual add (by URL or PDF)
+// ---------------------------------------------------------------------------
+
+export async function addPaper(url: string): Promise<{ run_id: string; state: string }> {
+  const res = await fetch(`${BASE}/papers/add`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw Object.assign(new Error(`API error ${res.status}: ${text}`), { status: res.status })
+  }
+  return res.json() as Promise<{ run_id: string; state: string }>
+}
+
+export async function addPaperPdf(args: { title: string; arxiv_id?: string; doi?: string; file: File }): Promise<{ run_id: string; state: string }> {
+  const fd = new FormData()
+  fd.append('title', args.title)
+  if (args.arxiv_id) fd.append('arxiv_id', args.arxiv_id)
+  if (args.doi) fd.append('doi', args.doi)
+  fd.append('file', args.file)
+  const res = await fetch(`${BASE}/papers/add-pdf`, { method: 'POST', body: fd })
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw Object.assign(new Error(`API error ${res.status}: ${text}`), { status: res.status })
+  }
+  return res.json() as Promise<{ run_id: string; state: string }>
+}
+
+// ---------------------------------------------------------------------------
 // Paper PDF upload + evidence backfill
 // ---------------------------------------------------------------------------
 

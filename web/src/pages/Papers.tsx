@@ -1,11 +1,11 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useRef } from 'react'
 import {
   useReactTable,
   getCoreRowModel,
   flexRender,
   type ColumnDef,
 } from '@tanstack/react-table'
-import { Search, AlertCircle, FileText, ChevronDown, ChevronUp, Trash2, Lock, AlertTriangle, TriangleAlert } from 'lucide-react'
+import { Search, AlertCircle, FileText, ChevronDown, ChevronUp, Trash2, Lock, AlertTriangle, TriangleAlert, Plus } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -21,13 +21,22 @@ import {
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog'
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { usePapers, useActiveRun } from '@/api/hooks'
 import { useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { useDebounce } from '@/hooks/useDebounce'
 import { bucketBadge, confidenceBadge, categoryBadge, categoryLabel } from '@/lib/tokens'
 import { formatAuthors, truncate } from '@/lib/utils'
 import { PaperSheet } from '@/components/papers/PaperSheet'
-import { batchReprocess, setPaperBucket } from '@/api/client'
+import { batchReprocess, setPaperBucket, addPaper, addPaperPdf } from '@/api/client'
 import { toast } from 'sonner'
 import type { PaperRow, Bucket, SortOption, ConfidenceBand, Category } from '@/api/types'
 
@@ -279,6 +288,7 @@ function SelectionToolbar({
 
 export function Papers() {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const [bucket, setBucket] = useState<'' | Bucket>('')
   const [searchInput, setSearchInput] = useState('')
   const [sort, setSort] = useState<SortOption>('year_desc')
@@ -286,8 +296,67 @@ export function Papers() {
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set())
   const [needsAttention, setNeedsAttention] = useState(false)
 
+  // Add paper dialog state
+  const [addOpen, setAddOpen] = useState(false)
+  const [linkUrl, setLinkUrl] = useState('')
+  const [pdfTitle, setPdfTitle] = useState('')
+  const [pdfArxiv, setPdfArxiv] = useState('')
+  const [pdfDoi, setPdfDoi] = useState('')
+  const [pdfFile, setPdfFile] = useState<File | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   const { data: activeRunData } = useActiveRun()
   const hasActiveRun = !!(activeRunData?.active)
+
+  function resetAddDialog() {
+    setLinkUrl('')
+    setPdfTitle('')
+    setPdfArxiv('')
+    setPdfDoi('')
+    setPdfFile(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  async function submitLink() {
+    if (!linkUrl.trim()) { toast.error('Enter a URL'); return }
+    setSubmitting(true)
+    try {
+      await addPaper(linkUrl.trim())
+      toast.success('Added — review the candidate at the gate')
+      setAddOpen(false)
+      resetAddDialog()
+      navigate('/runs')
+    } catch (e) {
+      const status = (e as { status?: number }).status
+      toast.error(status === 409 ? 'A run is already active — wait for it to finish.' : ((e as Error).message || 'Add failed'))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function submitPdf() {
+    if (!pdfTitle.trim()) { toast.error('Title is required'); return }
+    if (!pdfFile) { toast.error('Select a PDF file'); return }
+    setSubmitting(true)
+    try {
+      await addPaperPdf({
+        title: pdfTitle.trim(),
+        arxiv_id: pdfArxiv.trim() || undefined,
+        doi: pdfDoi.trim() || undefined,
+        file: pdfFile,
+      })
+      toast.success('Added — review the candidate at the gate')
+      setAddOpen(false)
+      resetAddDialog()
+      navigate('/runs')
+    } catch (e) {
+      const status = (e as { status?: number }).status
+      toast.error(status === 409 ? 'A run is already active — wait for it to finish.' : ((e as Error).message || 'Add failed'))
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   const q = useDebounce(searchInput, 300)
 
@@ -616,7 +685,131 @@ export function Papers() {
             {needsAttention ? `${filteredPapers.length} / ${papers.length}` : papers.length} papers
           </span>
         )}
+
+        {/* Add paper button */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs gap-1"
+                  disabled={hasActiveRun}
+                  onClick={() => setAddOpen(true)}
+                  aria-label="Add paper"
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                  Add paper
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {hasActiveRun && (
+              <TooltipContent side="bottom">A run is already active</TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
       </div>
+
+      {/* Add paper dialog */}
+      <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) resetAddDialog() }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add paper</DialogTitle>
+            <DialogDescription>
+              Add a paper by URL or upload a PDF. This starts a gated manual-add run.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-6 pb-6">
+            <Tabs defaultValue="link">
+              <TabsList className="mb-4">
+                <TabsTrigger value="link">By link</TabsTrigger>
+                <TabsTrigger value="pdf">By PDF</TabsTrigger>
+              </TabsList>
+
+              {/* By link tab */}
+              <TabsContent value="link">
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-medium text-foreground mb-1.5 block">URL</label>
+                    <Input
+                      type="url"
+                      placeholder="https://arxiv.org/abs/…"
+                      value={linkUrl}
+                      onChange={e => setLinkUrl(e.target.value)}
+                      className="h-8 text-xs"
+                      onKeyDown={e => { if (e.key === 'Enter') submitLink() }}
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    className="w-full h-8 text-xs"
+                    disabled={submitting || hasActiveRun || !linkUrl.trim()}
+                    onClick={submitLink}
+                  >
+                    {submitting ? 'Adding…' : 'Add paper'}
+                  </Button>
+                </div>
+              </TabsContent>
+
+              {/* By PDF tab */}
+              <TabsContent value="pdf">
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-medium text-foreground mb-1.5 block">
+                      Title <span className="text-destructive">*</span>
+                    </label>
+                    <Input
+                      placeholder="Paper title"
+                      value={pdfTitle}
+                      onChange={e => setPdfTitle(e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-foreground mb-1.5 block">arXiv ID <span className="text-muted-foreground font-normal">(optional)</span></label>
+                    <Input
+                      placeholder="e.g. 2301.00001"
+                      value={pdfArxiv}
+                      onChange={e => setPdfArxiv(e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-foreground mb-1.5 block">DOI <span className="text-muted-foreground font-normal">(optional)</span></label>
+                    <Input
+                      placeholder="e.g. 10.1234/example"
+                      value={pdfDoi}
+                      onChange={e => setPdfDoi(e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-foreground mb-1.5 block">
+                      PDF file <span className="text-destructive">*</span>
+                    </label>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="application/pdf"
+                      className="text-xs w-full cursor-pointer file:mr-2 file:h-7 file:cursor-pointer file:rounded-md file:border file:border-input file:bg-background file:px-2 file:text-xs file:font-medium file:text-foreground hover:file:bg-accent"
+                      onChange={e => setPdfFile(e.target.files?.[0] ?? null)}
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    className="w-full h-8 text-xs"
+                    disabled={submitting || hasActiveRun || !pdfTitle.trim() || !pdfFile}
+                    onClick={submitPdf}
+                  >
+                    {submitting ? 'Adding…' : 'Add paper'}
+                  </Button>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Error */}
       {error && (
