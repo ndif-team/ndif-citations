@@ -5,6 +5,7 @@ Each function returns {"ok": bool, "detail": str} and never echoes the secret.
 from __future__ import annotations
 
 import re
+from urllib.parse import urlparse
 import requests
 
 _TIMEOUT = 10
@@ -18,6 +19,9 @@ def _result(ok: bool, detail: str) -> dict:
 def test_llm(base_url: str, api_key: str) -> dict:
     if not (base_url and api_key):
         return _result(False, "base_url and api_key required")
+    parsed = urlparse(base_url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return _result(False, "base_url must be a http(s) URL")
     try:
         r = requests.get(f"{base_url.rstrip('/')}/models",
                          headers={"Authorization": f"Bearer {api_key}"}, timeout=_TIMEOUT)
@@ -50,4 +54,5 @@ def test_s2(api_key: str) -> dict:
 
 
 def validate_email(addr: str) -> dict:
-    return _result(bool(_EMAIL_RE.match(addr or "")), "format check")
+    ok = bool(_EMAIL_RE.match(addr or ""))
+    return _result(ok, "valid format" if ok else "invalid format")
