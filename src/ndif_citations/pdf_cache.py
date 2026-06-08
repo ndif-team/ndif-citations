@@ -176,6 +176,29 @@ def _cache_filename(paper: DiscoveredPaper) -> str:
         return f"{slugify(paper.title[:50])}.pdf"
 
 
+_PDF_MAGIC = b"%PDF-"
+_MAX_PDF_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
+def write_pdf_to_cache(paper: DiscoveredPaper, data: bytes, output_dir: Path) -> Path:
+    """Write uploaded PDF *data* to the canonical cache path for *paper*.
+
+    Validates the PDF magic bytes and a 50 MB cap; overwrites any existing
+    cached file. Returns the written path. Raises ``ValueError`` on a bad or
+    oversize file. Does NOT touch paper.pdf_url / manual_override — the cached
+    file is authoritative (``get_cached_pdf`` checks ``cache_path.exists()`` first).
+    """
+    if data[:5] != _PDF_MAGIC:
+        raise ValueError("uploaded file is not a PDF")
+    if len(data) > _MAX_PDF_BYTES:
+        raise ValueError("PDF exceeds the 50 MB limit")
+    cache_dir = output_dir / "pdfs"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    path = cache_dir / _cache_filename(paper)
+    path.write_bytes(data)
+    return path
+
+
 def cached_pdf_path(paper: DiscoveredPaper, output_dir: Path) -> Optional[Path]:
     """Path to the already-cached PDF for *paper*, or None. No mkdir, no download."""
     cache_dir = output_dir / "pdfs"
