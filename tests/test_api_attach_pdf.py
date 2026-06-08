@@ -27,3 +27,14 @@ def test_attach_pdf_non_pdf_422(client):
 def test_attach_pdf_unknown_404(client):
     r = client.post(f"/api/papers/{UNKNOWN}/pdf", files={"file": ("p.pdf", _PDF, "application/pdf")})
     assert r.status_code == 404
+
+def test_attach_pdf_409_during_active_run(fixture_state):
+    from unittest.mock import MagicMock
+    app = create_app()
+    app.dependency_overrides[deps.get_output_dir] = lambda: fixture_state
+    stub = MagicMock()
+    stub.active = True
+    app.dependency_overrides[deps.get_runner] = lambda: stub
+    c = TestClient(app, raise_server_exceptions=True)
+    r = c.post(f"/api/papers/{ID_OK}/pdf", files={"file": ("p.pdf", _PDF, "application/pdf")})
+    assert r.status_code == 409

@@ -447,6 +447,6 @@ def upload_pdf(
     try:
         return papers_svc.attach_pdf(out, paper_id, data)
     except KeyError:
-        raise HTTPException(status_code=404, detail=f"paper {paper_id!r} not found")
+        raise HTTPException(status_code=404, detail=f"Paper {paper_id!r} not found")
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
