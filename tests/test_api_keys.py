@@ -2,6 +2,7 @@ from __future__ import annotations
 import os
 import pytest
 from fastapi.testclient import TestClient
+from ndif_citations import config
 from ndif_citations.jobs import JobRunner
 from ndif_citations.server import deps
 from ndif_citations.server.app import create_app
@@ -16,7 +17,6 @@ def _restore_env():
     finally:
         os.environ.clear()
         os.environ.update(saved)
-        from ndif_citations import config
         config.reload_settings()
 
 @pytest.fixture()
@@ -34,14 +34,14 @@ def test_get_keys_returns_booleans_only(client, monkeypatch):
     assert "secret-value" not in r.text          # never leaks the value
 
 def test_put_keys_writes_and_applies(client, monkeypatch, tmp_path):
-    env = tmp_path / ".env"
-    monkeypatch.setattr("ndif_citations.server.routers.keys._env_path", lambda: env)
-    # suppress the cascade reload so project .env doesn't clobber the live-apply
-    monkeypatch.setattr("ndif_citations.config.reload_settings", lambda: None)
+    # Point BOTH _env_path() and reload_settings() at the same tmp .env (mirrors prod,
+    # where _PROJECT_ROOT/.env is the single file written and reloaded).
+    monkeypatch.setattr(config, "_PROJECT_ROOT", tmp_path)
     r = client.put("/api/settings/keys", json={"GITHUB_TOKEN": "ghp_z"})
     assert r.status_code == 200
-    assert "GITHUB_TOKEN" in env.read_text()      # written to the .env
-    assert os.environ.get("GITHUB_TOKEN") == "ghp_z"   # live-applied
+    assert "GITHUB_TOKEN" in (tmp_path / ".env").read_text()      # written to .env
+    assert os.environ.get("GITHUB_TOKEN") == "ghp_z"              # live-applied to env
+    assert config.GITHUB_TOKEN == "ghp_z"                         # reload synced the config global
     assert r.json()["GITHUB_TOKEN"]["configured"] is True
 
 def test_test_connection_uses_validator(client, monkeypatch):
@@ -52,13 +52,20 @@ def test_test_connection_uses_validator(client, monkeypatch):
     assert r.status_code == 200
     assert r.json()["ok"] is True
 
-def test_put_rejects_unknown_key(client, monkeypatch, tmp_path):
-    env = tmp_path / ".env"
-    monkeypatch.setattr("ndif_citations.server.routers.keys._env_path", lambda: env)
-    # An unknown field is ignored by the Pydantic model (not in KeysPut), so this
-    # should simply not write it; assert the known one still works.
-    r = client.put("/api/settings/keys", json={"GITHUB_TOKEN": "ghp_q"})
+def test_put_extra_fields_stripped_by_pydantic(client, monkeypatch, tmp_path):
+    """Unknown fields are ignored by Pydantic — only known secrets are processed."""
+    monkeypatch.setattr(config, "_PROJECT_ROOT", tmp_path)
+    r = client.put("/api/settings/keys", json={"UNKNOWN_KEY": "val", "GITHUB_TOKEN": "ghp_q"})
     assert r.status_code == 200
+    assert "UNKNOWN_KEY" not in (tmp_path / ".env").read_text()
+
+def test_put_value_error_from_store_returns_422(client, monkeypatch):
+    """If secrets_store.set_keys raises ValueError, the router maps it to 422."""
+    def _raise(path, changes):
+        raise ValueError("unknown secret key: 'X'")
+    monkeypatch.setattr("ndif_citations.secrets_store.set_keys", _raise)
+    r = client.put("/api/settings/keys", json={"GITHUB_TOKEN": "ghp_q"})
+    assert r.status_code == 422
 
 def test_test_connection_unknown_provider_422(client):
     r = client.post("/api/settings/keys/test", json={"provider": "bogus"})
