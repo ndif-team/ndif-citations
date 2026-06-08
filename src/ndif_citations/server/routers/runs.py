@@ -22,6 +22,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from ndif_citations.jobs import GateError, JobRunner, RunActiveError
+from ndif_citations.preflight import preflight as run_preflight
 from ndif_citations.server.deps import get_output_dir, get_runner
 
 router = APIRouter(prefix="/api", tags=["runs"])
@@ -66,6 +67,9 @@ def start_run(
     Returns 422 if *mode* is not ``"fresh"`` or ``"incremental"`` (Pydantic
     validation via ``Literal``).
     """
+    pf = run_preflight(skip_papers=body.skip_papers, skip_github=body.skip_github)
+    if not pf["ok"]:
+        raise HTTPException(status_code=422, detail={"message": "missing required keys", **pf})
     try:
         run_id = runner.start(
             out,
@@ -101,6 +105,19 @@ def get_active_run(
             return {"active": None}
         return {"active": record.to_dict()}
     return {"active": None}
+
+
+@router.get("/runs/preflight")
+def get_preflight(skip_papers: bool = False, skip_github: bool = False) -> dict:
+    """Return preflight credential check for the requested entity set.
+
+    Query params mirror ``StartRunRequest.skip_papers`` / ``skip_github``.
+    Response: ``{ok: bool, blocking: list[str], warnings: list[str]}``.
+
+    **Route ordering:** declared BEFORE ``GET /runs/{run_id}`` so the literal
+    path segment ``"preflight"`` is never captured as a run_id.
+    """
+    return run_preflight(skip_papers=skip_papers, skip_github=skip_github)
 
 
 @router.get("/runs/{run_id}")
