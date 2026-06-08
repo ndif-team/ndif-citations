@@ -141,13 +141,15 @@ def add_paper_pdf(
     * 409 — a run is active.
     """
     from ndif_citations.manual_add import seed_from_pdf
-    from ndif_citations.pdf_cache import _PDF_MAGIC
+    from ndif_citations.pdf_cache import _MAX_PDF_BYTES, _PDF_MAGIC
 
     if not title.strip():
         raise HTTPException(status_code=422, detail="title is required")
     data = file.file.read()
     if data[:5] != _PDF_MAGIC:
         raise HTTPException(status_code=422, detail="uploaded file is not a PDF")
+    if len(data) > _MAX_PDF_BYTES:
+        raise HTTPException(status_code=422, detail="PDF exceeds the 50 MB limit")
     try:
         run_id = runner.start_manual_add(
             out,

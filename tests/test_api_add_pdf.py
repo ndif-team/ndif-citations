@@ -78,3 +78,14 @@ def test_add_pdf_conflict_409(fixture_state, monkeypatch):
         files={"file": ("p.pdf", b"%PDF-1.4\nx\n", "application/pdf")},
     )
     assert r.status_code == 409
+    assert "run_id" not in r.json()
+
+
+def test_add_pdf_rejects_oversize(client, monkeypatch):
+    monkeypatch.setattr("ndif_citations.pdf_cache._MAX_PDF_BYTES", 8)
+    r = client.post(
+        "/api/papers/add-pdf",
+        data={"title": "X"},
+        files={"file": ("p.pdf", b"%PDF-1.4\ntoo big", "application/pdf")},
+    )
+    assert r.status_code == 422

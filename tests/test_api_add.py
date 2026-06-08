@@ -135,3 +135,4 @@ def test_add_paper_conflict_409(fixture_state, monkeypatch):
     client = TestClient(app, raise_server_exceptions=True)
     resp = client.post("/api/papers/add", json={"url": _NEW_URL})
     assert resp.status_code == 409, resp.text
+    assert "run_id" not in resp.json()
