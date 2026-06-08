@@ -458,7 +458,7 @@ def backfill_evidence(
     out: Path = Depends(deps.get_output_dir),
     _guard: None = Depends(deps.require_no_active_run),
 ) -> dict:
-    """Populate the paper's NDIF context windows from its cached PDF (no LLM, sync).
+    """Populate the paper's NDIF context windows from its cached PDF or abstract (no LLM, sync).
 
     * 404 — no paper with the given merge_key.
     * 409 — a run/job is already active.
