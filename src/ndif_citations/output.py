@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import shutil
 from datetime import date, datetime
 from pathlib import Path
 
@@ -382,6 +383,34 @@ def _update_existing(existing: DiscoveredPaper, new: DiscoveredPaper) -> bool:
 # ---------------------------------------------------------------------------
 # Write outputs
 # ---------------------------------------------------------------------------
+
+# Full-catalog files a pipeline run overwrites in place.
+_CATALOG_FILES = ("research-papers-full.json", "github-repos-full.json")
+
+
+def backup_outputs(output_dir: Path, *, suffix: str = "pre-run") -> list[Path]:
+    """Snapshot the full catalog JSON(s) before a run overwrites them (F-013).
+
+    Copies ``research-papers-full.json`` / ``github-repos-full.json`` (whichever
+    exist) to ``output_dir/backups/<name>.<timestamp>.<suffix>.json`` so a live run
+    is recoverable. No-op for files that don't exist yet (first run). Returns the
+    backup paths created. Mirrors the publish/backfill backup convention.
+    """
+    backups_dir = output_dir / "backups"
+    timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
+    created: list[Path] = []
+    for name in _CATALOG_FILES:
+        src = output_dir / name
+        if not src.exists():
+            continue
+        backups_dir.mkdir(parents=True, exist_ok=True)
+        dest = backups_dir / f"{src.name}.{timestamp}.{suffix}.json"
+        shutil.copy2(src, dest)
+        created.append(dest)
+    if created:
+        logger.info(f"Backed up {len(created)} catalog file(s) to {backups_dir}")
+    return created
+
 
 def write_outputs(papers: list[DiscoveredPaper], output_dir: Path, run: PipelineRun) -> None:
     """Write all output files: website JSON, full JSON."""

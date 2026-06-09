@@ -50,6 +50,15 @@ async function patch<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>
 }
 
+async function del<T>(path: string): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, { method: 'DELETE' })
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw Object.assign(new Error(`API error ${res.status}: ${text}`), { status: res.status })
+  }
+  return res.json() as Promise<T>
+}
+
 export async function fetchStats(): Promise<StatsResponse> {
   return get<StatsResponse>('/stats')
 }
@@ -246,14 +255,19 @@ export async function putKeys(changes: Record<string, string>): Promise<Record<s
   return put<Record<string, { configured: boolean }>>('/settings/keys', changes)
 }
 
-export async function testKey(provider: 'llm' | 'github' | 's2'): Promise<{ ok: boolean; detail: string }> {
+export async function clearKey(key: string): Promise<Record<string, { configured: boolean }>> {
+  return del<Record<string, { configured: boolean }>>(`/settings/keys/${encodeURIComponent(key)}`)
+}
+
+export async function testKey(provider: 'llm' | 'github' | 's2' | 'serpapi'): Promise<{ ok: boolean; detail: string }> {
   return post<{ ok: boolean; detail: string }>('/settings/keys/test', { provider })
 }
 
-export async function getPreflight(skipPapers: boolean, skipGithub: boolean): Promise<{ ok: boolean; blocking: string[]; warnings: string[] }> {
+export async function getPreflight(skipPapers: boolean, skipGithub: boolean, validate = false): Promise<{ ok: boolean; blocking: string[]; warnings: string[] }> {
   const sp = new URLSearchParams()
   sp.set('skip_papers', String(skipPapers))
   sp.set('skip_github', String(skipGithub))
+  if (validate) sp.set('validate', 'true')
   return get<{ ok: boolean; blocking: string[]; warnings: string[] }>(`/runs/preflight?${sp.toString()}`)
 }
 

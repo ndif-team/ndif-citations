@@ -19,7 +19,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { useSettings, useVenues, usePublishTarget, useActiveRun } from '@/api/hooks'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { putSettings, putVenues, putPublishTarget, runPublish, getKeys, putKeys, testKey } from '@/api/client'
+import { putSettings, putVenues, putPublishTarget, runPublish, getKeys, putKeys, testKey, clearKey } from '@/api/client'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import type { SettingsResponse, VenueEntry, VenueType, PublishDryRunResponse, PublishResponse } from '@/api/types'
@@ -917,14 +917,30 @@ function PublishSection({ hasActiveRun }: { hasActiveRun: boolean }) {
 // ---------------------------------------------------------------------------
 
 type KeyName = 'LLM_API_KEY' | 'S2_API_KEY' | 'GITHUB_TOKEN' | 'SERPAPI_API_KEY'
-type TestProvider = 'llm' | 'github' | 's2'
+type TestProvider = 'llm' | 'github' | 's2' | 'serpapi'
 
 const KEY_META: { name: KeyName; label: string; provider?: TestProvider }[] = [
   { name: 'LLM_API_KEY',      label: 'LLM API Key',       provider: 'llm' },
   { name: 'S2_API_KEY',       label: 'S2 API Key',        provider: 's2' },
   { name: 'GITHUB_TOKEN',     label: 'GitHub Token',      provider: 'github' },
-  { name: 'SERPAPI_API_KEY',  label: 'SerpAPI API Key' },
+  { name: 'SERPAPI_API_KEY',  label: 'SerpAPI API Key',   provider: 'serpapi' },
 ]
+
+// Turn a raw {ok, detail} test result into human-readable text (F-004).
+function describeTestResult(r: { ok: boolean; detail: string }): string {
+  if (r.ok) return 'Valid key'
+  const m = /HTTP (\d+)/.exec(r.detail)
+  if (m) {
+    const code = m[1]
+    if (code === '401') return 'Invalid or expired key (401)'
+    if (code === '403') return 'Forbidden — check scopes/SSO/quota (403)'
+    if (code === '404') return 'Endpoint not found (404)'
+    if (code === '429') return 'Rate limited (429)'
+    return `Rejected (HTTP ${code})`
+  }
+  if (/required/i.test(r.detail)) return 'No key set'
+  return `Could not reach service (${r.detail})`
+}
 
 function ApiKeysSection({ hasActiveRun }: { hasActiveRun: boolean }) {
   const qc = useQueryClient()
@@ -945,6 +961,7 @@ function ApiKeysSection({ hasActiveRun }: { hasActiveRun: boolean }) {
   // Per-key test result
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; detail: string } | null>>({})
   const [testingKey, setTestingKey] = useState<KeyName | null>(null)
+  const [clearingKey, setClearingKey] = useState<KeyName | null>(null)
   const [saving, setSaving] = useState(false)
 
   function setKeyDraft(name: KeyName, value: string) {
@@ -963,6 +980,22 @@ function ApiKeysSection({ hasActiveRun }: { hasActiveRun: boolean }) {
       toastApiError(err, 'Test request failed')
     } finally {
       setTestingKey(null)
+    }
+  }
+
+  async function handleClear(name: KeyName, label: string) {
+    if (!window.confirm(`Remove ${label} from .env? The pipeline won't be able to use it until you set it again.`)) return
+    setClearingKey(name)
+    try {
+      const updated = await clearKey(name)
+      qc.setQueryData(['settings', 'keys'], updated)
+      qc.invalidateQueries({ queryKey: ['preflight'] })
+      setTestResults(r => ({ ...r, [name]: null }))
+      toast.success(`${label} cleared`)
+    } catch (err) {
+      toastApiError(err, 'Could not clear key')
+    } finally {
+      setClearingKey(null)
     }
   }
 
@@ -1056,17 +1089,31 @@ function ApiKeysSection({ hasActiveRun }: { hasActiveRun: boolean }) {
                   autoComplete="new-password"
                 />
 
-                {/* Test button (not for SERPAPI) */}
+                {/* Test button (LLM/GitHub/S2/SerpAPI) */}
                 {provider && (
                   <Button
                     size="sm"
                     variant="outline"
                     className="h-7 text-xs shrink-0"
-                    disabled={disabled || isTesting}
+                    disabled={disabled || isTesting || clearingKey === name}
                     onClick={() => handleTest(name, provider)}
                     title="Tests the saved key — save first to test a new value"
                   >
                     {isTesting ? 'Testing…' : 'Test'}
+                  </Button>
+                )}
+
+                {/* Clear button — only when a key is configured (F-002: unset path) */}
+                {configured && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs shrink-0 text-muted-foreground hover:text-destructive"
+                    disabled={disabled || clearingKey === name}
+                    onClick={() => handleClear(name, label)}
+                    title="Remove this key from .env"
+                  >
+                    {clearingKey === name ? 'Clearing…' : 'Clear'}
                   </Button>
                 )}
               </div>
@@ -1077,7 +1124,7 @@ function ApiKeysSection({ hasActiveRun }: { hasActiveRun: boolean }) {
                   {testResult.ok
                     ? <CheckCircle2 className="h-3 w-3 flex-none" aria-hidden="true" />
                     : <XCircle className="h-3 w-3 flex-none" aria-hidden="true" />}
-                  {testResult.detail}
+                  {describeTestResult(testResult)}
                 </p>
               )}
             </div>

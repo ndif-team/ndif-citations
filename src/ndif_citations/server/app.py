@@ -56,6 +56,11 @@ def create_app() -> FastAPI:
 
         _index = _WEB_DIST / "index.html"
         _dist_root = _WEB_DIST.resolve()
+        # The SPA shell (and the unhashed root statics like favicon) must never be
+        # cached: Vite content-hashes /assets, but index.html keeps a stable URL, so
+        # a cached shell would point at deleted asset hashes after a rebuild (F-009).
+        # Hashed /assets are served by the StaticFiles mount above and stay cacheable.
+        _no_store = {"Cache-Control": "no-store"}
 
         @app.get("/{full_path:path}", include_in_schema=False)
         async def spa_fallback(full_path: str) -> FileResponse:
@@ -68,8 +73,8 @@ def create_app() -> FastAPI:
             if full_path:
                 candidate = (_WEB_DIST / full_path).resolve()
                 if candidate.is_file() and candidate.is_relative_to(_dist_root):
-                    return FileResponse(candidate)
-            return FileResponse(_index)
+                    return FileResponse(candidate, headers=_no_store)
+            return FileResponse(_index, headers=_no_store)
 
     return app
 

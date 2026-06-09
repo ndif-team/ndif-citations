@@ -124,6 +124,7 @@ export interface RunRecord {
   events: ProgressEvent[]
   paper_candidates: PaperCandidate[]
   repo_candidates: RepoCandidate[]
+  route_breakdown?: Record<string, number>
 }
 
 // SSE ProgressEvent shapes
@@ -134,6 +135,7 @@ export type ProgressEventType =
   | 'dedup'
   | 'route_summary'
   | 'item_start'
+  | 'item_skip'
   | 'item_step'
   | 'rate_limit_wait'
   | 'awaiting_review'

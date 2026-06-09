@@ -42,6 +42,7 @@ from ndif_citations.models import DiscoveredPaper, DiscoveredRepo, PipelineRun
 from ndif_citations.output import (
     _write_repos_outputs,
     _write_xlsx,
+    backup_outputs,
     load_existing_papers,
     load_existing_repos,
     merge_papers,
@@ -52,6 +53,7 @@ from ndif_citations.process import process_papers, process_repos
 from ndif_citations.router import (
     RepoRoutingDecision,
     RoutingDecision,
+    get_bucket_summary,
     route_papers,
     route_repos,
 )
@@ -88,6 +90,11 @@ class RouteResult:
     # this list (matching cli.run's `merge_repos(processed_repos, ...)`), not
     # from `[d.repo for d in repo_decisions]`.
     processed_repos: list[DiscoveredRepo] = field(default_factory=list)
+    # Per-bucket routing breakdown for papers ({"new": n, "fill_gaps": n, ...}),
+    # computed at route time over the FULL decision set (before any gate). Carries
+    # the honest "what will actually be worked on" story to the gate preview and,
+    # via finalize_stage, onto the run record's bucket_* fields (F-012).
+    bucket_counts: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -293,15 +300,24 @@ def route_stage(
 
     decisions: list[RoutingDecision] = []
     existing_papers: list[DiscoveredPaper] = []
+    paper_bucket_counts: dict[str, int] = {}
     if not skip_papers:
         existing_papers = load_existing_papers(out) if not fresh else []
         decisions = route_papers(unique_papers, existing_papers)
+        paper_bucket_counts = get_bucket_summary(decisions)
         skipped = sum(1 for dd in decisions if dd.bucket.value in ("skip", "protected"))
         events.emit(
             "route_summary", stage="route",
             kind="papers",
             to_process=len(decisions) - skipped,
             skipped=skipped,
+            # Per-bucket breakdown so the UI can say "N new + M gap-fills" instead
+            # of implying every routed paper costs an LLM call (F-012).
+            new=paper_bucket_counts.get("new", 0),
+            reprocess=paper_bucket_counts.get("reprocess", 0),
+            fill_gaps=paper_bucket_counts.get("fill_gaps", 0),
+            skip=paper_bucket_counts.get("skip", 0),
+            protected=paper_bucket_counts.get("protected", 0),
         )
 
     repo_decisions: list[RepoRoutingDecision] = []
@@ -323,6 +339,7 @@ def route_stage(
         repo_decisions=repo_decisions,
         existing_papers=existing_papers,
         enrich=e,
+        bucket_counts=paper_bucket_counts,
     )
 
 
@@ -405,6 +422,16 @@ def finalize_stage(
 
     events.emit("stage_start", stage="finalize")
 
+    # Snapshot the catalog before we overwrite it in place, so a run's mutations
+    # are recoverable (F-013). No-op on a first run (nothing to back up yet).
+    backup_paths = backup_outputs(out)
+    if backup_paths:
+        events.emit(
+            "log", stage="finalize",
+            message=f"Backed up catalog ({len(backup_paths)} file(s)) before write",
+            style="dim",
+        )
+
     if completed is None:
         n_papers = len(r.paper_decisions)
         n_repos = len(r.repo_decisions)
@@ -420,6 +447,16 @@ def finalize_stage(
             existing_for_merge = load_existing_papers(out)
         processed_paper_objs = [d.paper for d in r.paper_decisions[:n_papers]]
         merged_papers, run_stats = merge_papers(existing_for_merge, processed_paper_objs, run_stats)
+
+        # Lift the route-time bucket breakdown onto the run record. merge_papers
+        # returns run_stats, so set these AFTER it (F-012). These describe what
+        # routing decided over the full set; they are not affected by the gate.
+        bc = r.bucket_counts
+        run_stats.bucket_new = bc.get("new", 0)
+        run_stats.bucket_reprocess = bc.get("reprocess", 0)
+        run_stats.bucket_fill_gaps = bc.get("fill_gaps", 0)
+        run_stats.bucket_skip = bc.get("skip", 0)
+        run_stats.bucket_protected = bc.get("protected", 0)
 
         events.emit(
             "merge_result", stage="finalize",

@@ -383,6 +383,39 @@ def is_duplicate(title_a: str, title_b: str, threshold: float = 90.0) -> bool:
     return fuzz.ratio(title_a.lower().strip(), title_b.lower().strip()) >= threshold
 
 
+# Text-formatting LaTeX commands whose wrapped content should be kept (the markup
+# itself dropped). Math is deliberately left intact — we only de-clutter prose.
+_LATEX_WRAP_CMDS = (
+    "textbf", "textit", "emph", "texttt", "textsc", "textrm", "textsf",
+    "textnormal", "mathrm", "mathbf", "mathit", "mathcal", "boldsymbol",
+    "underline", "uline", "mbox", "text",
+)
+_LATEX_WRAP_RE = re.compile(r"\\(?:" + "|".join(_LATEX_WRAP_CMDS) + r")\s*\{([^{}]*)\}")
+_LATEX_ESCAPE_RE = re.compile(r"\\([%&_#${}])")
+
+
+def strip_latex(text: str) -> str:
+    """Strip common LaTeX text-formatting markup so abstracts render cleanly.
+
+    Unwraps formatting commands (``\\textbf{x}`` -> ``x``, ``\\textit{x}`` -> ``x``,
+    ...) keeping the wrapped content, and de-escapes ``\\%``, ``\\&``, ``\\_`` etc.
+    Conservative and idempotent: only a known set of text commands is unwrapped
+    (math delimiters / unknown commands are left as-is). Returns the input unchanged
+    when there's nothing to strip.
+    """
+    if not text:
+        return text
+    out = text
+    # Repeat to unwrap a few levels of nesting, e.g. \textbf{\textit{x}} -> x.
+    for _ in range(5):
+        new = _LATEX_WRAP_RE.sub(r"\1", out)
+        if new == out:
+            break
+        out = new
+    out = _LATEX_ESCAPE_RE.sub(r"\1", out)
+    return re.sub(r"[ \t]{2,}", " ", out)
+
+
 def normalize_arxiv_id(arxiv_id: str) -> str:
     """Normalize arXiv ID by stripping version suffix and URL prefix.
 

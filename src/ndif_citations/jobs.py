@@ -158,6 +158,10 @@ class RunRecord:
     gate_selection: dict | None = None
     seed_papers: "list[DiscoveredPaper] | None" = None
     pdf_bytes: "bytes | None" = None
+    # Per-bucket routing breakdown ({"new": n, "fill_gaps": n, ...}) so the gate
+    # can preview true work — incl. the automatic gap-fills the curator does NOT
+    # explicitly approve — before they submit (F-012).
+    route_breakdown: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         """Serialize for persistence; events go through ``ProgressEvent.to_dict``.
@@ -182,6 +186,7 @@ class RunRecord:
             "events": [ev.to_dict() for ev in self.events],
             "paper_candidates": self.paper_candidates,
             "repo_candidates": self.repo_candidates,
+            "route_breakdown": self.route_breakdown,
         }
 
 
@@ -799,16 +804,20 @@ class JobRunner:
             if dec.bucket == ProcessingBucket.NEW
         ]
 
-        # Publish gate state + candidates, then block the worker.
+        # Publish gate state + candidates, then block the worker. route_breakdown
+        # is the route-time per-bucket count so the gate can preview that approving
+        # also triggers automatic gap-fills on existing papers (F-012).
         with self._lock:
             record.route_result = route_result
             record.paper_candidates = paper_candidates
             record.repo_candidates = repo_candidates
+            record.route_breakdown = route_result.bucket_counts
             record.state = "awaiting_review"
         events.emit(
             "awaiting_review",
             paper_candidates=paper_candidates,
             repo_candidates=repo_candidates,
+            route_breakdown=route_result.bucket_counts,
         )
 
         # BLOCK (not under the lock) until submit_gate or cancel sets the event.

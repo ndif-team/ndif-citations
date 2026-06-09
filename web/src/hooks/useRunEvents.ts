@@ -6,6 +6,10 @@ export interface CurrentItem {
   total: number
   title: string
   bucket: string
+  /** 1-based index among real-work papers (excludes skipped no-ops) — F-012 */
+  workIdx?: number
+  /** count of real-work papers (the honest "Processing X/workTotal" denominator) */
+  workTotal?: number
 }
 
 export interface RunEventState {
@@ -15,11 +19,15 @@ export interface RunEventState {
   /** Stage completion status derived from stage_start / stage_done */
   stageStatus: Partial<Record<PipelineStage, 'active' | 'done'>>
   currentItem: CurrentItem | null
+  /** Count of papers skipped as already-complete during the process stage (F-012) */
+  skippedCount: number
   /** Seconds remaining in rate-limit wait, or null */
   rateLimitWait: number | null
   /** Source of the active rate-limit wait (e.g. "LLM summary", "OpenAlex", "S2"), or null */
   rateLimitLabel: string | null
   candidates: { papers: PaperCandidate[]; repos: RepoCandidate[] } | null
+  /** Per-bucket routing breakdown captured at the gate, for the work-preview (F-012) */
+  routeBreakdown: Record<string, number> | null
   /** Derived state, updated as events arrive */
   derivedState: RunState | null
   error: string | null
@@ -38,9 +46,11 @@ function initialState(): RunEventState {
     latestByStage: {},
     stageStatus: {},
     currentItem: null,
+    skippedCount: 0,
     rateLimitWait: null,
     rateLimitLabel: null,
     candidates: null,
+    routeBreakdown: null,
     derivedState: null,
     error: null,
     ended: false,
@@ -55,9 +65,11 @@ function reducer(state: RunEventState, action: Action): RunEventState {
       const latestByStage = { ...state.latestByStage }
       const stageStatus = { ...state.stageStatus }
       let currentItem = state.currentItem
+      let skippedCount = state.skippedCount
       let rateLimitWait = state.rateLimitWait
       let rateLimitLabel = state.rateLimitLabel
       let candidates = state.candidates
+      let routeBreakdown = state.routeBreakdown
       let derivedState = state.derivedState
       let error = state.error
 
@@ -68,13 +80,21 @@ function reducer(state: RunEventState, action: Action): RunEventState {
       }
 
       if (e.type === 'item_start') {
-        const d = e.data as { idx?: number; total?: number; title?: string; bucket?: string }
+        const d = e.data as { idx?: number; total?: number; title?: string; bucket?: string; work_idx?: number; work_total?: number }
         currentItem = {
           idx: typeof d.idx === 'number' ? d.idx : 0,
           total: typeof d.total === 'number' ? d.total : 0,
           title: typeof d.title === 'string' ? d.title : '',
           bucket: typeof d.bucket === 'string' ? d.bucket : '',
+          workIdx: typeof d.work_idx === 'number' ? d.work_idx : undefined,
+          workTotal: typeof d.work_total === 'number' ? d.work_total : undefined,
         }
+      }
+
+      // Already-complete papers are copied through without LLM work — count them
+      // separately so the headline reflects real work, not the routed total (F-012).
+      if (e.type === 'item_skip') {
+        skippedCount = skippedCount + 1
       }
 
       if (e.type === 'rate_limit_wait') {
@@ -84,10 +104,13 @@ function reducer(state: RunEventState, action: Action): RunEventState {
       }
 
       if (e.type === 'awaiting_review') {
-        const d = e.data as { paper_candidates?: PaperCandidate[]; repo_candidates?: RepoCandidate[] }
+        const d = e.data as { paper_candidates?: PaperCandidate[]; repo_candidates?: RepoCandidate[]; route_breakdown?: Record<string, number> }
         candidates = {
           papers: Array.isArray(d.paper_candidates) ? d.paper_candidates : [],
           repos: Array.isArray(d.repo_candidates) ? d.repo_candidates : [],
+        }
+        if (d.route_breakdown && typeof d.route_breakdown === 'object') {
+          routeBreakdown = d.route_breakdown
         }
         derivedState = 'awaiting_review'
       }
@@ -111,7 +134,7 @@ function reducer(state: RunEventState, action: Action): RunEventState {
         rateLimitLabel = null
       }
 
-      return { ...state, events, latestByStage, stageStatus, currentItem, rateLimitWait, rateLimitLabel, candidates, derivedState, error }
+      return { ...state, events, latestByStage, stageStatus, currentItem, skippedCount, rateLimitWait, rateLimitLabel, candidates, routeBreakdown, derivedState, error }
     }
     case 'rate_tick': {
       if (state.rateLimitWait === null || state.rateLimitWait <= 0) {

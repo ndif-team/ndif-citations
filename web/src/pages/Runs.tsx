@@ -85,12 +85,22 @@ function eventToLine(e: ProgressEvent): string {
         return `${prefix} Dedup: ${unique ?? '?'} unique / ${total ?? '?'} total (${dropped ?? 0} dropped)`
       }
       case 'route_summary': {
-        const { to_process, skipped } = d as Record<string, unknown>
-        return `${prefix} Route: ${to_process ?? '?'} to process, ${skipped ?? '?'} skipped`
+        const { to_process, skipped, new: nNew, fill_gaps } = d as Record<string, unknown>
+        const breakdown = (nNew !== undefined || fill_gaps !== undefined)
+          ? ` (${nNew ?? 0} new + ${fill_gaps ?? 0} gap-fills)`
+          : ''
+        return `${prefix} Route: ${to_process ?? '?'} to process${breakdown}, ${skipped ?? '?'} skipped (already complete)`
       }
       case 'item_start': {
-        const { idx, total, title } = d as Record<string, unknown>
-        return `${prefix} Processing ${idx ?? '?'}/${total ?? '?'}: ${title ?? ''}`
+        // Prefer the real-work counters (exclude already-complete no-ops) — F-012.
+        const { idx, total, title, work_idx, work_total } = d as Record<string, unknown>
+        const n = work_idx ?? idx
+        const tot = work_total ?? total
+        return `${prefix} Processing ${n ?? '?'}/${tot ?? '?'}: ${title ?? ''}`
+      }
+      case 'item_skip': {
+        const { title } = d as Record<string, unknown>
+        return `${prefix}   Skipped (already complete): ${title ?? ''}`
       }
       case 'item_step': {
         const { idx, step } = d as Record<string, unknown>
@@ -327,10 +337,11 @@ interface ReviewGateProps {
   runId: string
   papers: PaperCandidate[]
   repos: RepoCandidate[]
+  routeBreakdown: Record<string, number> | null
   onSubmitted: () => void
 }
 
-function ReviewGate({ runId, papers, repos, onSubmitted }: ReviewGateProps) {
+function ReviewGate({ runId, papers, repos, routeBreakdown, onSubmitted }: ReviewGateProps) {
   const [decisions, setDecisions] = useState<Record<string, CandidateDecision>>(() =>
     Object.fromEntries(papers.map((p) => [p.id, 'skip' as CandidateDecision]))
   )
@@ -406,6 +417,36 @@ function ReviewGate({ runId, papers, repos, onSubmitted }: ReviewGateProps) {
           <span className="font-medium text-foreground">{skipCount}</span> skip
         </span>
       </div>
+
+      {/* Work preview — what approving actually runs, beyond your selection (F-012).
+          Existing papers with gaps are gap-filled automatically (not gated); papers
+          already complete are skipped without LLM cost. */}
+      {routeBreakdown && (() => {
+        const fillGaps = routeBreakdown.fill_gaps ?? 0
+        const alreadyComplete = (routeBreakdown.skip ?? 0) + (routeBreakdown.protected ?? 0)
+        if (fillGaps === 0 && alreadyComplete === 0) return null
+        return (
+          <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            Approving runs the LLM on the{' '}
+            <span className="font-medium text-foreground">{processIds.length}</span>{' '}
+            paper{processIds.length === 1 ? '' : 's'} you select.
+            {fillGaps > 0 && (
+              <>
+                {' '}It will also auto-update{' '}
+                <span className="font-medium text-foreground">{fillGaps}</span>{' '}
+                existing paper{fillGaps === 1 ? '' : 's'} with missing fields (gap-fills).
+              </>
+            )}
+            {alreadyComplete > 0 && (
+              <>
+                {' '}
+                <span className="font-medium text-foreground">{alreadyComplete}</span>{' '}
+                already-complete paper{alreadyComplete === 1 ? '' : 's'} will be skipped (no LLM cost).
+              </>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Papers table */}
       {papers.length === 0 ? (
@@ -631,16 +672,21 @@ function LiveRunView({ runId, mode, onDone }: LiveRunViewProps) {
         showReview={mode === 'incremental'}
       />
 
-      {/* Per-item progress */}
+      {/* Per-item progress — counts real work (LLM/PDF), not the routed total (F-012) */}
       {eventState.currentItem && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none flex-none text-blue-500" aria-hidden="true" />
           <span className="tabular-nums font-medium text-foreground">
-            {eventState.currentItem.idx} / {eventState.currentItem.total}
+            {eventState.currentItem.workIdx ?? eventState.currentItem.idx} / {eventState.currentItem.workTotal ?? eventState.currentItem.total}
           </span>
           <span className="truncate max-w-xs" title={eventState.currentItem.title}>
             {eventState.currentItem.title}
           </span>
+          {eventState.skippedCount > 0 && (
+            <span className="tabular-nums text-muted-foreground/70">
+              · {eventState.skippedCount} skipped
+            </span>
+          )}
         </div>
       )}
 
@@ -652,6 +698,7 @@ function LiveRunView({ runId, mode, onDone }: LiveRunViewProps) {
               runId={runId}
               papers={eventState.candidates.papers}
               repos={eventState.candidates.repos}
+              routeBreakdown={eventState.routeBreakdown}
               onSubmitted={handleGateSubmitted}
             />
           </CardContent>
@@ -716,7 +763,7 @@ function TriggerPanel({ onStarted }: TriggerPanelProps) {
   // Preflight check — refetches when skip toggles change
   const { data: preflight, isLoading: preflightLoading, isError: preflightError } = useQuery({
     queryKey: ['preflight', skipPapers, skipGithub],
-    queryFn: () => getPreflight(skipPapers, skipGithub),
+    queryFn: () => getPreflight(skipPapers, skipGithub, true),  // validate=true: catch a present-but-dead GitHub token
     staleTime: 30_000,
   })
 

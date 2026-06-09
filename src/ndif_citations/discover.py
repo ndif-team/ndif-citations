@@ -959,6 +959,37 @@ def _detect_linked_paper(
 # Deduplication
 # ---------------------------------------------------------------------------
 
+def _normalize_seed_title(title: str) -> str:
+    """Lowercase + strip a trailing ``doi:...`` fragment / punctuation for seed matching.
+
+    Scholar-scraped titles sometimes append the DOI to the title text, e.g.
+    "...Internals. doi: 10.48550" — which defeats an exact-title match.
+    """
+    t = (title or "").lower().strip()
+    t = re.split(r"\s*\.?\s*doi:\s*", t)[0]      # drop a trailing "doi:..." fragment
+    t = re.sub(r"\s+", " ", t).strip(" .,:;-")    # collapse whitespace + trailing punct
+    return t
+
+
+def _is_seed_paper(paper: DiscoveredPaper) -> bool:
+    """True if *paper* is the seed (NNsight & NDIF) in any of its variant forms.
+
+    Belt-and-suspenders so an id-less Scholar variant with a mangled title can't
+    leak into the catalog/gate (F-011): match on arXiv id, DOI containing the seed
+    arXiv id, exact excluded title, or a normalized fuzzy title match.
+    """
+    if paper.arxiv_id and paper.arxiv_id == config.SEED_ARXIV_ID:
+        return True
+    if paper.doi and config.SEED_ARXIV_ID in paper.doi:
+        return True
+    norm = _normalize_seed_title(paper.title)
+    if norm in config.EXCLUDED_PAPER_TITLES:
+        return True
+    # Fuzzy (>=92) against the canonical excluded title(s) — after normalization an
+    # exact variant scores ~100, while a paper that merely cites the seed won't.
+    return any(is_duplicate(norm, excluded, threshold=92) for excluded in config.EXCLUDED_PAPER_TITLES)
+
+
 def deduplicate_papers(all_papers: list[DiscoveredPaper]) -> list[DiscoveredPaper]:
     """Deduplicate papers by arXiv ID, DOI, and title similarity.
 
@@ -984,11 +1015,9 @@ def deduplicate_papers(all_papers: list[DiscoveredPaper]) -> list[DiscoveredPape
     all_papers.sort(key=lambda p: source_priority.get(p.source, 4))
 
     for paper in all_papers:
-        # Ignore the seed paper itself — by title OR arXiv ID. The title can be
-        # corrupted or arrive in a variant form (the seed has leaked into the
-        # catalog under a wrong title before), so the arXiv ID is the robust guard.
-        if (paper.title.lower().strip() in config.EXCLUDED_PAPER_TITLES
-                or (paper.arxiv_id and paper.arxiv_id == config.SEED_ARXIV_ID)):
+        # Ignore the seed paper itself in any variant form (id-less Scholar rows
+        # with mangled titles have leaked into the gate before — F-011).
+        if _is_seed_paper(paper):
             continue
 
         # Check arXiv ID

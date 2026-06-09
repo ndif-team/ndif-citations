@@ -12,6 +12,7 @@ Replaces a manual workflow of checking Google Scholar, copying metadata into spr
 
 - **v1.9.0 — CLI app.** Discovery (S2 / OpenAlex / Scholar / GitHub), metadata enrichment, LLM classification with confidence bands, and catalog + spreadsheet output.
 - **v2.0.0 — adds the local web app** (`serve`): data-dense dashboard, a curation workspace (browse / edit / promote / discard / reprocess, cached-PDF + figure + evidence views), a run console with a pre-LLM review gate, robust metadata re-enrichment (`re-enrich`), and one-click publish to the site. The CLI is unchanged.
+- **v2.1.0 — QA hardening + API-key management.** API Keys settings tab with real credential validation (1-token LLM check, SerpAPI account check), humanized Test results, Clear buttons, and run-start preflight that live-checks keys. Run console now reports *honest* LLM work — distinguishes processed from already-complete papers and previews true work at the review gate (no more "Processing 113/128" for a 1-paper approval). Live runs snapshot the catalog before overwriting it; the seed paper can no longer leak into the gate; abstracts are stripped of raw LaTeX during enrichment; the SPA shell is served `no-store` so a rebuild never serves a stale bundle; PaperSheet opens without a Radix a11y console error.
 
 See [Releases](https://github.com/ndif-team/ndif-citations/releases) for notes.
 
