@@ -112,17 +112,15 @@ def put_target(body: TargetRequest) -> dict:
     """Validate *body.path* and persist it as ``publish_target``.
 
     422 if the path is not a valid target (missing ``public/data`` +
-    ``public/images``, or it is the refused ``ndif-website`` / a build ``out``
-    dir).
+    ``public/images``, e.g. a Next build ``out`` dir).
     """
     path = Path(body.path)
     if not publish.validate_target(path):
         raise HTTPException(
             status_code=422,
             detail=(
-                f"{body.path!r} is not a valid publish target. It must be an "
-                "ndif.us dir with public/data/ and public/images/, and must not "
-                "be the ndif-website project or a Next build 'out' dir."
+                f"{body.path!r} is not a valid publish target. It must be a site "
+                "dir with public/data/ and public/images/ (not a Next build 'out' dir)."
             ),
         )
 
@@ -136,7 +134,7 @@ def put_target(body: TargetRequest) -> dict:
 # ---------------------------------------------------------------------------
 
 _BUILD_HINT = (
-    "Run `bun run build` in ndif-web-beta to see changes on the site "
+    "Run `bun run build` in ndif-website to see changes on the site "
     "(data is imported at build time)."
 )
 

@@ -1,13 +1,13 @@
 """TDD tests for publish.py — Task 5.1 (publish curated outputs to the site).
 
 These tests build a FAKE site target under tmp_path and a FAKE pipeline output
-dir (the ``out`` arg) so they NEVER touch the real ``../ndif-web-beta``.
+dir (the ``out`` arg) so they NEVER touch the real ``../ndif-website``.
 
 Layout built per test::
 
-    tmp/ndif-web-beta/packages/ndif.us/public/data/research-papers.json
-    tmp/ndif-web-beta/packages/ndif.us/public/data/github-repos.json
-    tmp/ndif-web-beta/packages/ndif.us/public/images/<slug>.png
+    tmp/ndif-website/public/data/research-papers.json
+    tmp/ndif-website/public/data/github-repos.json
+    tmp/ndif-website/public/images/<slug>.png
 
     tmp/out/research-papers.json   (slim — list of to_website_dict)
     tmp/out/github-repos.json      (slim — list of to_website_dict)
@@ -28,11 +28,11 @@ from ndif_citations import publish
 # ---------------------------------------------------------------------------
 
 def _make_target(root: Path) -> Path:
-    """Build a valid fake ndif.us target dir; return the ndif.us Path."""
-    ndif_us = root / "ndif-web-beta" / "packages" / "ndif.us"
-    (ndif_us / "public" / "data").mkdir(parents=True)
-    (ndif_us / "public" / "images").mkdir(parents=True)
-    return ndif_us
+    """Build a valid fake ndif-website target dir; return its Path."""
+    site = root / "ndif-website"
+    (site / "public" / "data").mkdir(parents=True)
+    (site / "public" / "images").mkdir(parents=True)
+    return site
 
 
 def _write_json(path: Path, data) -> None:
@@ -88,64 +88,52 @@ def _make_out(root: Path, papers: list[dict], repos: list[dict],
 # ---------------------------------------------------------------------------
 
 def test_detect_target_finds_valid(tmp_path: Path):
-    """A sibling ndif-web-beta/packages/ndif.us with data/ + images/ is found."""
+    """A sibling ndif-website/ with public/data + public/images is found."""
     project_root = tmp_path / "ndif-citations"
     project_root.mkdir()
-    ndif_us = _make_target(tmp_path)  # sibling of project_root
+    site = _make_target(tmp_path)  # sibling of project_root
 
     found = publish.detect_target(start=project_root)
     assert found is not None
-    assert found.resolve() == ndif_us.resolve()
+    assert found.resolve() == site.resolve()
 
 
-def test_detect_refuses_ndif_website(tmp_path: Path):
-    """The ignored ndif-website/ dir must NEVER be returned, even if it has data/images."""
+def test_detect_finds_ndif_website(tmp_path: Path):
+    """ndif-website/ is the production publish target — it must be detected."""
     project_root = tmp_path / "ndif-citations"
     project_root.mkdir()
-    # Build an ndif-website that *looks* publishable but must be refused.
-    bad = tmp_path / "ndif-website"
-    (bad / "public" / "data").mkdir(parents=True)
-    (bad / "public" / "images").mkdir(parents=True)
-    # And also a nested ndif.us-like dir inside ndif-website.
-    nested = bad / "packages" / "ndif.us"
-    (nested / "public" / "data").mkdir(parents=True)
-    (nested / "public" / "images").mkdir(parents=True)
+    site = tmp_path / "ndif-website"
+    (site / "public" / "data").mkdir(parents=True)
+    (site / "public" / "images").mkdir(parents=True)
 
     found = publish.detect_target(start=project_root)
-    assert found is None, f"detect_target must refuse ndif-website, got {found}"
+    assert found is not None and found.resolve() == site.resolve()
 
 
-def test_detect_refuses_out_data(tmp_path: Path):
-    """A Next build-output dir (.../out/data) must never be selected."""
+def test_detect_skips_build_out_dir(tmp_path: Path):
+    """A site with only a Next build-output dir (out/data, no public/) is not selected."""
     project_root = tmp_path / "ndif-citations"
     project_root.mkdir()
-    # An ndif.us whose only data/images live under an out/ build dir.
-    ndif_us = tmp_path / "ndif-web-beta" / "packages" / "ndif.us"
-    (ndif_us / "out" / "data").mkdir(parents=True)
-    (ndif_us / "out" / "images").mkdir(parents=True)
-    # Note: NO public/data or public/images → not a valid target.
+    site = tmp_path / "ndif-website"
+    (site / "out" / "data").mkdir(parents=True)
+    (site / "out" / "images").mkdir(parents=True)
+    # NO public/data or public/images → not a valid target.
 
     found = publish.detect_target(start=project_root)
-    assert found is None, f"detect_target must not pick an out/ build dir, got {found}"
+    assert found is None, f"detect_target must not pick a build out/ dir, got {found}"
 
 
 def test_validate_target(tmp_path: Path):
-    ndif_us = _make_target(tmp_path)
-    assert publish.validate_target(ndif_us) is True
+    site = _make_target(tmp_path)
+    assert publish.validate_target(site) is True
 
     # Missing images/ → invalid.
-    bad = tmp_path / "broken" / "ndif.us"
+    bad = tmp_path / "broken"
     (bad / "public" / "data").mkdir(parents=True)
     assert publish.validate_target(bad) is False
 
     # Nonexistent → invalid.
     assert publish.validate_target(tmp_path / "nope") is False
-
-    # ndif-website path → refused even if structurally valid.
-    website = tmp_path / "ndif-website"
-    (website / "public" / "data").mkdir(parents=True)
-    (website / "public" / "images").mkdir(parents=True)
-    assert publish.validate_target(website) is False
 
 
 # ---------------------------------------------------------------------------
