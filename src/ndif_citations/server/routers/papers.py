@@ -162,6 +162,43 @@ def add_paper_pdf(
     return AddPaperResponse(run_id=run_id, state="running")
 
 
+# ---------------------------------------------------------------------------
+# Duplicate-check endpoint (Task A2) — must be BEFORE {paper_id:path} routes
+# ---------------------------------------------------------------------------
+
+
+class DuplicateCheckResponse(BaseModel):
+    """Response for POST /api/papers/add-pdf/check."""
+    match: dict | None
+
+
+@router.post("/papers/add-pdf/check", response_model=DuplicateCheckResponse)
+def check_add_pdf_duplicate(
+    title: str = Form(""),
+    arxiv_id: str | None = Form(None),
+    doi: str | None = Form(None),
+    out: Path = Depends(deps.get_output_dir),
+) -> DuplicateCheckResponse:
+    """Check whether an uploaded PDF's metadata matches an existing catalog paper.
+
+    Read-only (no mutation, no run). 422 if none of title/arxiv_id/doi is given.
+    """
+    if not (title.strip() or arxiv_id or doi):
+        raise HTTPException(status_code=422, detail="provide title, arxiv_id, or doi")
+    from ndif_citations.manual_add import find_duplicate
+    from ndif_citations.pdf_cache import cached_pdf_path
+
+    m = find_duplicate(out, title=title, arxiv_id=arxiv_id, doi=doi)
+    if m is None:
+        return DuplicateCheckResponse(match=None)
+    return DuplicateCheckResponse(match={
+        "id": m.merge_key(),
+        "title": m.title,
+        "bucket": m.bucket.value,
+        "has_pdf": cached_pdf_path(m, out) is not None,
+    })
+
+
 @router.post("/papers/reprocess", response_model=ReprocessResponse)
 def batch_reprocess_papers(
     body: BatchReprocessRequest,
