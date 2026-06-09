@@ -25,12 +25,14 @@ class KeysPut(BaseModel):
 
 
 class TestReq(BaseModel):
-    provider: str  # "llm" | "github" | "s2"
+    provider: str  # "llm" | "github" | "s2" | "serpapi"
 
 
 @router.get("/settings/keys")
 def get_keys() -> dict:
-    return {k: {"configured": v} for k, v in secrets_store.configured_status().items()}
+    # Re-sync from the .env file first so out-of-band edits/removals reflect (F-002).
+    status = secrets_store.refresh_secrets_from_file(_env_path())
+    return {k: {"configured": v} for k, v in status.items()}
 
 
 @router.put("/settings/keys")
@@ -43,13 +45,24 @@ def put_keys(body: KeysPut, _guard: None = Depends(deps.require_no_active_run)) 
     return {k: {"configured": v} for k, v in status.items()}
 
 
+@router.delete("/settings/keys/{key}")
+def delete_key(key: str, _guard: None = Depends(deps.require_no_active_run)) -> dict:
+    try:
+        status = secrets_store.clear_key(_env_path(), key)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return {k: {"configured": v} for k, v in status.items()}
+
+
 @router.post("/settings/keys/test")
 def test_key(body: TestReq) -> dict:
     p = body.provider
     if p == "llm":
-        return key_validation.test_llm(config.LLM_BASE_URL, os.environ.get("LLM_API_KEY", ""))
+        return key_validation.test_llm(config.LLM_BASE_URL, os.environ.get("LLM_API_KEY", ""), config.LLM_MODEL)
     if p == "github":
         return key_validation.test_github(os.environ.get("GITHUB_TOKEN", ""))
     if p == "s2":
         return key_validation.test_s2(os.environ.get("S2_API_KEY", ""))
+    if p == "serpapi":
+        return key_validation.test_serpapi(os.environ.get("SERPAPI_API_KEY", ""))
     raise HTTPException(status_code=422, detail=f"unknown provider {p!r}")

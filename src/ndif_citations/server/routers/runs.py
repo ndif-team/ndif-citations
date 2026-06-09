@@ -116,16 +116,19 @@ def get_active_run(
 
 
 @router.get("/runs/preflight")
-def get_preflight(skip_papers: bool = False, skip_github: bool = False) -> dict:
+def get_preflight(skip_papers: bool = False, skip_github: bool = False,
+                  validate: bool = False) -> dict:
     """Return preflight credential check for the requested entity set.
 
     Query params mirror ``StartRunRequest.skip_papers`` / ``skip_github``.
-    Response: ``{ok: bool, blocking: list[str], warnings: list[str]}``.
+    ``validate=true`` additionally live-checks the GitHub token (so a present-but-
+    dead token blocks before the run). Response:
+    ``{ok: bool, blocking: list[str], warnings: list[str]}``.
 
     **Route ordering:** declared BEFORE ``GET /runs/{run_id}`` so the literal
     path segment ``"preflight"`` is never captured as a run_id.
     """
-    return run_preflight(skip_papers=skip_papers, skip_github=skip_github)
+    return run_preflight(skip_papers=skip_papers, skip_github=skip_github, validate=validate)
 
 
 @router.get("/runs/{run_id}")

@@ -34,6 +34,16 @@ def test_get_preflight_ok_when_keys_present(client, monkeypatch):
     assert r.status_code == 200
     assert r.json()["ok"] is True
 
+def test_get_preflight_validate_blocks_dead_github_token(client, monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_dead")
+    monkeypatch.setattr("ndif_citations.key_validation.test_github",
+                        lambda t: {"ok": False, "detail": "HTTP 401"})
+    r = client.get("/api/runs/preflight",
+                   params={"skip_papers": True, "skip_github": False, "validate": True})
+    assert r.status_code == 200
+    assert r.json()["ok"] is False
+    assert any("rejected by GitHub" in b for b in r.json()["blocking"])
+
 def test_post_runs_blocked_without_required_key(client, monkeypatch):
     monkeypatch.delenv("LLM_API_KEY", raising=False)
     r = client.post("/api/runs", json={"mode": "incremental", "skip_papers": False, "skip_github": True})

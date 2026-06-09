@@ -16,15 +16,24 @@ def _result(ok: bool, detail: str) -> dict:
     return {"ok": ok, "detail": detail}
 
 
-def test_llm(base_url: str, api_key: str) -> dict:
+def test_llm(base_url: str, api_key: str, model: str = "") -> dict:
+    # A 1-token chat completion, NOT GET /models: some OpenAI-compatible providers
+    # (e.g. NVIDIA integrate) serve /models without enforcing auth, so a garbage key
+    # would read "ok". A completion actually exercises the credential (bad key -> 401).
     if not (base_url and api_key):
         return _result(False, "base_url and api_key required")
     parsed = urlparse(base_url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         return _result(False, "base_url must be a http(s) URL")
     try:
-        r = requests.get(f"{base_url.rstrip('/')}/models",
-                         headers={"Authorization": f"Bearer {api_key}"}, timeout=_TIMEOUT)
+        r = requests.post(
+            f"{base_url.rstrip('/')}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={"model": model or "gpt-3.5-turbo",
+                  "messages": [{"role": "user", "content": "ping"}],
+                  "max_tokens": 1},
+            timeout=_TIMEOUT,
+        )
         return _result(r.status_code < 400, f"HTTP {r.status_code}")
     except Exception as e:                       # noqa: BLE001
         return _result(False, f"{type(e).__name__}")
@@ -48,6 +57,19 @@ def test_s2(api_key: str) -> dict:
         r = requests.get(
             "https://api.semanticscholar.org/graph/v1/paper/ARXIV:2407.14561?fields=title",
             headers={"x-api-key": api_key}, timeout=_TIMEOUT)
+        return _result(r.status_code < 400, f"HTTP {r.status_code}")
+    except Exception as e:                       # noqa: BLE001
+        return _result(False, f"{type(e).__name__}")
+
+
+def test_serpapi(api_key: str) -> dict:
+    # GET serpapi.com/account validates the key (200) vs rejects it (401) WITHOUT
+    # consuming a search credit (it returns plan/usage metadata, not a search).
+    if not api_key:
+        return _result(False, "api_key required")
+    try:
+        r = requests.get("https://serpapi.com/account",
+                         params={"api_key": api_key}, timeout=_TIMEOUT)
         return _result(r.status_code < 400, f"HTTP {r.status_code}")
     except Exception as e:                       # noqa: BLE001
         return _result(False, f"{type(e).__name__}")

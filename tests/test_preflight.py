@@ -41,3 +41,30 @@ def test_skip_both_always_ok():
     assert r["ok"] is True
     assert r["blocking"] == []
     assert r["warnings"] == []
+
+
+def test_validate_blocks_on_rejected_github_token(monkeypatch):
+    # F-005: a present-but-dead token must not pass when validate=True.
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_dead")
+    monkeypatch.setattr("ndif_citations.key_validation.test_github",
+                        lambda t: {"ok": False, "detail": "HTTP 401"})
+    r = preflight.preflight(skip_papers=True, skip_github=False, validate=True)
+    assert r["ok"] is False
+    assert any("GITHUB_TOKEN" in b and "401" in b for b in r["blocking"])
+
+
+def test_validate_passes_on_good_github_token(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_good")
+    monkeypatch.setattr("ndif_citations.key_validation.test_github",
+                        lambda t: {"ok": True, "detail": "HTTP 200"})
+    r = preflight.preflight(skip_papers=True, skip_github=False, validate=True)
+    assert r["ok"] is True
+
+
+def test_validate_default_off_is_presence_only(monkeypatch):
+    # Default path stays presence-only (no network); a dead validator must NOT be called.
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_whatever")
+    monkeypatch.setattr("ndif_citations.key_validation.test_github",
+                        lambda t: (_ for _ in ()).throw(AssertionError("should not validate")))
+    r = preflight.preflight(skip_papers=True, skip_github=False)
+    assert r["ok"] is True
