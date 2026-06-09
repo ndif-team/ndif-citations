@@ -59,7 +59,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from ndif_citations import edit_schema, events, manual_add as _manual_add_mod, orchestrator
+from ndif_citations import edit_schema, events, manual_add, orchestrator
 from ndif_citations.events import ProgressEvent, RunCancelled
 from ndif_citations.models import Bucket, DiscoveredPaper, PaperReason, PipelineRun
 from ndif_citations.router import ProcessingBucket
@@ -282,12 +282,14 @@ class JobRunner:
         *,
         pdf_bytes: "bytes | None" = None,
     ) -> str:
-        """Start a gated manual-add run seeded with one paper; return its run_id.
+        """Start an ungated manual-add run seeded with one paper; return its run_id.
 
-        Same gated loop as incremental (enrich -> route -> gate -> process) but
-        skips discovery and injects *seed*. If *pdf_bytes* is given it is cached
-        AFTER enrichment (so the filename matches any resolved arXiv/DOI).
-        Raises RunActiveError if a run is already active.
+        Runs enrich -> route -> process -> finalize on *seed* with NO review gate
+        (via ``run_manual_add_seed``) — discovery is skipped. The single explicitly
+        added paper auto-processes to a terminal state and surfaces in the run's
+        results. If *pdf_bytes* is given it is cached AFTER enrichment (so the
+        filename matches any resolved arXiv/DOI). Raises RunActiveError if a run
+        is already active.
         """
         self._warm_imports()
 
@@ -635,7 +637,7 @@ class JobRunner:
                         record.counts = self._extract_counts(result)
             elif mode == "manual":
                 # Manual-add: one explicitly-chosen paper → ungated, auto-process.
-                result = _manual_add_mod.run_manual_add_seed(
+                result = manual_add.run_manual_add_seed(
                     out, record.seed_papers, pdf_bytes=record.pdf_bytes,
                     cancel_check=record.cancel_event.is_set,
                 )
