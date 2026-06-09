@@ -275,6 +275,13 @@ export interface PublishResponse {
   build_hint: string
 }
 
+export interface DuplicateMatch {
+  id: string
+  title: string
+  bucket: Bucket
+  has_pdf: boolean
+}
+
 /** Full repo detail returned by GET /api/repos/{owner}/{repo} */
 export interface RepoDetail {
   owner: string

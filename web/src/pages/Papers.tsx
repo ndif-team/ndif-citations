@@ -36,9 +36,9 @@ import { useDebounce } from '@/hooks/useDebounce'
 import { bucketBadge, confidenceBadge, categoryBadge, categoryLabel } from '@/lib/tokens'
 import { formatAuthors, truncate } from '@/lib/utils'
 import { PaperSheet } from '@/components/papers/PaperSheet'
-import { batchReprocess, setPaperBucket, addPaper, addPaperPdf } from '@/api/client'
+import { batchReprocess, setPaperBucket, addPaper, addPaperPdf, checkAddPdfDuplicate, attachPdf } from '@/api/client'
 import { toast } from 'sonner'
-import type { PaperRow, Bucket, SortOption, ConfidenceBand, Category } from '@/api/types'
+import type { PaperRow, Bucket, SortOption, ConfidenceBand, Category, DuplicateMatch } from '@/api/types'
 
 const BUCKETS: { label: string; value: '' | Bucket }[] = [
   { label: 'All', value: '' },
@@ -304,6 +304,8 @@ export function Papers() {
   const [pdfDoi, setPdfDoi] = useState('')
   const [pdfFile, setPdfFile] = useState<File | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [dupMatch, setDupMatch] = useState<DuplicateMatch | null>(null)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { data: activeRunData } = useActiveRun()
@@ -340,6 +342,16 @@ export function Papers() {
     if (!pdfFile) { toast.error('Select a PDF file'); return }
     setSubmitting(true)
     try {
+      const { match } = await checkAddPdfDuplicate({
+        title: pdfTitle.trim(),
+        arxiv_id: pdfArxiv.trim() || undefined,
+        doi: pdfDoi.trim() || undefined,
+      })
+      if (match) {
+        setPendingFile(pdfFile)
+        setDupMatch(match)
+        return
+      }
       await addPaperPdf({
         title: pdfTitle.trim(),
         arxiv_id: pdfArxiv.trim() || undefined,
@@ -355,6 +367,34 @@ export function Papers() {
       toast.error(status === 409 ? 'A run is already active — wait for it to finish.' : ((e as Error).message || 'Add failed'))
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  async function handleAttachToExisting() {
+    if (!dupMatch || !pendingFile) return
+    try {
+      await attachPdf(dupMatch.id, pendingFile)
+      toast.success('PDF attached to existing paper — open it to backfill / re-extract')
+      setDupMatch(null); setPendingFile(null); setAddOpen(false); resetAddDialog()
+    } catch (err) {
+      toast.error(`Attach failed: ${(err as Error).message}`)
+    }
+  }
+
+  async function handleAddAsNew() {
+    if (!pendingFile) return
+    try {
+      await addPaperPdf({
+        title: pdfTitle.trim(),
+        arxiv_id: pdfArxiv.trim() || undefined,
+        doi: pdfDoi.trim() || undefined,
+        file: pendingFile,
+      })
+      toast.success('Run started — auto-processing the new paper')
+      setDupMatch(null); setPendingFile(null); setAddOpen(false); resetAddDialog()
+      navigate('/runs')
+    } catch (err) {
+      toast.error(`Failed: ${(err as Error).message}`)
     }
   }
 
@@ -815,6 +855,23 @@ export function Papers() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Duplicate-match confirmation dialog */}
+      <AlertDialog open={dupMatch !== null} onOpenChange={(v) => { if (!v) { setDupMatch(null); setPendingFile(null) } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Looks like this paper already exists</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{dupMatch?.title}" is already in the catalog ({dupMatch?.bucket}). Attach this PDF to that entry instead of creating a duplicate?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setDupMatch(null); setPendingFile(null) }}>Cancel</AlertDialogCancel>
+            <Button variant="outline" onClick={handleAddAsNew}>Add as new anyway</Button>
+            <Button onClick={handleAttachToExisting}>Attach to existing</Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Error */}
       {error && (
