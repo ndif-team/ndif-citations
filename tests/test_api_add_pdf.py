@@ -105,6 +105,7 @@ def test_add_pdf_check_returns_match(client, monkeypatch):
     assert r.status_code == 200, r.text
     m = r.json()["match"]
     assert m["id"] == "arxiv:2407.14561"
+    assert m["title"] == "Democratizing Access to Foundation Model Internals"
     assert m["bucket"] == "pending"
     assert m["has_pdf"] is False
 

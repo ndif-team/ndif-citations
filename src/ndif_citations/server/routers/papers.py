@@ -183,6 +183,8 @@ def check_add_pdf_duplicate(
 
     Read-only (no mutation, no run). 422 if none of title/arxiv_id/doi is given.
     """
+    arxiv_id = (arxiv_id or "").strip() or None
+    doi = (doi or "").strip() or None
     if not (title.strip() or arxiv_id or doi):
         raise HTTPException(status_code=422, detail="provide title, arxiv_id, or doi")
     from ndif_citations.manual_add import find_duplicate
