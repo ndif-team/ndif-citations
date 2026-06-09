@@ -575,6 +575,7 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
   useEffect(() => {
     if (procRunId && procEvents.ended) {
       qc.invalidateQueries({ queryKey: ['paper', paperId] })
+      qc.invalidateQueries({ queryKey: ['papers'] })
       qc.invalidateQueries({ queryKey: ['stats'] })
       toast.success(`${procLabel} done`)
       setProcRunId(null)
