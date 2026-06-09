@@ -14,7 +14,7 @@ from typing import NamedTuple
 
 from ndif_citations.venue import is_preprint_sentinel
 from ndif_citations.extract import _openalex_fetch_work, detect_peer_review, detect_venue_type
-from ndif_citations.utils import extract_arxiv_id_from_url, query_arxiv_api, rate_limit_sleep
+from ndif_citations.utils import extract_arxiv_id_from_url, query_arxiv_api, rate_limit_sleep, strip_latex
 from ndif_citations.discover import _openalex_work_to_discovered
 from ndif_citations import config
 
@@ -267,6 +267,18 @@ def enrich_paper(paper, *, dry_run: bool = False, fields: tuple[str, ...] = _MAN
     records = fetch_records(target)
     cs = reconcile_paper(target, records, locked=target.manual_override,
                          low_confidence=resolved.via_title, fields=fields)
+
+    # Cosmetic LaTeX normalization: legacy abstracts carry raw \textbf{}/\textit{}
+    # that repair-only reconcile won't touch (they're not "broken"). Clean the
+    # final abstract for non-locked papers; curator locks are honored.
+    if not target.manual_override and target.abstract:
+        cleaned = strip_latex(target.abstract)
+        if cleaned != target.abstract:
+            prev = cs.changes["abstract"].old if "abstract" in cs.changes else target.abstract
+            target.abstract = cleaned
+            target.enrichment_provenance["abstract"] = "latex_normalize"
+            cs.changes["abstract"] = FieldChange(prev, cleaned, "latex_normalize", False)
+
     if cs.changes and not dry_run:
         paper.peer_reviewed = detect_peer_review(paper.venue)
         paper.venue_type = detect_venue_type(paper.venue)
