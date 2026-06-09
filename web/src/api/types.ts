@@ -112,6 +112,16 @@ export interface RunSummary {
   processed?: number
 }
 
+export interface ResultPaper {
+  id: string
+  title: string
+  category: string | null
+  confidence_band: 'high' | 'medium' | 'low' | 'none' | null
+  bucket: Bucket
+  source: string | null
+  is_new: boolean
+}
+
 // Full run record from GET /runs/{id} or GET /runs/active
 export interface RunRecord {
   run_id: string
@@ -125,6 +135,7 @@ export interface RunRecord {
   paper_candidates: PaperCandidate[]
   repo_candidates: RepoCandidate[]
   route_breakdown?: Record<string, number>
+  result_papers?: ResultPaper[]
 }
 
 // SSE ProgressEvent shapes
