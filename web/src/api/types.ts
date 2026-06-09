@@ -116,7 +116,7 @@ export interface ResultPaper {
   id: string
   title: string
   category: string | null
-  confidence_band: 'high' | 'medium' | 'low' | 'none' | null
+  confidence_band: 'certain' | 'high' | 'medium' | 'low' | 'none' | null
   bucket: Bucket
   source: string | null
   is_new: boolean
