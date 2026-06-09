@@ -37,12 +37,12 @@ def isolated_settings(tmp_path, monkeypatch):
 
 
 def _make_target(root: Path) -> Path:
-    ndif_us = root / "ndif-web-beta" / "packages" / "ndif.us"
-    (ndif_us / "public" / "data").mkdir(parents=True)
-    (ndif_us / "public" / "images").mkdir(parents=True)
-    (ndif_us / "public" / "data" / "research-papers.json").write_text("[]\n")
-    (ndif_us / "public" / "data" / "github-repos.json").write_text("[]\n")
-    return ndif_us
+    site = root / "ndif-website"
+    (site / "public" / "data").mkdir(parents=True)
+    (site / "public" / "images").mkdir(parents=True)
+    (site / "public" / "data" / "research-papers.json").write_text("[]\n")
+    (site / "public" / "data" / "github-repos.json").write_text("[]\n")
+    return site
 
 
 def _slim_paper(title: str, url: str, image: str | None = None) -> dict:
@@ -120,16 +120,31 @@ def test_put_target_valid(fixture_state, tmp_path, isolated_settings):
     assert saved["publish_target"] == str(ndif_us)
 
 
-def test_put_target_refuses_ndif_website(fixture_state, tmp_path, isolated_settings):
+def test_put_target_accepts_ndif_website(fixture_state, tmp_path, isolated_settings):
+    # ndif-website is the production publish target — a valid layout is accepted.
     website = tmp_path / "ndif-website"
     (website / "public" / "data").mkdir(parents=True)
     (website / "public" / "images").mkdir(parents=True)
 
     client, _ = _make_client(fixture_state)
     resp = client.put("/api/publish/target", json={"path": str(website)})
+    assert resp.status_code == 200, resp.text
+
+    # Persisted as the publish target.
+    saved = settings_store.load_overrides(config._SETTINGS_FILE)
+    assert saved.get("publish_target") == str(website)
+
+
+def test_put_target_refuses_build_out_dir(fixture_state, tmp_path, isolated_settings):
+    # A Next build-output dir (out/data, no public/) is still not a valid target.
+    site = tmp_path / "ndif-website"
+    (site / "out" / "data").mkdir(parents=True)
+    (site / "out" / "images").mkdir(parents=True)
+
+    client, _ = _make_client(fixture_state)
+    resp = client.put("/api/publish/target", json={"path": str(site)})
     assert resp.status_code == 422, resp.text
 
-    # Not persisted.
     saved = settings_store.load_overrides(config._SETTINGS_FILE)
     assert saved.get("publish_target") is None
 

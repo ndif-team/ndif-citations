@@ -1,9 +1,8 @@
 """Publish curated slim outputs to the live NDIF website repo.
 
-This module SUPERSEDES the site repo's manual sync scripts
-(``ndif-web-beta/packages/ndif.us/scripts/sync-research-papers.mjs`` and
-``sync-github-repos.mjs``). The curator drives publishing through the web
-"Publish" button (server endpoints in ``server/routers/publish.py``); the
+This module SUPERSEDES the site repo's manual ``sync-research-papers.mjs`` /
+``sync-github-repos.mjs`` scripts. The curator drives publishing through the web
+"Publish" button (server endpoints in ``server/routers/publish.py``); any such
 ``.mjs`` scripts remain only as a manual fallback and are NOT modified by us.
 
 Why reimplement in Python instead of shelling out to node:
@@ -19,18 +18,17 @@ Source / destination / shape — matched exactly to the .mjs scripts:
       ``out/research-papers.json``  — list of verified ``to_website_dict``s
       ``out/github-repos.json``     — list of ``to_website_dict``s
       ``out/images/{slug}.png``     — referenced as ``/images/{slug}.png`` in JSON
-  * Destination (inside the site repo's ndif.us package):
-      ``<ndif.us>/public/data/research-papers.json``
-      ``<ndif.us>/public/data/github-repos.json``
-      ``<ndif.us>/public/images/{slug}.png``
+  * Destination (inside the production site repo, ``ndif-website``):
+      ``<ndif-website>/public/data/research-papers.json``
+      ``<ndif-website>/public/data/github-repos.json``
+      ``<ndif-website>/public/images/{slug}.png``
   * JSON written as ``json.dumps(..., indent=2) + "\n"`` — byte-identical to
     the .mjs ``JSON.stringify(x, null, 2) + "\n"``.
 
 Safety:
-  * ``detect_target`` / ``validate_target`` REFUSE the ignored ``ndif-website``
-    directory and any Next build-output ``out/data`` dir — only the real
-    ``ndif-web-beta/.../ndif.us`` with ``public/data`` + ``public/images`` is
-    accepted.
+  * ``detect_target`` / ``validate_target`` accept only a dir with ``public/data``
+    + ``public/images`` (a Next build-output ``out/`` dir alone is rejected). The
+    production target is the sibling ``ndif-website`` project.
   * ``apply`` BACKS UP the existing destination JSON files into
     ``out/backups/<name>.<timestamp>.bak.json`` before overwriting.
 """
@@ -41,10 +39,6 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-# Directory name that must never be used as a publish target (it's an ignored
-# legacy project — see web-dev/CLAUDE.md).
-_REFUSED_DIR_NAME = "ndif-website"
-
 # Slim output filenames (identical at source and destination).
 _PAPERS_JSON = "research-papers.json"
 _REPOS_JSON = "github-repos.json"
@@ -54,31 +48,15 @@ _REPOS_JSON = "github-repos.json"
 # Target detection / validation
 # ---------------------------------------------------------------------------
 
-def _is_refused(path: Path) -> bool:
-    """True if *path* lies inside an ``ndif-website`` directory (refused).
-
-    Also refuses any path whose ``public`` parent sits under an ``out``
-    build-output directory — though ``validate_target`` already requires the
-    ``public/`` convention, this is belt-and-suspenders against a Next ``out/``
-    dir being passed directly.
-    """
-    parts = path.resolve().parts
-    if _REFUSED_DIR_NAME in parts:
-        return True
-    return False
-
-
 def validate_target(path: Path) -> bool:
     """Return True iff *path* is a usable publish target.
 
     Requires:
       * the path exists and is a directory,
-      * it contains ``public/data/`` AND ``public/images/``,
-      * it is NOT inside the refused ``ndif-website`` tree.
+      * it contains ``public/data/`` AND ``public/images/`` (a Next build-output
+        ``out/`` dir alone is therefore not accepted).
     """
     path = Path(path)
-    if _is_refused(path):
-        return False
     if not path.is_dir():
         return False
     if not (path / "public" / "data").is_dir():
@@ -89,15 +67,12 @@ def validate_target(path: Path) -> bool:
 
 
 def detect_target(start: Path | None = None) -> Path | None:
-    """Auto-detect the sibling ``ndif-web-beta/packages/ndif.us`` publish target.
+    """Auto-detect the sibling ``ndif-website`` publish target (production ndif.us).
 
-    Searches from the ndif-citations project root's PARENT (the ``web-dev``
-    directory) for ``ndif-web-beta/packages/ndif.us`` that passes
-    ``validate_target``. Returns the ``ndif.us`` dir or ``None``.
-
-    REFUSES the ignored ``ndif-website`` dir and any Next build-output
-    ``out/data`` dir — only a ``public/data`` + ``public/images`` layout is
-    accepted.
+    Searches from the ndif-citations project root and its PARENT (the ``web-dev``
+    workspace) for an ``ndif-website`` dir that passes ``validate_target`` (has
+    ``public/data`` + ``public/images``; a Next ``out/`` build dir alone is not
+    accepted). Returns the ``ndif-website`` dir or ``None``.
     """
     if start is None:
         # ndif-citations project root = parents[2] of this file
@@ -106,12 +81,10 @@ def detect_target(start: Path | None = None) -> Path | None:
     start = Path(start).resolve()
 
     # Search the project root itself and its parent (the web-dev workspace),
-    # which is where ndif-web-beta lives as a sibling.
+    # which is where ndif-website lives as a sibling.
     search_roots = [start, start.parent]
     for root in search_roots:
-        candidate = root / "ndif-web-beta" / "packages" / "ndif.us"
-        if _is_refused(candidate):
-            continue
+        candidate = root / "ndif-website"
         if validate_target(candidate):
             return candidate.resolve()
     return None
