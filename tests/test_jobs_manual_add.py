@@ -45,17 +45,16 @@ def _fake_stages(monkeypatch):
     monkeypatch.setattr(orchestrator, "finalize_stage", fake_finalize)
 
 
-def test_manual_add_parks_at_gate_then_processes(tmp_path, monkeypatch):
+def test_manual_add_runs_ungated_to_done(tmp_path, monkeypatch):
+    """manual-add runs straight to 'done' without parking at awaiting_review."""
     out = tmp_path / "output"; out.mkdir()
     (out / "research-papers-full.json").write_text('{"verified":[],"pending":[],"discarded":[]}')
     _fake_stages(monkeypatch)
     seed = DiscoveredPaper(title="Manually Added", arxiv_id="2401.55555", source=DiscoverySource.MANUAL_ADD)
     runner = JobRunner()
-    run_id = runner.start_manual_add(out, seed)
-    assert _wait(lambda: runner.status().state == "awaiting_review"), runner.status().state
-    assert seed.merge_key() in [c["id"] for c in runner.status().paper_candidates]
-    runner.submit_gate(run_id, process_ids=[seed.merge_key()], discard_ids=[], edits={})
+    runner.start_manual_add(out, seed)
     assert _wait(lambda: runner.status().state == "done"), runner.status().state
+    assert runner.status().state != "awaiting_review", "manual-add must never park at the gate"
 
 
 def test_manual_add_caches_pdf_after_enrich(tmp_path, monkeypatch):
@@ -65,8 +64,7 @@ def test_manual_add_caches_pdf_after_enrich(tmp_path, monkeypatch):
     seed = DiscoveredPaper(title="Paywalled", arxiv_id="2402.99999", source=DiscoverySource.MANUAL_ADD)
     runner = JobRunner()
     pdf = b"%PDF-1.4\nmanual\n"  # MUST start with %PDF- magic — write_pdf_to_cache rejects otherwise
-    run_id = runner.start_manual_add(out, seed, pdf_bytes=pdf)
-    assert _wait(lambda: runner.status().state == "awaiting_review"), runner.status().state
-    assert (out / "pdfs" / "arxiv-2402.99999.pdf").read_bytes() == pdf
-    runner.submit_gate(run_id, process_ids=[seed.merge_key()], discard_ids=[], edits={})
+    runner.start_manual_add(out, seed, pdf_bytes=pdf)
+    # PDF is cached inside run_manual_add_seed (after enrich_stage); verify after run completes.
     assert _wait(lambda: runner.status().state == "done"), runner.status().state
+    assert (out / "pdfs" / "arxiv-2402.99999.pdf").read_bytes() == pdf

@@ -59,7 +59,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from ndif_citations import edit_schema, events, orchestrator
+from ndif_citations import edit_schema, events, manual_add as _manual_add_mod, orchestrator
 from ndif_citations.events import ProgressEvent, RunCancelled
 from ndif_citations.models import Bucket, DiscoveredPaper, PaperReason, PipelineRun
 from ndif_citations.router import ProcessingBucket
@@ -620,10 +620,9 @@ class JobRunner:
         # disk already exists (no read-your-write race for callers).
         terminal_state = "done"
         try:
-            if mode in ("incremental", "manual"):
+            if mode == "incremental":
                 # Stage-driven path with the human-in-the-loop gate (Task 3.1).
                 # Returns None if the run was cancelled at the gate (no finalize).
-                # For "manual" mode, seed_papers / pdf_bytes bypass discovery.
                 result = self._run_incremental_with_gate(
                     record, out, skip_papers=skip_papers, skip_github=skip_github,
                     seed_papers=record.seed_papers, pdf_bytes=record.pdf_bytes,
@@ -632,9 +631,16 @@ class JobRunner:
                     terminal_state = "cancelled"
                     logger.info("run %s cancelled at gate", record.run_id)
                 else:
-                    counts = self._extract_counts(result)
                     with self._lock:
-                        record.counts = counts
+                        record.counts = self._extract_counts(result)
+            elif mode == "manual":
+                # Manual-add: one explicitly-chosen paper → ungated, auto-process.
+                result = _manual_add_mod.run_manual_add_seed(
+                    out, record.seed_papers, pdf_bytes=record.pdf_bytes,
+                    cancel_check=record.cancel_event.is_set,
+                )
+                with self._lock:
+                    record.counts = self._extract_counts(result)
             else:
                 # Fresh mode: unchanged end-to-end driver, NO gate.
                 result = orchestrator.run_pipeline(
@@ -644,9 +650,8 @@ class JobRunner:
                     skip_github=skip_github,
                     cancel_check=record.cancel_event.is_set,
                 )
-                counts = self._extract_counts(result)
                 with self._lock:
-                    record.counts = counts
+                    record.counts = self._extract_counts(result)
         except RunCancelled:
             # Cancel is stop-and-discard: nothing written to disk for the in-flight
             # run (RunCancelled fires before finalize_stage). Do NOT set error.

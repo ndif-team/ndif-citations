@@ -219,3 +219,40 @@ def test_find_duplicate_arxiv_precedes_doi(monkeypatch, tmp_path):
     assert result is existing[1], (
         f"arXiv match should win over earlier DOI match; got {result!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Test 6 — manual-add JobRunner run reaches terminal state without gate
+# ---------------------------------------------------------------------------
+
+def test_manual_run_does_not_park_at_gate(fixture_state, monkeypatch):
+    """A manual-add run reaches a terminal state without ever entering awaiting_review."""
+    import time
+    from ndif_citations.jobs import JobRunner
+    from ndif_citations.models import PipelineRun
+    from ndif_citations import orchestrator
+    import ndif_citations.manual_add as ma
+    from tests.conftest import make_paper
+
+    # Stub the ungated seed run so the test is fast + deterministic.
+    def fake_seed(out, seed_papers, *, pdf_bytes=None, cancel_check=None):
+        return orchestrator.FinalizeResult(merged_papers=list(seed_papers), merged_repos=[],
+                                           run_stats=PipelineRun())
+    monkeypatch.setattr(ma, "run_manual_add_seed", fake_seed)
+
+    runner = JobRunner()
+    seed = make_paper(title="New Paper")
+
+    rid = runner.start_manual_add(fixture_state, seed)
+    seen_states = []
+    # Use a real-time deadline (time.time() still advances even when
+    # time.sleep is monkeypatched to a no-op by the no_sleep fixture).
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        rec = runner.status(rid)
+        seen_states.append(rec.state)
+        if rec.state in ("done", "error", "cancelled"):
+            break
+        time.sleep(0.01)
+    assert runner.status(rid).state == "done", f"states seen: {seen_states}"
+    assert "awaiting_review" not in seen_states, f"states seen: {seen_states}"
