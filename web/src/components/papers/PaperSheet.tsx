@@ -720,6 +720,18 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
         className="overflow-y-auto p-0 flex flex-col w-[420px] sm:max-w-[420px]"
         onEscapeKeyDown={(e) => { if (lightbox) e.preventDefault() }}
       >
+        {/* Radix requires an accessible title/description on every open dialog. The
+            loaded branch renders its own visible SheetTitle; during loading/error
+            (and the first paint before the query resolves) supply a hidden one so
+            the Sheet is never title-less (F-010). Guarded on !paper to avoid two
+            titles (and duplicate ids) once the paper is loaded. */}
+        {!paper && (
+          <>
+            <SheetTitle className="sr-only">Paper details</SheetTitle>
+            <SheetDescription className="sr-only">Loading paper details.</SheetDescription>
+          </>
+        )}
+
         {isLoading && (
           <div className="p-6 space-y-4">
             <Skeleton className="h-5 w-3/4" />
