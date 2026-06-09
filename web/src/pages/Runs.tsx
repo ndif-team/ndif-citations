@@ -322,7 +322,7 @@ function RunResults({ papers }: { papers: ResultPaper[] }) {
         </Button>
       </div>
       <div className="rounded-md border overflow-hidden">
-        <table className="w-full text-xs text-left">
+        <table className="w-full text-xs text-left" aria-label="Run result papers">
           <tbody>
             {papers.map((p) => (
               <tr key={p.id} className="border-t border-border/50 hover:bg-muted/30">
@@ -342,13 +342,13 @@ function RunResults({ papers }: { papers: ResultPaper[] }) {
                 <td className="px-2 py-1.5 max-w-0"><span className="block truncate" title={p.title}>{p.title}</span></td>
                 <td className="px-2 py-1.5 w-20 text-muted-foreground">{p.bucket}</td>
                 <td className="px-2 py-1.5 w-28 text-right whitespace-nowrap">
-                  <button onClick={() => verify([p.id])} disabled={busy} className="px-1.5 py-0.5 rounded hover:bg-muted" title="Verify">
+                  <button onClick={() => verify([p.id])} disabled={busy} className="px-1.5 py-0.5 rounded hover:bg-muted" title="Verify" aria-label={`Verify ${p.title}`}>
                     <Check className="h-3.5 w-3.5 inline text-green-600" />
                   </button>
-                  <button onClick={() => discard(p.id)} disabled={busy} className="px-1.5 py-0.5 rounded hover:bg-muted" title="Discard">
+                  <button onClick={() => discard(p.id)} disabled={busy} className="px-1.5 py-0.5 rounded hover:bg-muted" title="Discard" aria-label={`Discard ${p.title}`}>
                     <X className="h-3.5 w-3.5 inline text-red-600" />
                   </button>
-                  <a href="/papers" className="px-1.5 py-0.5 rounded hover:bg-muted inline-block" title="Open in Papers">
+                  <a href="/papers" className="px-1.5 py-0.5 rounded hover:bg-muted inline-block" title="Open in Papers" aria-label={`Open ${p.title} in Papers`}>
                     <ExternalLink className="h-3.5 w-3.5 inline text-muted-foreground" />
                   </a>
                 </td>
