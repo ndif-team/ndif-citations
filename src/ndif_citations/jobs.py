@@ -162,6 +162,9 @@ class RunRecord:
     # can preview true work — incl. the automatic gap-fills the curator does NOT
     # explicitly approve — before they submit (F-012).
     route_breakdown: dict = field(default_factory=dict)
+    # Papers added or (category/bucket-)changed by this run.  Computed by
+    # _build_result_papers from a pre-run snapshot vs FinalizeResult.merged_papers.
+    result_papers: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         """Serialize for persistence; events go through ``ProgressEvent.to_dict``.
@@ -187,6 +190,7 @@ class RunRecord:
             "paper_candidates": self.paper_candidates,
             "repo_candidates": self.repo_candidates,
             "route_breakdown": self.route_breakdown,
+            "result_papers": self.result_papers,
         }
 
 
@@ -621,7 +625,23 @@ class JobRunner:
         # sees a terminal state via ``status()`` is guaranteed the run file on
         # disk already exists (no read-your-write race for callers).
         terminal_state = "done"
+        result = None
         try:
+            # Snapshot the catalog BEFORE any stage mutates it, so we can diff
+            # against the post-run merged catalog to compute result_papers.
+            pre_snapshot: dict = {}
+            try:
+                from ndif_citations.output import load_existing_papers
+                for _ep in load_existing_papers(out):
+                    pre_snapshot[_ep.merge_key()] = (
+                        _ep.category.value if _ep.category else None,
+                        _ep.bucket.value,
+                    )
+            except Exception:
+                logger.exception(
+                    "result_papers: pre-snapshot failed for %s", record.run_id
+                )
+
             if mode == "incremental":
                 # Stage-driven path with the human-in-the-loop gate (Task 3.1).
                 # Returns None if the run was cancelled at the gate (no finalize).
@@ -654,6 +674,17 @@ class JobRunner:
                 )
                 with self._lock:
                     record.counts = self._extract_counts(result)
+
+            # Build result_papers once, after all branches, for any non-cancelled run.
+            if result is not None:
+                try:
+                    rows = self._build_result_papers(pre_snapshot, result)
+                    with self._lock:
+                        record.result_papers = rows
+                except Exception:
+                    logger.exception(
+                        "result_papers build failed for %s", record.run_id
+                    )
         except RunCancelled:
             # Cancel is stop-and-discard: nothing written to disk for the in-flight
             # run (RunCancelled fires before finalize_stage). Do NOT set error.
@@ -968,6 +999,36 @@ class JobRunner:
         """Pick a few meaningful fields from ``run_stats`` (a ``PipelineRun``)."""
         stats = result.run_stats.model_dump()
         return {k: stats[k] for k in _COUNT_FIELDS if k in stats}
+
+    @staticmethod
+    def _build_result_papers(pre: dict, result) -> list[dict]:
+        """Diff the pre-run snapshot against the merged catalog → new/changed papers.
+
+        ``pre`` maps merge_key -> (category_value, bucket_value). Returns a row per
+        paper that is new (key absent in pre) or whose (category, bucket) changed.
+        Silent gap-fills (no category/bucket change) are excluded.
+        """
+        rows: list[dict] = []
+        for p in getattr(result, "merged_papers", []) or []:
+            key = p.merge_key()
+            cat = p.category.value if p.category else None
+            bucket = p.bucket.value
+            prev = pre.get(key)
+            is_new = prev is None
+            changed = (prev is not None) and prev != (cat, bucket)
+            if not (is_new or changed):
+                continue
+            band = p.category_confidence_band.value if p.category_confidence_band else None
+            rows.append({
+                "id": key,
+                "title": p.title,
+                "category": cat,
+                "confidence_band": band,
+                "bucket": bucket,
+                "source": p.source.value if getattr(p, "source", None) else None,
+                "is_new": is_new,
+            })
+        return rows
 
     def _persist(
         self, record: RunRecord, out: Path, *, state_override: str | None = None
