@@ -42,6 +42,7 @@ from ndif_citations.models import DiscoveredPaper, DiscoveredRepo, PipelineRun
 from ndif_citations.output import (
     _write_repos_outputs,
     _write_xlsx,
+    backup_outputs,
     load_existing_papers,
     load_existing_repos,
     merge_papers,
@@ -420,6 +421,16 @@ def finalize_stage(
     enrich = r.enrich
 
     events.emit("stage_start", stage="finalize")
+
+    # Snapshot the catalog before we overwrite it in place, so a run's mutations
+    # are recoverable (F-013). No-op on a first run (nothing to back up yet).
+    backup_paths = backup_outputs(out)
+    if backup_paths:
+        events.emit(
+            "log", stage="finalize",
+            message=f"Backed up catalog ({len(backup_paths)} file(s)) before write",
+            style="dim",
+        )
 
     if completed is None:
         n_papers = len(r.paper_decisions)
