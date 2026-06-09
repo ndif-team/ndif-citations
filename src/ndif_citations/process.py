@@ -829,6 +829,15 @@ def process_papers(
 
     results: list[DiscoveredPaper] = []
 
+    # Papers that will actually be worked on (LLM/PDF) — i.e. NOT the SKIP/PROTECTED
+    # no-ops the loop merely copies through. This is the honest denominator for the
+    # live "Processing X/Y" headline; len(decisions) over-represented the work (F-012).
+    work_total = sum(
+        1 for d in decisions
+        if d.bucket not in (ProcessingBucket.SKIP, ProcessingBucket.PROTECTED)
+    )
+    work_done = 0
+
     for i, decision in enumerate(decisions):
         if cancel_check is not None and cancel_check():
             raise RunCancelled(completed=len(results), results=list(results))
@@ -837,12 +846,11 @@ def process_papers(
         bucket = decision.bucket
         needs = decision.processing_needed
 
-        events.emit("item_start", stage="process", idx=i, total=len(decisions), title=paper.title, bucket=bucket.value)
-
-        logger.info(f"[{i+1}/{len(decisions)}] {bucket.value}: {paper.title[:60]}...")
-
-        # SKIP and PROTECTED: just copy as-is, preserving all override fields
+        # SKIP and PROTECTED: no LLM/PDF work — copy as-is, preserving all override
+        # fields. Emit item_skip (not item_start) so the live log can distinguish
+        # already-complete papers from the ones that actually cost work (F-012).
         if bucket in (ProcessingBucket.SKIP, ProcessingBucket.PROTECTED):
+            events.emit("item_skip", stage="process", idx=i, total=len(decisions), title=paper.title, bucket=bucket.value)
             if bucket == ProcessingBucket.PROTECTED and decision.existing_paper:
                 existing = decision.existing_paper
                 # Carry over new identifiers (safe, non-destructive)
@@ -858,6 +866,16 @@ def process_papers(
                 paper.description = existing.description
             results.append(paper)
             continue
+
+        # Real work item (NEW / REPROCESS / FILL_GAPS). work_idx/work_total let the
+        # UI headline true progress ("Processing 3/4") rather than the routed total.
+        work_done += 1
+        events.emit(
+            "item_start", stage="process", idx=i, total=len(decisions),
+            title=paper.title, bucket=bucket.value,
+            work_idx=work_done, work_total=work_total,
+        )
+        logger.info(f"[{i+1}/{len(decisions)}] {bucket.value}: {paper.title[:60]}...")
 
         # FILL_GAPS on a manual_override paper: hydrate the discovered paper
         # with the curated existing state so the fields we don't refill
