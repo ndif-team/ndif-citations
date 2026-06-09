@@ -63,6 +63,28 @@ def run_manual_add_seed(out, seed_papers, *, pdf_bytes=None, cancel_check=None):
     return orchestrator.finalize_stage(out, r, d.run_stats, skip_papers=False, skip_github=True, fresh=False, completed=completed)
 
 
+def find_duplicate(out, *, title: str, arxiv_id: str | None = None, doi: str | None = None):
+    """Return an existing catalog paper matching the seed metadata, or None.
+
+    Match precedence: exact arXiv id, exact DOI, then fuzzy title (rapidfuzz >= 90).
+    """
+    from ndif_citations.output import load_existing_papers
+    from ndif_citations.utils import is_duplicate, normalize_arxiv_id
+
+    existing = load_existing_papers(out)
+    ax = normalize_arxiv_id(arxiv_id) if arxiv_id else None
+    for p in existing:
+        if ax and p.arxiv_id and p.arxiv_id == ax:
+            return p
+        if doi and p.doi and p.doi == doi:
+            return p
+    if title and title.strip():
+        for p in existing:
+            if p.title and is_duplicate(title, p.title, threshold=90.0):
+                return p
+    return None
+
+
 def add_paper_by_url(
     out: Path,
     url: str,

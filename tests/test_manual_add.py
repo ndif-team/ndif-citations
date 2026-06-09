@@ -175,3 +175,26 @@ def test_add_paper_cancel_check_forwarded(monkeypatch, fixture_state):
     assert received_cancel_check[0] is sentinel, (
         "cancel_check was not forwarded to process_papers"
     )
+
+
+# ---------------------------------------------------------------------------
+# Test 4 — find_duplicate() helper
+# ---------------------------------------------------------------------------
+
+def test_find_duplicate_matches_arxiv_doi_and_title(monkeypatch, tmp_path):
+    from ndif_citations import manual_add
+    from tests.conftest import make_paper
+
+    existing = [
+        make_paper(title="Democratizing Access to Foundation Model Internals",
+                   arxiv_id="2407.14561"),
+        make_paper(title="Some Other Paper", doi="10.1/abc"),
+    ]
+    monkeypatch.setattr("ndif_citations.output.load_existing_papers", lambda out: existing)
+
+    out = tmp_path
+    assert manual_add.find_duplicate(out, title="x", arxiv_id="2407.14561") is existing[0]
+    assert manual_add.find_duplicate(out, title="x", doi="10.1/abc") is existing[1]
+    assert manual_add.find_duplicate(
+        out, title="Democratizing Access to Foundation Model Internals.") is existing[0]
+    assert manual_add.find_duplicate(out, title="Totally Unrelated Title") is None
