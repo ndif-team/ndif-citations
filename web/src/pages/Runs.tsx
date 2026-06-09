@@ -11,6 +11,7 @@ import {
   SkipForward,
   Pencil,
   X,
+  ExternalLink,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -28,10 +29,10 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useRuns, useActiveRun } from '@/api/hooks'
 import { useRunEvents } from '@/hooks/useRunEvents'
-import { startRun, cancelRun, submitGate, fetchRun, getPreflight } from '@/api/client'
+import { startRun, cancelRun, submitGate, fetchRun, getPreflight, setPaperBucket } from '@/api/client'
 import { runStateBadge, runStateLabel } from '@/lib/tokens'
 import { cn } from '@/lib/utils'
-import type { RunRecord, PipelineStage, PaperCandidate, RepoCandidate, RunMode, ProgressEvent } from '@/api/types'
+import type { RunRecord, PipelineStage, PaperCandidate, RepoCandidate, RunMode, ProgressEvent, ResultPaper } from '@/api/types'
 
 // ─── Pipeline stage ordering ────────────────────────────────────────────────
 
@@ -254,6 +255,109 @@ function CooldownBadge({ seconds, label }: { seconds: number; label?: string | n
       <Clock className="h-3.5 w-3.5 flex-none" aria-hidden="true" />
       {source} cooldown: {seconds}s
     </span>
+  )
+}
+
+// ─── Run Results panel ────────────────────────────────────────────────────────
+
+function isSuggested(p: ResultPaper): boolean {
+  return (p.category === 'uses_nnsight' || p.category === 'uses_ndif')
+    && (p.confidence_band === 'high' || p.confidence_band === 'certain')
+}
+
+function RunResults({ papers }: { papers: ResultPaper[] }) {
+  const qc = useQueryClient()
+  const [checked, setChecked] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(papers.map((p) => [p.id, isSuggested(p)]))
+  )
+  const [busy, setBusy] = useState(false)
+
+  if (papers.length === 0) {
+    return <p className="text-xs text-muted-foreground">No new or changed papers from this run.</p>
+  }
+
+  const suggestedIds = papers.filter(isSuggested).map((p) => p.id)
+
+  function refresh() {
+    qc.invalidateQueries({ queryKey: ['papers'] })
+    qc.invalidateQueries({ queryKey: ['stats'] })
+    qc.invalidateQueries({ queryKey: ['runs'] })
+  }
+
+  async function verify(ids: string[]) {
+    if (ids.length === 0) return
+    setBusy(true)
+    const failed: string[] = []
+    for (const id of ids) {
+      try { await setPaperBucket(id, { bucket: 'verified' }) }
+      catch { failed.push(id) }
+    }
+    refresh()
+    setBusy(false)
+    if (failed.length) toast.error(`${failed.length} failed to verify`)
+    else toast.success(`Verified ${ids.length} paper${ids.length === 1 ? '' : 's'}`)
+  }
+
+  async function discard(id: string) {
+    setBusy(true)
+    try {
+      await setPaperBucket(id, { bucket: 'discarded' })
+      refresh()
+      toast.success('Discarded')
+    } catch (err) {
+      toast.error(`Failed: ${(err as Error).message}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium text-muted-foreground">
+          Results — {papers.length} new/changed · defaults to pending
+        </p>
+        <Button size="sm" disabled={busy || suggestedIds.length === 0} onClick={() => verify(suggestedIds)} className="gap-1.5">
+          <Check className="h-3.5 w-3.5" /> Verify {suggestedIds.length} suggested
+        </Button>
+      </div>
+      <div className="rounded-md border overflow-hidden">
+        <table className="w-full text-xs text-left">
+          <tbody>
+            {papers.map((p) => (
+              <tr key={p.id} className="border-t border-border/50 hover:bg-muted/30">
+                <td className="px-2 py-1.5 w-6">
+                  <input
+                    type="checkbox"
+                    checked={!!checked[p.id]}
+                    onChange={(e) => setChecked((c) => ({ ...c, [p.id]: e.target.checked }))}
+                    aria-label={`Select ${p.title}`}
+                  />
+                </td>
+                <td className="px-2 py-1.5 font-mono text-muted-foreground w-28">{p.category ?? '—'}</td>
+                <td className="px-2 py-1.5 w-20">
+                  {p.confidence_band ?? '—'}
+                  {isSuggested(p) && <span className="ml-1 text-[10px] text-blue-600 dark:text-blue-400">suggested</span>}
+                </td>
+                <td className="px-2 py-1.5 max-w-0"><span className="block truncate" title={p.title}>{p.title}</span></td>
+                <td className="px-2 py-1.5 w-20 text-muted-foreground">{p.bucket}</td>
+                <td className="px-2 py-1.5 w-28 text-right whitespace-nowrap">
+                  <button onClick={() => verify([p.id])} disabled={busy} className="px-1.5 py-0.5 rounded hover:bg-muted" title="Verify">
+                    <Check className="h-3.5 w-3.5 inline text-green-600" />
+                  </button>
+                  <button onClick={() => discard(p.id)} disabled={busy} className="px-1.5 py-0.5 rounded hover:bg-muted" title="Discard">
+                    <X className="h-3.5 w-3.5 inline text-red-600" />
+                  </button>
+                  <a href="/papers" className="px-1.5 py-0.5 rounded hover:bg-muted inline-block" title="Open in Papers">
+                    <ExternalLink className="h-3.5 w-3.5 inline text-muted-foreground" />
+                  </a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }
 
@@ -598,6 +702,7 @@ function LiveRunView({ runId, mode, onDone }: LiveRunViewProps) {
   const [cancelOpen, setCancelOpen] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [gateSubmitted, setGateSubmitted] = useState(false)
+  const [doneRecord, setDoneRecord] = useState<RunRecord | null>(null)
 
   const isRunning = !eventState.ended && eventState.derivedState !== 'awaiting_review'
   const isAwaiting = eventState.derivedState === 'awaiting_review' && !gateSubmitted
@@ -614,6 +719,11 @@ function LiveRunView({ runId, mode, onDone }: LiveRunViewProps) {
       qc.invalidateQueries({ queryKey: ['runs', 'active'] })
     }
   }, [isDone, qc])
+
+  // Fetch the persisted record once done to get result_papers
+  useEffect(() => {
+    if (isDone && !doneRecord) { fetchRun(runId).then(setDoneRecord).catch(() => {}) }
+  }, [isDone, doneRecord, runId])
 
   async function handleCancel() {
     setCancelling(true)
@@ -723,6 +833,14 @@ function LiveRunView({ runId, mode, onDone }: LiveRunViewProps) {
         <p className="text-xs font-medium text-muted-foreground mb-1.5">Event log</p>
         <EventLog events={eventState.events} />
       </div>
+
+      {/* Results panel — shown once the run finishes */}
+      {isDone && doneRecord?.result_papers && doneRecord.result_papers.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Papers from this run</p>
+          <RunResults papers={doneRecord.result_papers} />
+        </div>
+      )}
 
       {/* Cancel AlertDialog */}
       <AlertDialog open={cancelOpen} onOpenChange={setCancelOpen}>
@@ -1021,6 +1139,12 @@ function FinishedRunView({ run, onBack }: FinishedRunViewProps) {
         <div className="flex flex-col" style={{ minHeight: '160px', maxHeight: '300px' }}>
           <p className="text-xs font-medium text-muted-foreground mb-1.5">Event log (recorded)</p>
           <EventLog events={run.events} />
+        </div>
+      )}
+      {Array.isArray(run.result_papers) && run.result_papers.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Papers from this run</p>
+          <RunResults papers={run.result_papers} />
         </div>
       )}
     </div>
