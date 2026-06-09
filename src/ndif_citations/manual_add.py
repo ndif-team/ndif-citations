@@ -63,7 +63,7 @@ def run_manual_add_seed(out, seed_papers, *, pdf_bytes=None, cancel_check=None):
     return orchestrator.finalize_stage(out, r, d.run_stats, skip_papers=False, skip_github=True, fresh=False, completed=completed)
 
 
-def find_duplicate(out, *, title: str, arxiv_id: str | None = None, doi: str | None = None):
+def find_duplicate(out: Path, *, title: str, arxiv_id: str | None = None, doi: str | None = None) -> "DiscoveredPaper | None":
     """Return an existing catalog paper matching the seed metadata, or None.
 
     Match precedence: exact arXiv id, exact DOI, then fuzzy title (rapidfuzz >= 90).
