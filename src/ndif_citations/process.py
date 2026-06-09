@@ -382,6 +382,16 @@ def compute_context(
     windows = context.split("\n---\n")
     surviving_windows, prefilter_signal = _apply_prefilters(windows, paper)
 
+    # Drop byte-identical windows (a keyword repeated verbatim shouldn't show twice).
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for w in surviving_windows:
+        if w in seen:
+            continue
+        seen.add(w)
+        deduped.append(w)
+    surviving_windows = deduped
+
     return surviving_windows, context_source, prefilter_signal
 
 

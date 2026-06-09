@@ -48,3 +48,33 @@ def test_compute_context_pdf_path_used_when_provided(monkeypatch, tmp_path):
     windows, source, signal = process.compute_context(paper, tmp_path, pdf_path=pdf)
     assert source == "pdf"
     assert len(windows) >= 1
+
+
+def test_compute_context_dedups_identical_windows(monkeypatch, tmp_path):
+    """Byte-identical windows are deduplicated; distinct windows are preserved."""
+    # Two identical windows + one distinct window: only 2 unique windows should survive.
+    dup_window = "We perform experiments using nnsight to trace model activations."
+    distinct_window = "We also ran ndif experiments on the cluster infrastructure."
+    blob = f"{dup_window}\n---\n{dup_window}\n---\n{distinct_window}"
+
+    pdf = tmp_path / "paper.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n")
+    monkeypatch.setattr(
+        "ndif_citations.process.extract_ndif_context",
+        lambda path, window=500: blob,
+    )
+    monkeypatch.setattr(
+        "ndif_citations.pdf_cache.get_cached_pdf",
+        lambda p, out: pdf,
+    )
+
+    paper = make_paper(abstract=None)
+    windows, source, signal = process.compute_context(paper, tmp_path)
+
+    # No exact duplicates remain.
+    assert len(windows) == len(set(windows)), "Duplicate windows were not removed"
+    # The duplicate window survived exactly once.
+    assert sum(1 for w in windows if w == dup_window) == 1
+    # The distinct window also survived.
+    assert any("ndif" in w.lower() for w in windows), "Distinct ndif window was dropped"
+    assert source == "pdf"
