@@ -73,11 +73,14 @@ def find_duplicate(out, *, title: str, arxiv_id: str | None = None, doi: str | N
 
     existing = load_existing_papers(out)
     ax = normalize_arxiv_id(arxiv_id) if arxiv_id else None
-    for p in existing:
-        if ax and p.arxiv_id and p.arxiv_id == ax:
-            return p
-        if doi and p.doi and p.doi == doi:
-            return p
+    if ax:
+        for p in existing:
+            if p.arxiv_id and p.arxiv_id == ax:
+                return p
+    if doi:
+        for p in existing:
+            if p.doi and p.doi == doi:
+                return p
     if title and title.strip():
         for p in existing:
             if p.title and is_duplicate(title, p.title, threshold=90.0):

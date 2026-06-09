@@ -198,3 +198,24 @@ def test_find_duplicate_matches_arxiv_doi_and_title(monkeypatch, tmp_path):
     assert manual_add.find_duplicate(
         out, title="Democratizing Access to Foundation Model Internals.") is existing[0]
     assert manual_add.find_duplicate(out, title="Totally Unrelated Title") is None
+
+
+# ---------------------------------------------------------------------------
+# Test 5 — find_duplicate() arXiv match strictly precedes DOI match
+# ---------------------------------------------------------------------------
+
+def test_find_duplicate_arxiv_precedes_doi(monkeypatch, tmp_path):
+    """arXiv id match must win even when the DOI match appears earlier in the list."""
+    from ndif_citations import manual_add
+    from tests.conftest import make_paper
+
+    existing = [
+        make_paper(title="DOI Match", doi="10.1/zzz"),          # paper[0], DOI match, earlier
+        make_paper(title="Arxiv Match", arxiv_id="2407.14561"), # paper[1], arXiv match, later
+    ]
+    monkeypatch.setattr("ndif_citations.output.load_existing_papers", lambda out: existing)
+
+    result = manual_add.find_duplicate(tmp_path, title="x", arxiv_id="2407.14561", doi="10.1/zzz")
+    assert result is existing[1], (
+        f"arXiv match should win over earlier DOI match; got {result!r}"
+    )
