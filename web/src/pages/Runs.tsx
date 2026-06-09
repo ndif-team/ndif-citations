@@ -716,7 +716,7 @@ function TriggerPanel({ onStarted }: TriggerPanelProps) {
   // Preflight check — refetches when skip toggles change
   const { data: preflight, isLoading: preflightLoading, isError: preflightError } = useQuery({
     queryKey: ['preflight', skipPapers, skipGithub],
-    queryFn: () => getPreflight(skipPapers, skipGithub),
+    queryFn: () => getPreflight(skipPapers, skipGithub, true),  // validate=true: catch a present-but-dead GitHub token
     staleTime: 30_000,
   })
 
