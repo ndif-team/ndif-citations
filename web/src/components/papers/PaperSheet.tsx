@@ -1003,9 +1003,9 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                        <AlertDialogCancel onClick={() => setPostAttachOpen(false)}>
+                        <Button variant="ghost" size="sm" onClick={() => setPostAttachOpen(false)}>
                           Not now
-                        </AlertDialogCancel>
+                        </Button>
                         <Button
                           size="sm"
                           variant="outline"
