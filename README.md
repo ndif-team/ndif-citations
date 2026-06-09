@@ -66,7 +66,7 @@ The server (FastAPI) hosts a React SPA plus a JSON API at `/api` (`/docs` for Sw
 | **Papers** | Browse / filter the catalog, inline-edit 16 curated fields, promote / demote / discard, batch-reprocess, manage thumbnails, attach PDFs, on-demand summarize / categorize. Flags column marks curator-locked (🔒) and missing-metadata (⚠) rows |
 | **Runs** | Trigger a run, watch live progress over SSE (phase stepper, per-source rate-limit cooldowns, event log), cancel, browse history. **Incremental runs pause at a review gate before any LLM spend** — the gate previews the *true* work (your selected candidates + automatic gap-fills, with already-complete papers skipped) so you approve first |
 | **Repos** | Browse / edit / exclude discovered GitHub repos |
-| **Settings** | Edit pipeline knobs and known venues; manage **API keys** (validate with a live Test, clear); **publish** the catalog to the `ndif-web-beta` site (dry-run diff first, then apply) |
+| **Settings** | Edit pipeline knobs and known venues; manage **API keys** (validate with a live Test, clear); **publish** the catalog to the `ndif-website` site (dry-run diff first, then apply) |
 
 Everything the UI does maps to a CLI command, so the two workflows are interchangeable.
 
