@@ -390,7 +390,7 @@ export function Papers() {
     setSubmitting(true)
     try {
       await attachPdf(dupMatch.id, pendingFile)
-      toast.success('PDF attached to existing paper — open it to backfill / re-extract')
+      toast.success('PDF attached to existing paper — open it to backfill / extract')
       setDupMatch(null); setPendingFile(null); setAddOpen(false); resetAddDialog()
     } catch (err) {
       toast.error(`Attach failed: ${(err as Error).message}`)
