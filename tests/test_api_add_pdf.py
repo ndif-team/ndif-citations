@@ -89,3 +89,34 @@ def test_add_pdf_rejects_oversize(client, monkeypatch):
         files={"file": ("p.pdf", b"%PDF-1.4\ntoo big", "application/pdf")},
     )
     assert r.status_code == 422
+
+
+def test_add_pdf_check_returns_match(client, monkeypatch):
+    from ndif_citations.models import Bucket
+
+    class _M:
+        def merge_key(self): return "arxiv:2407.14561"
+        title = "Democratizing Access to Foundation Model Internals"
+        bucket = Bucket.PENDING
+    monkeypatch.setattr("ndif_citations.manual_add.find_duplicate", lambda out, **kw: _M())
+    monkeypatch.setattr("ndif_citations.pdf_cache.cached_pdf_path", lambda p, out: None)
+
+    r = client.post("/api/papers/add-pdf/check", data={"title": "Democratizing Access"})
+    assert r.status_code == 200, r.text
+    m = r.json()["match"]
+    assert m["id"] == "arxiv:2407.14561"
+    assert m["title"] == "Democratizing Access to Foundation Model Internals"
+    assert m["bucket"] == "pending"
+    assert m["has_pdf"] is False
+
+
+def test_add_pdf_check_returns_null_when_no_match(client, monkeypatch):
+    monkeypatch.setattr("ndif_citations.manual_add.find_duplicate", lambda out, **kw: None)
+    r = client.post("/api/papers/add-pdf/check", data={"title": "Unrelated"})
+    assert r.status_code == 200, r.text
+    assert r.json()["match"] is None
+
+
+def test_add_pdf_check_requires_some_field(client):
+    r = client.post("/api/papers/add-pdf/check", data={"title": "   "})
+    assert r.status_code == 422

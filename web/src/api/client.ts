@@ -1,4 +1,4 @@
-import type { StatsResponse, PaperRow, PaperDetail, RunSummary, RepoRow, RepoDetail, RepoType, RepoSortOption, Bucket, SortOption, RunRecord, RunMode, GatePayload, ReprocessResponse, SettingsResponse, SettingsPatch, VenuesResponse, PublishTargetResponse, PublishDryRunResponse, PublishResponse } from './types'
+import type { StatsResponse, PaperRow, PaperDetail, RunSummary, RepoRow, RepoDetail, RepoType, RepoSortOption, Bucket, SortOption, RunRecord, RunMode, GatePayload, ReprocessResponse, SettingsResponse, SettingsPatch, VenuesResponse, PublishTargetResponse, PublishDryRunResponse, PublishResponse, DuplicateMatch } from './types'
 
 const BASE = '/api'
 
@@ -173,8 +173,14 @@ export interface BucketPayload {
   detail?: string
 }
 
-export async function setPaperBucket(id: string, payload: BucketPayload): Promise<PaperDetail> {
-  return post<PaperDetail>(`/papers/${encodeURIComponent(id)}/bucket`, payload)
+export async function setPaperBucket(
+  id: string,
+  payload: BucketPayload,
+): Promise<PaperDetail & { deleted?: boolean; merge_key?: string }> {
+  return post<PaperDetail & { deleted?: boolean; merge_key?: string }>(
+    `/papers/${encodeURIComponent(id)}/bucket`,
+    payload,
+  )
 }
 
 export async function uploadPaperImage(id: string, file: File): Promise<PaperDetail> {
@@ -297,6 +303,19 @@ export async function addPaperPdf(args: { title: string; arxiv_id?: string; doi?
     throw Object.assign(new Error(`API error ${res.status}: ${text}`), { status: res.status })
   }
   return res.json() as Promise<{ run_id: string; state: string }>
+}
+
+export async function checkAddPdfDuplicate(args: { title: string; arxiv_id?: string; doi?: string }): Promise<{ match: DuplicateMatch | null }> {
+  const fd = new FormData()
+  fd.append('title', args.title)
+  if (args.arxiv_id) fd.append('arxiv_id', args.arxiv_id)
+  if (args.doi) fd.append('doi', args.doi)
+  const res = await fetch(`${BASE}/papers/add-pdf/check`, { method: 'POST', body: fd })
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw Object.assign(new Error(`API error ${res.status}: ${text}`), { status: res.status })
+  }
+  return res.json() as Promise<{ match: DuplicateMatch | null }>
 }
 
 // ---------------------------------------------------------------------------

@@ -383,6 +383,24 @@ def is_duplicate(title_a: str, title_b: str, threshold: float = 90.0) -> bool:
     return fuzz.ratio(title_a.lower().strip(), title_b.lower().strip()) >= threshold
 
 
+def fuzzy_title_match(title_a: str, title_b: str, threshold: float = 85.0) -> bool:
+    """Lenient title match for manual-add duplicate detection.
+
+    Uses ``token_set_ratio`` (shared-word overlap, order/length-insensitive) so a
+    subtitle/prefix like "Not Just a Piece of Cake" matches the full
+    "Not Just a Piece of Cake: Cross-Lingual ...". Deliberately looser than
+    ``is_duplicate``: the manual-add flow always shows an override dialog, so a
+    false match costs one click, whereas a missed dup pollutes the catalog.
+    Used ONLY by manual_add.find_duplicate; the pipeline's bulk dedup keeps the
+    strict is_duplicate (fuzz.ratio).
+    """
+    a = (title_a or "").lower().strip()
+    b = (title_b or "").lower().strip()
+    if not a or not b:
+        return False
+    return fuzz.token_set_ratio(a, b) >= threshold
+
+
 # Text-formatting LaTeX commands whose wrapped content should be kept (the markup
 # itself dropped). Math is deliberately left intact — we only de-clutter prose.
 _LATEX_WRAP_CMDS = (

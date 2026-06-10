@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ndif_citations.models import Bucket, Category, DiscoveredPaper, PaperReason, PipelineRun
+from ndif_citations.models import Bucket, Category, DiscoveredPaper, DiscoverySource, PaperReason, PipelineRun
 from ndif_citations.output import load_existing_papers, write_outputs
 from ndif_citations.utils import slugify
 from ndif_citations.venue import is_preprint_sentinel
@@ -244,6 +244,13 @@ def set_bucket(
             break
     if paper is None:
         raise KeyError(paper_id)
+
+    # Manually-added papers carry no discovery history worth preserving, so a
+    # discard removes them entirely rather than parking them in `discarded`.
+    if bucket == "discarded" and paper.source == DiscoverySource.MANUAL_ADD:
+        papers.remove(paper)
+        write_outputs(papers, out, PipelineRun())
+        return {"deleted": True, "merge_key": paper_id}
 
     paper.bucket = Bucket(bucket)
     paper.reason = PaperReason(reason) if reason is not None else None  # raises ValueError for bad value

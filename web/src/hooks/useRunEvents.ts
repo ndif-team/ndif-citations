@@ -142,8 +142,15 @@ function reducer(state: RunEventState, action: Action): RunEventState {
       }
       return { ...state, rateLimitWait: state.rateLimitWait - 1 }
     }
-    case 'ended':
-      return { ...state, ended: true }
+    case 'ended': {
+      // The pipeline emits no terminal `done` event — the SSE stream just ends.
+      // Treat stream-end as completion so the live view leaves running/awaiting.
+      const derivedState =
+        state.derivedState === 'error' || state.derivedState === 'cancelled'
+          ? state.derivedState
+          : 'done'
+      return { ...state, ended: true, derivedState }
+    }
     case 'reset':
       return initialState()
     default:

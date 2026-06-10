@@ -175,3 +175,97 @@ def test_add_paper_cancel_check_forwarded(monkeypatch, fixture_state):
     assert received_cancel_check[0] is sentinel, (
         "cancel_check was not forwarded to process_papers"
     )
+
+
+# ---------------------------------------------------------------------------
+# Test 4 — find_duplicate() helper
+# ---------------------------------------------------------------------------
+
+def test_find_duplicate_matches_arxiv_doi_and_title(monkeypatch, tmp_path):
+    from ndif_citations import manual_add
+    from tests.conftest import make_paper
+
+    existing = [
+        make_paper(title="Democratizing Access to Foundation Model Internals",
+                   arxiv_id="2407.14561"),
+        make_paper(title="Some Other Paper", doi="10.1/abc"),
+    ]
+    monkeypatch.setattr("ndif_citations.output.load_existing_papers", lambda out: existing)
+
+    out = tmp_path
+    assert manual_add.find_duplicate(out, title="x", arxiv_id="2407.14561") is existing[0]
+    assert manual_add.find_duplicate(out, title="x", doi="10.1/abc") is existing[1]
+    assert manual_add.find_duplicate(
+        out, title="Democratizing Access to Foundation Model Internals.") is existing[0]
+    assert manual_add.find_duplicate(out, title="Totally Unrelated Title") is None
+
+
+# ---------------------------------------------------------------------------
+# Test 5 — find_duplicate() arXiv match strictly precedes DOI match
+# ---------------------------------------------------------------------------
+
+def test_find_duplicate_arxiv_precedes_doi(monkeypatch, tmp_path):
+    """arXiv id match must win even when the DOI match appears earlier in the list."""
+    from ndif_citations import manual_add
+    from tests.conftest import make_paper
+
+    existing = [
+        make_paper(title="DOI Match", doi="10.1/zzz"),          # paper[0], DOI match, earlier
+        make_paper(title="Arxiv Match", arxiv_id="2407.14561"), # paper[1], arXiv match, later
+    ]
+    monkeypatch.setattr("ndif_citations.output.load_existing_papers", lambda out: existing)
+
+    result = manual_add.find_duplicate(tmp_path, title="x", arxiv_id="2407.14561", doi="10.1/zzz")
+    assert result is existing[1], (
+        f"arXiv match should win over earlier DOI match; got {result!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test 6 — manual-add JobRunner run reaches terminal state without gate
+# ---------------------------------------------------------------------------
+
+def test_manual_run_does_not_park_at_gate(fixture_state, monkeypatch):
+    """A manual-add run reaches a terminal state without ever entering awaiting_review."""
+    import time
+    from ndif_citations.jobs import JobRunner
+    from ndif_citations.models import PipelineRun
+    from ndif_citations import orchestrator
+    import ndif_citations.manual_add as ma
+    from tests.conftest import make_paper
+
+    # Stub the ungated seed run so the test is fast + deterministic.
+    def fake_seed(out, seed_papers, *, pdf_bytes=None, cancel_check=None):
+        return orchestrator.FinalizeResult(merged_papers=list(seed_papers), merged_repos=[],
+                                           run_stats=PipelineRun())
+    monkeypatch.setattr(ma, "run_manual_add_seed", fake_seed)
+
+    runner = JobRunner()
+    seed = make_paper(title="New Paper")
+
+    rid = runner.start_manual_add(fixture_state, seed)
+    seen_states = []
+    # Use a real-time deadline (time.time() still advances even when
+    # time.sleep is monkeypatched to a no-op by the no_sleep fixture).
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        rec = runner.status(rid)
+        seen_states.append(rec.state)
+        if rec.state in ("done", "error", "cancelled"):
+            break
+        time.sleep(0.01)
+    assert runner.status(rid).state == "done", f"states seen: {seen_states}"
+    assert "awaiting_review" not in seen_states, f"states seen: {seen_states}"
+
+
+def test_find_duplicate_matches_title_subtitle(monkeypatch, tmp_path):
+    """A subtitle/prefix of an existing title should be detected as a duplicate."""
+    from ndif_citations import manual_add
+    from tests.conftest import make_paper
+
+    existing = [make_paper(
+        title="Not Just a Piece of Cake: Cross-Lingual Fine-Tuning for Idiom Identification",
+        arxiv_id=None, doi=None)]
+    monkeypatch.setattr("ndif_citations.output.load_existing_papers", lambda out: existing)
+
+    assert manual_add.find_duplicate(tmp_path, title="Not Just a Piece of Cake") is existing[0]

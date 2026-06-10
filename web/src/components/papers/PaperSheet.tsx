@@ -1,4 +1,4 @@
-import { ExternalLink, Copy, Check, AlertCircle, Pencil, X, Upload, RotateCcw, ChevronUp, ChevronDown, Trash2, Lock, ChevronLeft, ChevronRight, FileText, RefreshCw } from 'lucide-react'
+import { ExternalLink, Copy, Check, AlertCircle, Pencil, X, Upload, RotateCcw, ChevronUp, ChevronDown, Trash2, Lock, ChevronLeft, ChevronRight, FileText, RefreshCw, Loader2 } from 'lucide-react'
 import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   Sheet,
@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { usePaper, useActiveRun } from '@/api/hooks'
+import { useRunEvents } from '@/hooks/useRunEvents'
 import { useQueryClient } from '@tanstack/react-query'
 import { bucketBadge, confidenceBadge, categoryBadge, categoryLabel } from '@/lib/tokens'
 import { EDITABLE_FIELDS, SELECT_NONE } from '@/lib/editable'
@@ -256,6 +257,7 @@ interface BucketActionsProps {
   paperId: string
   disabled: boolean
   onMutate: (updater: (prev: PaperDetail) => PaperDetail) => void
+  onClose: () => void
 }
 
 // Local reason options for the demote select — uses SELECT_NONE instead of ""
@@ -273,11 +275,13 @@ const BUCKET_REASON_OPTIONS = [
   { value: 'manual_demote',            label: 'Manual demote' },
 ]
 
-function BucketActions({ paper, paperId, disabled, onMutate }: BucketActionsProps) {
+function BucketActions({ paper, paperId, disabled, onMutate, onClose }: BucketActionsProps) {
+  const qc = useQueryClient()
   const [demoteReason, setDemoteReason] = useState(SELECT_NONE)
   const [discardOpen, setDiscardOpen] = useState(false)
   const [demoteOpen, setDemoteOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const isManualAdd = paper.source === 'manual_add'
 
   async function handleBucket(
     bucket: Bucket,
@@ -293,6 +297,15 @@ function BucketActions({ paper, paperId, disabled, onMutate }: BucketActionsProp
         reason: reason || undefined,
         detail,
       })
+      // A manual-add discard deletes the paper outright (no full record returned,
+      // nothing to undo): refresh the list/stats and close the now-stale sheet.
+      if (updated.deleted) {
+        qc.invalidateQueries({ queryKey: ['papers'] })
+        qc.invalidateQueries({ queryKey: ['stats'] })
+        toast.success('Paper deleted')
+        onClose()
+        return
+      }
       onMutate(() => updated)
       toast.success(`Moved to ${bucket}`, {
         action: {
@@ -416,9 +429,13 @@ function BucketActions({ paper, paperId, disabled, onMutate }: BucketActionsProp
             <AlertDialog open={discardOpen} onOpenChange={setDiscardOpen}>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Discard this paper?</AlertDialogTitle>
+                  <AlertDialogTitle>
+                    {isManualAdd ? 'Delete this manually-added paper?' : 'Discard this paper?'}
+                  </AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will move the paper to the discarded bucket. You can undo via the toast.
+                    {isManualAdd
+                      ? "This paper was added manually. Discarding it permanently deletes it from the catalog (it won't be kept as a discarded record and can't be recovered)."
+                      : 'This will move the paper to the discarded bucket. You can undo via the toast.'}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -429,7 +446,7 @@ function BucketActions({ paper, paperId, disabled, onMutate }: BucketActionsProp
                       await handleBucket('discarded', 'manual_discard')
                     }}
                   >
-                    Discard
+                    {isManualAdd ? 'Delete permanently' : 'Discard'}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -448,10 +465,12 @@ function BucketActions({ paper, paperId, disabled, onMutate }: BucketActionsProp
 interface ImageActionsProps {
   paperId: string
   disabled: boolean
+  procRunning: boolean
   onMutate: (updater: (prev: PaperDetail) => PaperDetail) => void
+  onRunStarted: (runId: string, label: string) => void
 }
 
-function ImageActions({ paperId, disabled, onMutate }: ImageActionsProps) {
+function ImageActions({ paperId, disabled, procRunning, onMutate, onRunStarted }: ImageActionsProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
 
@@ -476,15 +495,15 @@ function ImageActions({ paperId, disabled, onMutate }: ImageActionsProps) {
 
   const handleReextract = useCallback(async () => {
     try {
-      await reextractThumbnail(paperId)
-      toast.info('Re-extracting thumbnail… check the run indicator for progress')
+      const { run_id } = await reextractThumbnail(paperId)
+      onRunStarted(run_id, 'Thumbnail re-extract')
     } catch (err) {
       const msg = (err as { status?: number }).status === 409
         ? 'A run is in progress — try again when it finishes'
         : (err as Error).message
       toast.error(msg)
     }
-  }, [paperId])
+  }, [paperId, onRunStarted])
 
   return (
     <div>
@@ -513,12 +532,12 @@ function ImageActions({ paperId, disabled, onMutate }: ImageActionsProps) {
         <Button
           size="sm"
           variant="outline"
-          disabled={disabled}
+          disabled={disabled || procRunning}
           onClick={handleReextract}
           className="h-7 text-xs gap-1"
         >
           <RotateCcw className="h-3 w-3" />
-          Re-extract
+          Extract
         </Button>
       </div>
     </div>
@@ -559,14 +578,51 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
   const pdfInputRef = useRef<HTMLInputElement>(null)
   const lightboxRef = useRef<HTMLDivElement>(null)
 
+  // Async background job subscription (thumbnail re-extract + reprocess)
+  const [procRunId, setProcRunId] = useState<string | null>(null)
+  const [procLabel, setProcLabel] = useState('')
+  const procEvents = useRunEvents(procRunId)
+
+  const handleRunStarted = useCallback((runId: string, label: string) => {
+    setProcLabel(label)
+    setProcRunId(runId)
+  }, [])
+
+  useEffect(() => {
+    if (procRunId && procEvents.ended) {
+      qc.invalidateQueries({ queryKey: ['paper', paperId] })
+      qc.invalidateQueries({ queryKey: ['papers'] })
+      qc.invalidateQueries({ queryKey: ['stats'] })
+      toast.success(`${procLabel} done`)
+      setProcRunId(null)
+    }
+  }, [procRunId, procEvents.ended, qc, paperId, procLabel])
+
+  const [backfilling, setBackfilling] = useState(false)
+  async function handleBackfillEvidence() {
+    if (!paperId) return
+    setBackfilling(true)
+    try {
+      await backfillEvidence(paperId)
+      qc.invalidateQueries({ queryKey: ['paper', paperId] })
+      qc.invalidateQueries({ queryKey: ['papers'] })
+      qc.invalidateQueries({ queryKey: ['stats'] })
+      toast.success('Evidence backfilled')
+    } catch (err) {
+      toast.error((err as Error).message || 'Backfill failed')
+    } finally {
+      setBackfilling(false)
+    }
+  }
+
   const isOpen = !!paperId
 
   async function runReprocess(field: 'summary' | 'classify') {
     if (!paperId) return
     setProcessingBusy(true)
     try {
-      await reprocessPaper(paperId, [field])
-      toast.success(field === 'summary' ? 'Summarize started' : 'Categorize started')
+      const { run_id } = await reprocessPaper(paperId, [field])
+      handleRunStarted(run_id, field === 'summary' ? 'Summarize' : 'Categorize')
     } catch (e) {
       const status = (e as { status?: number }).status
       toast.error(status === 409 ? 'A run is already active — wait for it to finish.' : (e as Error).message || 'Reprocess failed')
@@ -1003,26 +1059,6 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                        <AlertDialogCancel onClick={() => setPostAttachOpen(false)}>
-                          Not now
-                        </AlertDialogCancel>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={hasActiveRun}
-                          title={hasActiveRun ? 'A run is already active' : undefined}
-                          onClick={async () => {
-                            setPostAttachOpen(false)
-                            try {
-                              await reextractThumbnail(paperId ?? '')
-                              toast.success('Thumbnail re-extraction started')
-                            } catch (err) {
-                              toast.error((err as Error).message || 'Re-extract failed')
-                            }
-                          }}
-                        >
-                          Re-extract thumbnail
-                        </Button>
                         <Button
                           size="sm"
                           disabled={hasActiveRun}
@@ -1039,6 +1075,26 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
                           }}
                         >
                           Backfill evidence
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={hasActiveRun}
+                          title={hasActiveRun ? 'A run is already active' : undefined}
+                          onClick={async () => {
+                            setPostAttachOpen(false)
+                            try {
+                              const { run_id } = await reextractThumbnail(paperId ?? '')
+                              handleRunStarted(run_id, 'Thumbnail re-extract')
+                            } catch (err) {
+                              toast.error((err as Error).message || 'Re-extract failed')
+                            }
+                          }}
+                        >
+                          Extract thumbnail
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => setPostAttachOpen(false)}>
+                          Not now
                         </Button>
                       </AlertDialogFooter>
                     </AlertDialogContent>
@@ -1061,6 +1117,15 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
                           no evidence
                         </span>
                       )}
+                      <button
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleBackfillEvidence() }}
+                        disabled={backfilling || !paperId}
+                        className="ml-auto inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded border border-input hover:bg-accent disabled:opacity-50"
+                        title="Recompute NDIF evidence from the cached PDF (no LLM)"
+                      >
+                        {backfilling ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : null}
+                        Backfill evidence
+                      </button>
                     </summary>
                     <div className="mt-2 space-y-2">
                       {(paper.ndif_context_windows ?? []).length > 0 ? (
@@ -1084,31 +1149,39 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
                     paperId={paperId ?? ''}
                     disabled={hasActiveRun}
                     onMutate={handleMutate}
+                    onClose={onClose}
                   />
 
                   {/* Image management */}
                   <ImageActions
                     paperId={paperId ?? ''}
                     disabled={hasActiveRun}
+                    procRunning={!!procRunId && !procEvents.ended}
                     onMutate={handleMutate}
+                    onRunStarted={handleRunStarted}
                   />
 
                   {/* Processing */}
                   <div>
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Processing</p>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 items-center">
                       <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
-                              disabled={hasActiveRun || processingBusy}
+                              disabled={hasActiveRun || processingBusy || !!procRunId}
                               title={hasActiveRun ? 'A run is already active' : undefined}
                               onClick={() => setConfirmField('summary')}>
                         <RefreshCw className="h-3 w-3" /> Summarize
                       </Button>
                       <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
-                              disabled={hasActiveRun || processingBusy}
+                              disabled={hasActiveRun || processingBusy || !!procRunId}
                               title={hasActiveRun ? 'A run is already active' : undefined}
                               onClick={() => setConfirmField('classify')}>
                         <RefreshCw className="h-3 w-3" /> Categorize
                       </Button>
+                      {procRunId && !procEvents.ended && (
+                        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> {procLabel}…
+                        </span>
+                      )}
                     </div>
                   </div>
 

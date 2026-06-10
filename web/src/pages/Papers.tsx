@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from 'react'
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import {
   useReactTable,
   getCoreRowModel,
@@ -31,14 +31,14 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { usePapers, useActiveRun } from '@/api/hooks'
 import { useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useDebounce } from '@/hooks/useDebounce'
 import { bucketBadge, confidenceBadge, categoryBadge, categoryLabel } from '@/lib/tokens'
 import { formatAuthors, truncate } from '@/lib/utils'
 import { PaperSheet } from '@/components/papers/PaperSheet'
-import { batchReprocess, setPaperBucket, addPaper, addPaperPdf } from '@/api/client'
+import { batchReprocess, setPaperBucket, addPaper, addPaperPdf, checkAddPdfDuplicate, attachPdf } from '@/api/client'
 import { toast } from 'sonner'
-import type { PaperRow, Bucket, SortOption, ConfidenceBand, Category } from '@/api/types'
+import type { PaperRow, Bucket, SortOption, ConfidenceBand, Category, DuplicateMatch } from '@/api/types'
 
 const BUCKETS: { label: string; value: '' | Bucket }[] = [
   { label: 'All', value: '' },
@@ -289,12 +289,27 @@ function SelectionToolbar({
 export function Papers() {
   const qc = useQueryClient()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [bucket, setBucket] = useState<'' | Bucket>('')
   const [searchInput, setSearchInput] = useState('')
   const [sort, setSort] = useState<SortOption>('year_desc')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set())
   const [needsAttention, setNeedsAttention] = useState(false)
+
+  // Deep-link: open a paper's detail sheet from ?paper=<id> (e.g. the RunResults "Open" action),
+  // then strip the param so a later refresh/close doesn't reopen it.
+  useEffect(() => {
+    const pid = searchParams.get('paper')
+    if (pid) {
+      setSelectedId(pid)
+      setSearchParams((prev) => {
+        prev.delete('paper')
+        return prev
+      }, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Add paper dialog state
   const [addOpen, setAddOpen] = useState(false)
@@ -304,6 +319,8 @@ export function Papers() {
   const [pdfDoi, setPdfDoi] = useState('')
   const [pdfFile, setPdfFile] = useState<File | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [dupMatch, setDupMatch] = useState<DuplicateMatch | null>(null)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { data: activeRunData } = useActiveRun()
@@ -323,7 +340,7 @@ export function Papers() {
     setSubmitting(true)
     try {
       await addPaper(linkUrl.trim())
-      toast.success('Added — review the candidate at the gate')
+      toast.success('Run started — auto-processing the paper')
       setAddOpen(false)
       resetAddDialog()
       navigate('/runs')
@@ -340,19 +357,63 @@ export function Papers() {
     if (!pdfFile) { toast.error('Select a PDF file'); return }
     setSubmitting(true)
     try {
+      const { match } = await checkAddPdfDuplicate({
+        title: pdfTitle.trim(),
+        arxiv_id: pdfArxiv.trim() || undefined,
+        doi: pdfDoi.trim() || undefined,
+      })
+      if (match) {
+        setPendingFile(pdfFile)
+        setDupMatch(match)
+        return
+      }
       await addPaperPdf({
         title: pdfTitle.trim(),
         arxiv_id: pdfArxiv.trim() || undefined,
         doi: pdfDoi.trim() || undefined,
         file: pdfFile,
       })
-      toast.success('Added — review the candidate at the gate')
+      toast.success('Run started — auto-processing the paper')
       setAddOpen(false)
       resetAddDialog()
       navigate('/runs')
     } catch (e) {
       const status = (e as { status?: number }).status
       toast.error(status === 409 ? 'A run is already active — wait for it to finish.' : ((e as Error).message || 'Add failed'))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleAttachToExisting() {
+    if (!dupMatch || !pendingFile) return
+    setSubmitting(true)
+    try {
+      await attachPdf(dupMatch.id, pendingFile)
+      toast.success('PDF attached to existing paper — open it to backfill / re-extract')
+      setDupMatch(null); setPendingFile(null); setAddOpen(false); resetAddDialog()
+    } catch (err) {
+      toast.error(`Attach failed: ${(err as Error).message}`)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleAddAsNew() {
+    if (!pendingFile) return
+    setSubmitting(true)
+    try {
+      await addPaperPdf({
+        title: pdfTitle.trim(),
+        arxiv_id: pdfArxiv.trim() || undefined,
+        doi: pdfDoi.trim() || undefined,
+        file: pendingFile,
+      })
+      toast.success('Run started — auto-processing the new paper')
+      setDupMatch(null); setPendingFile(null); setAddOpen(false); resetAddDialog()
+      navigate('/runs')
+    } catch (err) {
+      toast.error(`Failed: ${(err as Error).message}`)
     } finally {
       setSubmitting(false)
     }
@@ -717,7 +778,7 @@ export function Papers() {
           <DialogHeader>
             <DialogTitle>Add paper</DialogTitle>
             <DialogDescription>
-              Add a paper by URL or upload a PDF. This starts a gated manual-add run.
+              Add a paper by URL or upload a PDF. It auto-processes, then appears in the run's Results to verify or discard.
             </DialogDescription>
           </DialogHeader>
           <div className="px-6 pb-6">
@@ -815,6 +876,23 @@ export function Papers() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Duplicate-match confirmation dialog */}
+      <AlertDialog open={dupMatch !== null} onOpenChange={(v) => { if (!v) { setDupMatch(null); setPendingFile(null) } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Looks like this paper already exists</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{dupMatch?.title}" is already in the catalog ({dupMatch?.bucket}). Attach this PDF to that entry instead of creating a duplicate?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setDupMatch(null); setPendingFile(null) }}>Cancel</AlertDialogCancel>
+            <Button variant="outline" onClick={handleAddAsNew} disabled={submitting}>Add as new anyway</Button>
+            <Button onClick={handleAttachToExisting} disabled={submitting}>Attach to existing</Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Error */}
       {error && (
