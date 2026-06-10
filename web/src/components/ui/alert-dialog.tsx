@@ -49,7 +49,7 @@ const AlertDialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDiv
 AlertDialogHeader.displayName = 'AlertDialogHeader'
 
 const AlertDialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('flex flex-row justify-end gap-2 mt-4', className)} {...props} />
+  <div className={cn('flex flex-row flex-wrap justify-end gap-2 mt-4', className)} {...props} />
 )
 AlertDialogFooter.displayName = 'AlertDialogFooter'
 
