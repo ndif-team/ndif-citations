@@ -459,7 +459,7 @@ function BucketActions({ paper, paperId, disabled, onMutate, onClose }: BucketAc
 }
 
 // ---------------------------------------------------------------------------
-// ImageActions: Replace image (file upload) + Re-extract
+// ImageActions: Replace image (file upload) + Extract
 // ---------------------------------------------------------------------------
 
 interface ImageActionsProps {
@@ -496,7 +496,7 @@ function ImageActions({ paperId, disabled, procRunning, onMutate, onRunStarted }
   const handleReextract = useCallback(async () => {
     try {
       const { run_id } = await reextractThumbnail(paperId)
-      onRunStarted(run_id, 'Thumbnail re-extract')
+      onRunStarted(run_id, 'Thumbnail extract')
     } catch (err) {
       const msg = (err as { status?: number }).status === 409
         ? 'A run is in progress — try again when it finishes'
@@ -578,7 +578,7 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
   const pdfInputRef = useRef<HTMLInputElement>(null)
   const lightboxRef = useRef<HTMLDivElement>(null)
 
-  // Async background job subscription (thumbnail re-extract + reprocess)
+  // Async background job subscription (thumbnail extract + reprocess)
   const [procRunId, setProcRunId] = useState<string | null>(null)
   const [procLabel, setProcLabel] = useState('')
   const procEvents = useRunEvents(procRunId)
@@ -1085,9 +1085,9 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
                             setPostAttachOpen(false)
                             try {
                               const { run_id } = await reextractThumbnail(paperId ?? '')
-                              handleRunStarted(run_id, 'Thumbnail re-extract')
+                              handleRunStarted(run_id, 'Thumbnail extract')
                             } catch (err) {
-                              toast.error((err as Error).message || 'Re-extract failed')
+                              toast.error((err as Error).message || 'Extract failed')
                             }
                           }}
                         >
