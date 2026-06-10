@@ -156,6 +156,11 @@ def discover_stage(
         events.emit(
             "dedup",
             stage="discover",
+            # Dedup counts the frontend log reads (total/unique/dropped):
+            total=len(all_papers),
+            unique=before_year,
+            dropped=len(all_papers) - before_year,
+            # Year-filter detail (kept for the CLI sink / report):
             before_year=before_year,
             after_year=len(unique_papers),
             dropped_old=dropped_old,
