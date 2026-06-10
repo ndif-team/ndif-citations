@@ -506,7 +506,6 @@ def build_xlsx(
     import io
     import openpyxl
     from openpyxl.styles import Font
-    from openpyxl.utils import get_column_letter
 
     wb = openpyxl.Workbook()
     # Remove default sheet

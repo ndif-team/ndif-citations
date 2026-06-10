@@ -280,8 +280,17 @@ export interface PublishDryRunResponse {
   images: { new: string[]; changed: string[] }
 }
 
+export interface PublishSummary {
+  files_written: string[]
+  images_copied: number
+  images_overwritten: number
+  images_unchanged: number
+  images_missing: number
+  backups: string[]
+}
+
 export interface PublishResponse {
-  summary: string
+  summary: PublishSummary
   diff: unknown
   build_hint: string
 }

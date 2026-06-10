@@ -276,7 +276,12 @@ export function Publish() {
               <div className="rounded-md border bg-muted/30 p-3 text-xs space-y-2">
                 <p className="font-medium text-foreground">Publish complete</p>
                 {publishResult.summary && (
-                  <p className="text-muted-foreground">{publishResult.summary}</p>
+                  <p className="text-muted-foreground">
+                    {publishResult.summary.files_written.length} file(s) written,{' '}
+                    {publishResult.summary.images_copied} image(s) copied,{' '}
+                    {publishResult.summary.images_overwritten} overwritten,{' '}
+                    {publishResult.summary.images_unchanged} unchanged
+                  </p>
                 )}
                 {publishResult.build_hint && (
                   <div className="rounded bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-2">
