@@ -22,6 +22,7 @@ Two front-ends drive the **same** pipeline: the **CLI** runs it straight through
 - **v2.2.0 — run results + PDF curation.** Per-run **Results panel** (what each run added/changed, deep-link straight to a paper), PDF-upload de-dup + attach, a standalone **Backfill evidence** action, ungated manual-add, and evidence de-duplication.
 - **v2.3.0 — Publish tab + export + sort.** **Publish** promoted to its own nav tab with what-to-publish (papers / repos) scope, one-click **Export .xlsx** (Papers / Pending / Discarded / GitHub), and a **Date added ↓/↑** sort on the Papers page.
 - **v2.3.1 — reliability.** **Cancel** now stops a run mid-Discover/Enrich (not just at the gate), live-run spinner/scroll fixes, and API keys written to `.env` unquoted.
+- **v2.4.0 — run history + log polish.** Run history is an **inline accordion** (click a run to expand its details in place; click another to switch), each row can **delete its log** behind a confirm (`DELETE /api/runs/{id}`). Live-run **Cancelled** state shows correctly (was "Done") with the stopped stage amber; the event log no longer floods with cooldown lines (single chip stays, in a fixed-height slot so it doesn't shift the layout); the **Dedup** log line shows real counts; long reprocess **counts** wrap instead of overflowing.
 
 See [Releases](https://github.com/ndif-team/ndif-citations/releases) for notes. A non-coding, end-to-end **[curator walkthrough](onboarding/README.md)** tracks the current (v2.3.1) UI.
 
