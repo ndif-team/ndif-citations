@@ -51,6 +51,8 @@ const SORT_OPTIONS: { label: string; value: SortOption }[] = [
   { label: 'Year ↓', value: 'year_desc' },
   { label: 'Year ↑', value: 'year_asc' },
   { label: 'Title', value: 'title' },
+  { label: 'Date added ↓', value: 'date_added_desc' },
+  { label: 'Date added ↑', value: 'date_added_asc' },
 ]
 
 const REPROCESS_FIELDS = [

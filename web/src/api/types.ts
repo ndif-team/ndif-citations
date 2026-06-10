@@ -3,7 +3,7 @@
 export type Bucket = 'verified' | 'pending' | 'discarded'
 export type Category = 'uses_ndif' | 'uses_nnsight' | 'referencing' | 'unclassified'
 export type ConfidenceBand = 'CERTAIN' | 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE'
-export type SortOption = 'year_desc' | 'year_asc' | 'title'
+export type SortOption = 'year_desc' | 'year_asc' | 'title' | 'date_added_desc' | 'date_added_asc'
 
 export interface StatsResponse {
   papers: {
