@@ -247,7 +247,7 @@ When you open a paper you'll see a few labels. Here's how to read them.
 | **referencing** | Mentions NDIF/NNsight without actively using it. |
 | **unclassified** | The classifier couldn't find clear evidence either way. |
 
-**Confidence** — *how sure the classifier was.* It shows in the **Conf.** column on the Papers table (and on each run-results row), lowercased:
+**Confidence** — *how sure the classifier was.* It shows in the **Conf.** column on the Papers table (and on each run-results row), and as a badge on the paper detail sheet, lowercased:
 
 | Conf. | What it means for you |
 |---|---|
@@ -257,7 +257,7 @@ When you open a paper you'll see a few labels. Here's how to read them.
 | **low** | Guessed from keywords because the LLM was unavailable. Re-run with the LLM and it usually upgrades. Lands in Pending. |
 | **none** | Unclassified — no confidence shown. |
 
-The short version: **anything that lands in Pending is asking for your eyes.** *medium* and *low* are the ones most worth verifying by hand. (Confidence is a quick at-a-glance signal in the table — it isn't repeated inside the detail sheet, where the **bucket** and **category** badges are what you act on.)
+The short version: **anything that lands in Pending is asking for your eyes.** *medium* and *low* are the ones most worth verifying by hand.
 
 ---
 
@@ -284,7 +284,7 @@ Click a paper to open its detail sheet.
 
 ![Paper detail](images/22-paper-detail.png)
 
-The top of the sheet shows the **bucket** badge (e.g. `verified`) and the **category** badge (e.g. `Uses NNsight`), the **thumbnail** (click to zoom), **affiliations**, and the **abstract**. Here you can:
+The top of the sheet shows the **bucket** badge (e.g. `verified`), the **category** badge (e.g. `Uses NNsight`), and the **confidence** badge (e.g. `high`), plus the **thumbnail** (click to zoom), **affiliations**, and the **abstract**. Here you can:
 
 - **Edit any field inline** — click a value (e.g. a missing **Venue**) and type. Editing a field **locks** the paper (🔒) so a future run won't clobber your work.
 - See links to the **Paper / PDF / Cached PDF** and the **evidence** snippets the classifier used.
@@ -417,7 +417,7 @@ Also on the **Publish** tab: **Export .xlsx** downloads the whole catalog as a m
 |---|---|
 | **Bucket** | Where a paper sits in review: **Verified / Pending / Discarded**. Only Verified publishes. |
 | **Category** | The paper's relationship to NDIF: **uses NDIF / uses NNsight / referencing / unclassified**. |
-| **Confidence** | How sure the classifier was, shown in the Papers table **Conf.** column: **certain / high / medium / low / none**. *medium* and *low* are the ones worth verifying by hand. |
+| **Confidence** | How sure the classifier was, shown in the Papers table **Conf.** column and as a badge on the detail sheet: **certain / high / medium / low / none**. *medium* and *low* are the ones worth verifying by hand. |
 | **Curator-locked (🔒)** | A paper you've hand-edited/promoted/discarded. The pipeline never overwrites your fields again (it only fills blanks). |
 | **The review gate** | The pause in an Incremental run where you choose Process / Skip / Discard *before* any LLM spend. |
 | **Backfill evidence** | A free, no-LLM action that re-reads a paper's cached PDF and refreshes the evidence snippets. |
