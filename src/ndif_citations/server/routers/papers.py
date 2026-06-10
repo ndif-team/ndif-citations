@@ -276,7 +276,8 @@ def list_papers(
     q:
         Case-insensitive substring search over title, authors, and venue.
     sort:
-        Sort order: ``year_desc`` (default), ``year_asc``, or ``title``.
+        Sort order: ``year_desc`` (default), ``year_asc``, ``title``,
+        ``date_added_desc``, or ``date_added_asc``.
     """
     return papers_svc.list_rows(out, bucket=bucket, q=q, sort=sort)
 

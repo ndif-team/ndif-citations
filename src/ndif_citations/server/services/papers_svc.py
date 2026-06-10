@@ -114,6 +114,10 @@ def list_rows(
         papers.sort(key=lambda p: (p.year, p.title.lower()))
     elif sort == "title":
         papers.sort(key=lambda p: p.title.lower())
+    elif sort == "date_added_desc":
+        papers.sort(key=lambda p: (p.date_discovered, p.title.lower()), reverse=True)
+    elif sort == "date_added_asc":
+        papers.sort(key=lambda p: (p.date_discovered, p.title.lower()))
     else:  # year_desc (default)
         papers.sort(key=lambda p: (-p.year, p.title.lower()))
 
