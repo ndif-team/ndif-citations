@@ -202,7 +202,7 @@ function PhaseStepper({
                 'flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors motion-reduce:transition-none',
                 status === 'done' && 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300',
                 status === 'active' && !stalled && 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 ring-1 ring-blue-300 dark:ring-blue-700',
-                stalled && 'bg-muted text-muted-foreground',
+                stalled && 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
                 status === 'pending' && 'bg-muted text-muted-foreground'
               )}
             >
@@ -235,6 +235,10 @@ function EventLog({ events }: { events: ProgressEvent[] }) {
     if (nearBottom) el.scrollTop = el.scrollHeight
   }, [events.length])
 
+  // Cooldown waits surface via the live CooldownBadge chip, not the log — they
+  // otherwise flood the feed with dozens of identical "… cooldown: 0.5s" lines.
+  const shown = events.filter((e) => e.type !== 'rate_limit_wait')
+
   return (
     <div
       ref={containerRef}
@@ -242,10 +246,10 @@ function EventLog({ events }: { events: ProgressEvent[] }) {
       aria-live="polite"
       aria-label="Run event log"
     >
-      {events.length === 0 && (
+      {shown.length === 0 && (
         <span className="text-muted-foreground/50">Waiting for events…</span>
       )}
-      {events.map((e, i) => (
+      {shown.map((e, i) => (
         <div
           key={i}
           className={cn(
@@ -253,7 +257,6 @@ function EventLog({ events }: { events: ProgressEvent[] }) {
             e.type === 'error' && 'text-destructive',
             e.type === 'done' && 'text-green-600 dark:text-green-400',
             e.type === 'cancelled' && 'text-muted-foreground',
-            e.type === 'rate_limit_wait' && 'text-amber-600 dark:text-amber-400',
           )}
         >
           {eventToLine(e)}
@@ -760,6 +763,15 @@ function LiveRunView({ runId, mode, onDone }: LiveRunViewProps) {
     eventState.derivedState === 'error' ||
     eventState.derivedState === 'cancelled'
 
+  // The persisted record is authoritative for the terminal state: the SSE
+  // stream can end WITHOUT a 'cancelled' event (e.g. cancelled at the review
+  // gate), which useRunEvents would otherwise derive as 'done'. Once the
+  // record is loaded, reuse the same state the run-history badge shows.
+  const displayState: RunState | string =
+    isDone && doneRecord?.state
+      ? doneRecord.state
+      : eventState.derivedState ?? 'running'
+
   // Notify parent on completion
   useEffect(() => {
     if (isDone) {
@@ -797,8 +809,8 @@ function LiveRunView({ runId, mode, onDone }: LiveRunViewProps) {
       <div className="flex flex-wrap items-center gap-3 justify-between">
         <div className="flex items-center gap-2">
           <span className="text-xs font-mono text-muted-foreground">{runId}</span>
-          <span className={cn(runStateBadge(eventState.derivedState ?? 'running'))}>
-            {runStateLabel(eventState.derivedState ?? 'running')}
+          <span className={cn(runStateBadge(displayState))}>
+            {runStateLabel(displayState)}
           </span>
           <span className="text-xs text-muted-foreground capitalize">({mode})</span>
         </div>
@@ -829,7 +841,7 @@ function LiveRunView({ runId, mode, onDone }: LiveRunViewProps) {
       <PhaseStepper
         stageStatus={eventState.stageStatus}
         showReview={mode === 'incremental'}
-        terminalState={isDone ? (eventState.derivedState ?? 'done') : null}
+        terminalState={isDone ? ((displayState as RunState) ?? 'done') : null}
       />
 
       {/* Per-item progress — counts real work (LLM/PDF), not the routed total (F-012) */}
