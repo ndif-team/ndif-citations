@@ -4,6 +4,7 @@ import {
   FileText,
   GitBranch,
   Play,
+  UploadCloud,
   Settings,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -13,6 +14,7 @@ const NAV_ITEMS = [
   { to: '/papers', label: 'Papers', icon: FileText, end: false },
   { to: '/repos', label: 'Repos', icon: GitBranch, end: false },
   { to: '/runs', label: 'Runs', icon: Play, end: false },
+  { to: '/publish', label: 'Publish', icon: UploadCloud, end: false },
   { to: '/settings', label: 'Settings', icon: Settings, end: false },
 ]
 

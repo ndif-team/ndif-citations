@@ -12,6 +12,7 @@ const Dashboard = lazy(() => import('@/pages/Dashboard').then((m) => ({ default:
 const Papers = lazy(() => import('@/pages/Papers').then((m) => ({ default: m.Papers })))
 const Repos = lazy(() => import('@/pages/Repos').then((m) => ({ default: m.Repos })))
 const Runs = lazy(() => import('@/pages/Runs').then((m) => ({ default: m.Runs })))
+const Publish = lazy(() => import('@/pages/Publish').then((m) => ({ default: m.Publish })))
 const Settings = lazy(() => import('@/pages/Settings').then((m) => ({ default: m.Settings })))
 
 const queryClient = new QueryClient({
@@ -33,6 +34,7 @@ function App() {
             <Route path="/papers" element={<ErrorBoundary><Papers /></ErrorBoundary>} />
             <Route path="/repos" element={<ErrorBoundary><Repos /></ErrorBoundary>} />
             <Route path="/runs" element={<ErrorBoundary><Runs /></ErrorBoundary>} />
+            <Route path="/publish" element={<ErrorBoundary><Publish /></ErrorBoundary>} />
             <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
           </Route>
         </Routes>

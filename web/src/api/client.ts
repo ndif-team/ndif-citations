@@ -245,8 +245,12 @@ export async function putPublishTarget(path: string): Promise<{ publish_target: 
   return put<{ publish_target: string }>('/publish/target', { path })
 }
 
-export async function runPublish(dry_run: boolean): Promise<PublishDryRunResponse | PublishResponse> {
-  return post<PublishDryRunResponse | PublishResponse>('/publish', { dry_run })
+export async function runPublish(args: {
+  dry_run: boolean
+  publish_papers: boolean
+  publish_repos: boolean
+}): Promise<PublishDryRunResponse | PublishResponse> {
+  return post<PublishDryRunResponse | PublishResponse>('/publish', args)
 }
 
 // ---------------------------------------------------------------------------
