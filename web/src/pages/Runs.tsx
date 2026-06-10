@@ -369,7 +369,7 @@ function RunResults({ papers }: { papers: ResultPaper[] }) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setPendingDiscard(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { if (pendingDiscard) discard(pendingDiscard.id); setPendingDiscard(null) }}>
+            <AlertDialogAction onClick={async () => { if (pendingDiscard) { const id = pendingDiscard.id; setPendingDiscard(null); await discard(id) } }}>
               Delete permanently
             </AlertDialogAction>
           </AlertDialogFooter>

@@ -177,7 +177,10 @@ export async function setPaperBucket(
   id: string,
   payload: BucketPayload,
 ): Promise<PaperDetail & { deleted?: boolean; merge_key?: string }> {
-  return post<PaperDetail>(`/papers/${encodeURIComponent(id)}/bucket`, payload)
+  return post<PaperDetail & { deleted?: boolean; merge_key?: string }>(
+    `/papers/${encodeURIComponent(id)}/bucket`,
+    payload,
+  )
 }
 
 export async function uploadPaperImage(id: string, file: File): Promise<PaperDetail> {
