@@ -619,6 +619,10 @@ class JobRunner:
         """
 
         events.set_sink(self._make_sink(record))
+        # Install the per-thread cancel hook so every rate-limited loop (discover,
+        # enrich papers + repos, process) aborts promptly when this run is cancelled
+        # — not just process_stage. Cleared in _finalize_record alongside the sink.
+        events.set_cancel_check(record.cancel_event.is_set)
         # Compute the terminal outcome first, but DON'T flip the visible state
         # to a terminal value yet. The state is flipped to "done"/"error" only
         # in the `finally`, *after* the record is persisted — so an observer that
@@ -715,6 +719,7 @@ class JobRunner:
         for ``status`` / ``subscribe`` / ``history`` / ``cancel``.
         """
         events.set_sink(self._make_sink(record))
+        events.set_cancel_check(record.cancel_event.is_set)
         terminal_state = "done"
         try:
             result = job_fn(record.cancel_event.is_set)
@@ -762,6 +767,7 @@ class JobRunner:
         subscriber after the flip.
         """
         events.clear_sink()
+        events.clear_cancel_check()
         with self._lock:
             record.finished_at = datetime.now().isoformat()
         # Persist while still nominally "running", then flip the state so the

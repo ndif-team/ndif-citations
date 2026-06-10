@@ -500,7 +500,14 @@ def looks_like_pdf_url(url: str) -> bool:
 # ---------------------------------------------------------------------------
 
 def rate_limit_sleep(seconds: float, label: str = "") -> None:
-    """Sleep for rate limiting with optional logging."""
+    """Sleep for rate limiting with optional logging.
+
+    Checks the per-thread cancel hook first (``events.raise_if_cancelled``): this
+    is the single chokepoint every rate-limited loop (S2/OpenAlex/Scholar/GitHub
+    discovery + enrich) funnels through, so a cancelled run aborts within one
+    iteration instead of grinding through the whole stage.
+    """
+    events.raise_if_cancelled()
     if seconds > 0:
         if label:
             logger.debug(f"Rate limiting ({label}): sleeping {seconds}s")
