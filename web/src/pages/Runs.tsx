@@ -33,7 +33,7 @@ import { useRunEvents } from '@/hooks/useRunEvents'
 import { startRun, cancelRun, submitGate, fetchRun, getPreflight, setPaperBucket } from '@/api/client'
 import { runStateBadge, runStateLabel } from '@/lib/tokens'
 import { cn } from '@/lib/utils'
-import type { RunRecord, PipelineStage, PaperCandidate, RepoCandidate, RunMode, ProgressEvent, ResultPaper } from '@/api/types'
+import type { RunRecord, PipelineStage, PaperCandidate, RepoCandidate, RunMode, ProgressEvent, ResultPaper, RunState } from '@/api/types'
 
 // ─── Pipeline stage ordering ────────────────────────────────────────────────
 
@@ -145,10 +145,15 @@ function eventToLine(e: ProgressEvent): string {
 function PhaseStepper({
   stageStatus,
   showReview,
+  terminalState = null,
 }: {
   stageStatus: Partial<Record<PipelineStage, 'active' | 'done'>>
   showReview: boolean
+  /** When the run has ended, stop spinners: 'done' marks the in-flight stage
+   *  complete; 'cancelled'/'error' leave it static (shows where it stopped). */
+  terminalState?: RunState | null
 }) {
+  const isTerminal = terminalState === 'done' || terminalState === 'cancelled' || terminalState === 'error'
   // Build ordered display steps (insert Review gate between route and process for incremental)
   type DisplayStep = { key: string; label: string; status: 'done' | 'active' | 'pending' }
   const steps: DisplayStep[] = []
@@ -176,44 +181,63 @@ function PhaseStepper({
 
   return (
     <div className="flex items-center gap-0 overflow-x-auto" role="list" aria-label="Pipeline phases">
-      {steps.map((step, i) => (
-        <div key={step.key} className="flex items-center" role="listitem">
-          {i > 0 && (
-            <ChevronRight
-              className="h-3.5 w-3.5 text-muted-foreground flex-none mx-0.5"
-              aria-hidden="true"
-            />
-          )}
-          <div
-            className={cn(
-              'flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors motion-reduce:transition-none',
-              step.status === 'done' && 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300',
-              step.status === 'active' && 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 ring-1 ring-blue-300 dark:ring-blue-700',
-              step.status === 'pending' && 'bg-muted text-muted-foreground'
+      {steps.map((step, i) => {
+        // On a finished run, never show a spinner. A successful run marks the
+        // in-flight stage complete; a cancelled/errored run leaves it static.
+        const status =
+          isTerminal && step.status === 'active' && terminalState === 'done'
+            ? 'done'
+            : step.status
+        const stalled = isTerminal && status === 'active' // cancelled/error mid-stage
+        return (
+          <div key={step.key} className="flex items-center" role="listitem">
+            {i > 0 && (
+              <ChevronRight
+                className="h-3.5 w-3.5 text-muted-foreground flex-none mx-0.5"
+                aria-hidden="true"
+              />
             )}
-          >
-            {step.status === 'done' && <Check className="h-3 w-3 flex-none" aria-hidden="true" />}
-            {step.status === 'active' && (
-              <Loader2 className="h-3 w-3 flex-none animate-spin motion-reduce:animate-none" aria-hidden="true" />
-            )}
-            {step.label}
+            <div
+              className={cn(
+                'flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors motion-reduce:transition-none',
+                status === 'done' && 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300',
+                status === 'active' && !stalled && 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 ring-1 ring-blue-300 dark:ring-blue-700',
+                stalled && 'bg-muted text-muted-foreground',
+                status === 'pending' && 'bg-muted text-muted-foreground'
+              )}
+            >
+              {status === 'done' && <Check className="h-3 w-3 flex-none" aria-hidden="true" />}
+              {status === 'active' && !isTerminal && (
+                <Loader2 className="h-3 w-3 flex-none animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              )}
+              {stalled && <span className="h-2 w-2 flex-none rounded-full bg-current opacity-60" aria-hidden="true" />}
+              {step.label}
+            </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
 
 /** Scrolling event log */
 function EventLog({ events }: { events: ProgressEvent[] }) {
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
+  // Keep the log pinned to the latest line by scrolling the CONTAINER itself —
+  // NOT scrollIntoView, which bubbles to the window and yanks the whole page down
+  // on every event. Only auto-scroll when the user is already near the bottom, so
+  // scrolling up to read history isn't interrupted.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = containerRef.current
+    if (!el) return
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+    if (nearBottom) el.scrollTop = el.scrollHeight
   }, [events.length])
 
   return (
     <div
+      ref={containerRef}
       className="flex-1 min-h-0 overflow-y-auto rounded-md border bg-card p-3 font-mono text-xs text-muted-foreground space-y-0.5"
       aria-live="polite"
       aria-label="Run event log"
@@ -235,7 +259,6 @@ function EventLog({ events }: { events: ProgressEvent[] }) {
           {eventToLine(e)}
         </div>
       ))}
-      <div ref={bottomRef} />
     </div>
   )
 }
@@ -806,6 +829,7 @@ function LiveRunView({ runId, mode, onDone }: LiveRunViewProps) {
       <PhaseStepper
         stageStatus={eventState.stageStatus}
         showReview={mode === 'incremental'}
+        terminalState={isDone ? (eventState.derivedState ?? 'done') : null}
       />
 
       {/* Per-item progress — counts real work (LLM/PDF), not the routed total (F-012) */}
@@ -1245,7 +1269,14 @@ export function Runs() {
           <CardTitle className="flex items-center gap-2 text-sm">
             {showLive ? (
               <>
-                <Loader2 className="h-4 w-4 text-blue-500 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                {/* Spin only while the run is genuinely active (backend reports it
+                    in /runs/active); once it's terminal the view persists to show
+                    results, so show a static icon instead of an endless spinner. */}
+                {activeRecord ? (
+                  <Loader2 className="h-4 w-4 text-blue-500 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                ) : (
+                  <Check className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                )}
                 Live run
               </>
             ) : (

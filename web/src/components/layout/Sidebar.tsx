@@ -55,7 +55,7 @@ export function Sidebar() {
 
       {/* Footer */}
       <div className="p-3 border-t border-[hsl(var(--sidebar-border))]">
-        <p className="text-[10px] text-[hsl(var(--sidebar-fg)/0.4)] font-mono">v2.0.0</p>
+        <p className="text-[10px] text-[hsl(var(--sidebar-fg)/0.4)] font-mono">v2.3.1</p>
       </div>
     </nav>
   )

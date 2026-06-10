@@ -8,10 +8,19 @@ EventType = str  # "stage_start"|"stage_done"|"source_count"|"dedup"|"route_summ
                  # |"merge_result"|"report"|"error"|"cancelled"|"done"|"log"
 
 
-class RunCancelled(Exception):
-    """Raised by the processing loops when a cancel_check fires mid-run.
-    Carries how many items were fully completed and the partial results,
-    so the caller can merge the completed prefix."""
+class RunCancelled(BaseException):
+    """Raised when a cancel is requested mid-run (processing loops + every
+    rate_limit_sleep via the per-thread cancel hook).
+
+    Subclasses ``BaseException`` (NOT ``Exception``) on purpose: cancellation is a
+    control-flow signal, like ``KeyboardInterrupt``. The discover/enrich loops wrap
+    each external API call in broad ``except Exception`` blocks — if ``RunCancelled``
+    were an ``Exception`` those would silently swallow the cancel and the run would
+    grind on (the exact bug this fixes). Explicit ``except RunCancelled`` still
+    catches it by name (e.g. the JobRunner worker).
+
+    Carries how many items were fully completed and the partial results, so the
+    caller can merge the completed prefix."""
     def __init__(self, completed: int = 0, results: list | None = None):
         super().__init__(f"run cancelled after {completed} item(s)")
         self.completed = completed
@@ -28,6 +37,18 @@ class ProgressEvent:
 _local = threading.local()
 def set_sink(fn: Callable[[ProgressEvent], None]) -> None: _local.fn = fn
 def clear_sink() -> None: _local.fn = None
+
+# Per-thread cancellation hook. The JobRunner worker installs the run's
+# ``cancel_event.is_set`` here (like the event sink), so any code running on that
+# thread — every rate-limited loop via ``rate_limit_sleep`` — can cooperatively
+# abort by calling ``raise_if_cancelled()``. Unset on other threads (CLI, tests),
+# where it is a no-op.
+def set_cancel_check(fn: "Callable[[], bool] | None") -> None: _local.cancel = fn
+def clear_cancel_check() -> None: _local.cancel = None
+def raise_if_cancelled() -> None:
+    fn = getattr(_local, "cancel", None)
+    if fn is not None and fn():
+        raise RunCancelled()
 def emit(type: EventType, stage: str | None = None, **data: Any) -> None:
     fn = getattr(_local, "fn", None)
     if fn is not None:

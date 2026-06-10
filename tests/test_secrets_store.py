@@ -43,6 +43,24 @@ def test_set_keys_strips_pasted_surrounding_quotes(tmp_path):
     assert vals["GITHUB_TOKEN"] == "ghp_quoted"
     assert vals["S2_API_KEY"] == "s2quoted"
 
+
+def test_set_keys_writes_tokens_without_quotes(tmp_path):
+    # Tokens with '_' / '-' aren't str.isalnum(), so dotenv's quote_mode='auto'
+    # used to write KEY='value' (cosmetic, but alarming on inspection). We use
+    # quote_mode='never' → the raw .env line has NO surrounding quotes, and the
+    # value still round-trips cleanly.
+    env = tmp_path / ".env"
+    env.write_text("")
+    token = "github_pat_11ABC_xyz-456"          # underscores + hyphen → not alnum
+    secrets_store.set_keys(env, {"GITHUB_TOKEN": token, "LLM_API_KEY": "sk-ant-api03-x_y"})
+    raw = env.read_text()
+    assert f"GITHUB_TOKEN={token}\n" in raw, f"expected unquoted line, got: {raw!r}"
+    assert "GITHUB_TOKEN='" not in raw and 'GITHUB_TOKEN="' not in raw
+    assert "LLM_API_KEY='" not in raw and 'LLM_API_KEY="' not in raw
+    vals = dotenv_values(env)
+    assert vals["GITHUB_TOKEN"] == token        # round-trips clean
+    assert vals["LLM_API_KEY"] == "sk-ant-api03-x_y"
+
 def test_set_keys_quote_only_value_is_skipped(tmp_path):
     # '' (just quotes -> empty after stripping) is treated as blank = keep existing.
     env = tmp_path / ".env"

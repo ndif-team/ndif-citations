@@ -43,7 +43,13 @@ def set_keys(env_path: Path | str, changes: dict[str, str]) -> dict[str, bool]:
             value = value[1:-1].strip()
         if not value:
             continue                              # blank = keep existing
-        set_key(str(env_path), key, value, quote_mode="auto")
+        # quote_mode="never": dotenv's "auto" single-quotes any value that isn't
+        # purely alphanumeric (str.isalnum() is False for '_' and '-'), so tokens
+        # like github_pat_… / sk-ant-… were written as KEY='value'. Those quotes are
+        # cosmetic (dotenv strips them on load), but they look alarming in .env and
+        # confuse manual inspection. API keys/tokens have no spaces or shell-special
+        # chars, so writing them raw is safe and round-trips cleanly.
+        set_key(str(env_path), key, value, quote_mode="never")
         os.environ[key] = value
         applied.append(key)
     if applied:
