@@ -57,6 +57,10 @@ def test_cli_run_matches_golden(monkeypatch, tmp_path):
     the orchestrator binds the names eagerly.
     """
     install_pipeline_fakes(monkeypatch, orchestrator)
+    # The golden was captured under legacy auto-verify; keep it enabled so this
+    # parity check stays about CLI==orchestrator, not the bucket policy.
+    from ndif_citations import config
+    monkeypatch.setattr(config, "AUTO_VERIFY", True)
 
     # Fresh fixture_state copy (inline so we control the exact out dir passed to -o).
     out = tmp_path / "output"

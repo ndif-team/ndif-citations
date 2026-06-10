@@ -776,6 +776,13 @@ def _decide_bucket(paper: DiscoveredPaper) -> tuple[Bucket, Optional[PaperReason
     if paper.category_confidence_band == Confidence.LOW:
         return Bucket.PENDING, PaperReason.LOW_CONFIDENCE
 
+    # HIGH/CERTAIN. Auto-verify only when explicitly enabled; otherwise hold in
+    # pending for a curator to verify (nothing gets verified without a human).
+    # Curator-set papers (manual_override) keep their verified decision — the
+    # hold is only for pipeline-classified papers.
+    if not config.AUTO_VERIFY and not paper.manual_override:
+        return Bucket.PENDING, PaperReason.NEEDS_REVIEW
+
     return Bucket.VERIFIED, None
 
 

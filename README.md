@@ -22,7 +22,7 @@ Two front-ends drive the **same** pipeline: the **CLI** runs it straight through
 - **v2.2.0 — run results + PDF curation.** Per-run **Results panel** (what each run added/changed, deep-link straight to a paper), PDF-upload de-dup + attach, a standalone **Backfill evidence** action, ungated manual-add, and evidence de-duplication.
 - **v2.3.0 — Publish tab + export + sort.** **Publish** promoted to its own nav tab with what-to-publish (papers / repos) scope, one-click **Export .xlsx** (Papers / Pending / Discarded / GitHub), and a **Date added ↓/↑** sort on the Papers page.
 - **v2.3.1 — reliability.** **Cancel** now stops a run mid-Discover/Enrich (not just at the gate), live-run spinner/scroll fixes, and API keys written to `.env` unquoted.
-- **v2.4.0 — run history + log polish.** Run history is an **inline accordion** (click a run to expand its details in place; click another to switch), each row can **delete its log** behind a confirm (`DELETE /api/runs/{id}`). Live-run **Cancelled** state shows correctly (was "Done") with the stopped stage amber; the event log no longer floods with cooldown lines (single chip stays, in a fixed-height slot so it doesn't shift the layout); the **Dedup** log line shows real counts; long reprocess **counts** wrap instead of overflowing.
+- **v2.4.0 — curator control + run history polish.** **The pipeline no longer auto-verifies** (`AUTO_VERIFY=False`): every processed paper lands in *pending* for the curator to verify from the run **Results** panel (high/certain flagged *suggested*; curator-set papers untouched). Result rows stay actionable (Verify/Discard) regardless of bucket. Run history is an **inline accordion** (click a run to expand details in place; click another to switch), each row can **delete its log** behind a confirm (`DELETE /api/runs/{id}`). Live-run **Cancelled** state shows correctly (was "Done") with the stopped stage amber; the event log no longer floods with cooldown lines (single chip in a fixed-height slot); the **Dedup** line shows real counts; long reprocess **counts** wrap instead of overflowing.
 
 See [Releases](https://github.com/ndif-team/ndif-citations/releases) for notes. A non-coding, end-to-end **[curator walkthrough](onboarding/README.md)** tracks the current (v2.3.1) UI.
 
@@ -81,11 +81,13 @@ Every classified paper carries a `category_confidence_band` (categorical) alongs
 
 | Band | Float equiv | When | Bucket |
 |---|---|---|---|
-| `CERTAIN` | 1.00 | `manual_override=True` OR pre-filter caught explicit non-use ("alternative to NDIF") | VERIFIED |
-| `HIGH` | 0.85 | LLM verdict with ≥2 surviving context windows OR `linked_paper_tier ≤ 2` cross-link | VERIFIED |
+| `CERTAIN` | 1.00 | `manual_override=True` OR pre-filter caught explicit non-use ("alternative to NDIF") | PENDING (`NEEDS_REVIEW`)¹ |
+| `HIGH` | 0.85 | LLM verdict with ≥2 surviving context windows OR `linked_paper_tier ≤ 2` cross-link | PENDING (`NEEDS_REVIEW`)¹ |
 | `MEDIUM` | 0.55 | LLM verdict on a single context window OR abstract-only OR pre-filter caught comparison-table / acks-only | PENDING (`MEDIUM_CONFIDENCE`) |
 | `LOW` | 0.30 | Keyword fallback (LLM unavailable / errored) | PENDING (`LOW_CONFIDENCE`) |
 | `NONE` | 0.00 | UNCLASSIFIED (no evidence / LLM unparseable) | PENDING (`UNCLASSIFIED_*`) |
+
+¹ **The pipeline never auto-verifies** (`config.AUTO_VERIFY = False`, the default): even HIGH/CERTAIN classifications land in **pending** (`needs_review`) for a curator to verify from the run **Results** panel — high/certain rows are flagged *suggested* for one-click bulk-verify. Curator-set (`manual_override`) papers keep their bucket and are never demoted by this policy. Set `AUTO_VERIFY = True` in `config.py` to restore HIGH/CERTAIN → auto-`verified`.
 
 `manual_override=True` papers route to `FILL_GAPS` if any `has_*` flag is False, so the pipeline backfills empty description / thumbnail / affiliations on the next run without overwriting curated values.
 

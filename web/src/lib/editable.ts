@@ -60,6 +60,7 @@ const BUCKET_OPTIONS: SelectOption[] = [
  */
 const REASON_OPTIONS: SelectOption[] = [
   { value: SELECT_NONE,                label: '(none)' },
+  { value: 'needs_review',             label: 'Needs review' },
   { value: 'openalex_source',          label: 'OpenAlex source' },
   { value: 'low_confidence',           label: 'Low confidence' },
   { value: 'medium_confidence',        label: 'Medium confidence' },

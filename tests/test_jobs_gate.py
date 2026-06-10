@@ -124,8 +124,11 @@ def test_gate_process_selected(monkeypatch, fixture_state):
 
     bucket_name, paper = _find_paper(out, "9999.99999")
     assert paper is not None, "new paper was not merged into the output"
-    # Processed via the fakes → USES_NNSIGHT / HIGH → verified.
-    assert bucket_name == "verified", f"expected verified, got {bucket_name}"
+    # Processed via the fakes → USES_NNSIGHT / HIGH. With AUTO_VERIFY off (the
+    # shipped default), it lands in pending (needs_review) for the curator to
+    # verify from the Results panel — nothing auto-verifies.
+    assert bucket_name == "pending", f"expected pending, got {bucket_name}"
+    assert paper["reason"] == "needs_review"
     assert paper["has_summary"] is True
 
 

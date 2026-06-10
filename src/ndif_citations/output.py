@@ -8,7 +8,7 @@ import shutil
 from datetime import date, datetime
 from pathlib import Path
 
-from ndif_citations.models import Bucket, Category, DiscoveredPaper, DiscoveredRepo, PipelineRun
+from ndif_citations.models import Bucket, Category, DiscoveredPaper, DiscoveredRepo, PaperReason, PipelineRun
 from ndif_citations.utils import is_duplicate
 
 logger = logging.getLogger(__name__)
@@ -161,7 +161,16 @@ def merge_papers(existing: list[DiscoveredPaper],
                 from ndif_citations.process import _decide_bucket
                 new_bucket, new_reason = _decide_bucket(existing_paper)
                 old_bucket = existing_paper.bucket
-                if new_bucket != old_bucket:
+                # Never demote an already-verified paper just because AUTO_VERIFY
+                # is off — NEEDS_REVIEW is a policy hold for NEW papers, not a
+                # metadata regression. Genuine regressions (stub/unclassified/
+                # medium/low) still demote.
+                policy_hold = (
+                    new_bucket == Bucket.PENDING
+                    and old_bucket == Bucket.VERIFIED
+                    and new_reason == PaperReason.NEEDS_REVIEW
+                )
+                if new_bucket != old_bucket and not policy_hold:
                     if new_bucket == Bucket.VERIFIED and old_bucket == Bucket.PENDING:
                         run.auto_promoted.append(existing_paper.title)
                         logger.info(f"Auto-promoted: '{existing_paper.title[:60]}' (was: {old_bucket.value} {existing_paper.reason})")

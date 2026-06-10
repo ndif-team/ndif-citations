@@ -68,6 +68,7 @@ class Bucket(str, Enum):
 class PaperReason(str, Enum):
     """Reason a paper was placed in pending or discarded."""
     # Pending reasons
+    NEEDS_REVIEW = "needs_review"  # HIGH/CERTAIN but AUTO_VERIFY off — awaits curator
     OPENALEX_SOURCE = "openalex_source"
     LOW_CONFIDENCE = "low_confidence"
     MEDIUM_CONFIDENCE = "medium_confidence"

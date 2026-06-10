@@ -421,9 +421,13 @@ class TestManualOverride:
 
 class TestAutoRecovery:
     def test_pending_paper_promoted_when_stub_cleared(self, monkeypatch):
-        """Existing pending (stub_metadata) paper with year=0 → new discovery has year=2025 → promoted."""
+        """Existing pending (stub_metadata) paper with year=0 → new discovery has year=2025 → promoted.
+
+        Auto-promotion to verified only happens when AUTO_VERIFY is enabled."""
+        from ndif_citations import config
         from ndif_citations.models import Category
         from ndif_citations.process import _decide_bucket
+        monkeypatch.setattr(config, "AUTO_VERIFY", True)
 
         existing = make_paper(
             arxiv_id="2401.00001",

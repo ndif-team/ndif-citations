@@ -213,12 +213,14 @@ When the run finishes **Process → Finalize**, select it in **Run history** and
 
 ![Run results panel](images/06-run-results.png)
 
-- It's titled **"Results — N new/changed · defaults to pending."** Freshly-processed papers land in **Pending** for your review, even if the LLM classified them confidently — *you* decide what gets verified.
-- Each row has two quick actions:
-  - **Discard** — drop a result you can already tell is irrelevant (for a manually-added paper this *permanently deletes* it, with a confirm; for a discovered paper it just moves it to Discarded).
-  - **Open** (↗) — jumps straight to that paper's detail sheet on the Papers page, so you can review it immediately.
+- It's titled **"Results — N new/changed from this run."** **The pipeline never verifies a paper on its own** — every processed paper lands in **Pending** for you to review, even when the LLM was highly confident. *You* decide what gets verified.
+- High-confidence *uses NDIF / uses NNsight* results are tagged **suggested** and pre-checked, so you can **Verify N selected** in one click.
+- Each row also has per-paper actions:
+  - **Verify** (✓) — accept it into Verified.
+  - **Discard** (✗) — reject it (for a manually-added paper this *permanently deletes* it, with a confirm; for a discovered paper it moves to Discarded).
+  - **Open** (↗) — jump to that paper's detail sheet on the Papers page.
 
-This is your "what did this run actually do?" summary. From here you typically click **Open** on each new paper and review it like any other (next sections).
+This is your "what did this run actually do?" summary — and where you accept or reject everything it produced.
 
 > A paper's category can come back as **"unclassified"** if the classifier found no clear NNsight/NDIF evidence in the text — that's a normal outcome, not an error. It just sits in Pending until you look at it.
 
@@ -234,8 +236,8 @@ When you open a paper you'll see a few labels. Here's how to read them.
 
 | Bucket | Meaning |
 |---|---|
-| **Verified** | Reviewed and good. **Only Verified papers publish to the website.** |
-| **Pending** | Needs your attention — new, low-confidence, or missing data. Your work queue. |
+| **Verified** | Reviewed and good. **Only Verified papers publish to the website**, and **only you** put a paper here — the pipeline never auto-verifies. |
+| **Pending** | Needs your attention — every freshly-processed paper, plus anything low-confidence or missing data. Your work queue. |
 | **Discarded** | Not relevant. Kept for the record, never published. |
 
 **Category** (the paper's relationship to NDIF):
@@ -252,12 +254,12 @@ When you open a paper you'll see a few labels. Here's how to read them.
 | Conf. | What it means for you |
 |---|---|
 | **certain** | Locked-in (e.g. you hand-set it, or the text explicitly says it does *not* use NDIF). |
-| **high** | Strong evidence — multiple clear mentions in the PDF. Usually safe to verify. |
-| **medium** | Thin evidence — a single mention, or only the abstract was available. **Worth a look.** Lands in Pending. |
-| **low** | Guessed from keywords because the LLM was unavailable. Re-run with the LLM and it usually upgrades. Lands in Pending. |
+| **high** | Strong evidence — multiple clear mentions in the PDF. Flagged **suggested** in run results for one-click verify. |
+| **medium** | Thin evidence — a single mention, or only the abstract was available. **Worth a closer look.** |
+| **low** | Guessed from keywords because the LLM was unavailable. Re-run with the LLM and it usually upgrades. |
 | **none** | Unclassified — no confidence shown. |
 
-The short version: **anything that lands in Pending is asking for your eyes.** *medium* and *low* are the ones most worth verifying by hand.
+**Everything the pipeline processes lands in Pending** regardless of confidence — confidence just tells you *how much* to scrutinize. *high*/*certain* are usually a quick confirm (and come pre-checked as "suggested"); *medium*/*low* deserve a real read before you verify.
 
 ---
 

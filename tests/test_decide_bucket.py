@@ -6,6 +6,14 @@ from ndif_citations.process import _decide_bucket, _has_usable_abstract
 from tests.conftest import make_paper
 
 
+@pytest.fixture
+def auto_verify(monkeypatch):
+    """Enable legacy auto-verify (HIGH/CERTAIN → verified) for tests that
+    exercise that path. The shipped default is AUTO_VERIFY=False."""
+    from ndif_citations import config
+    monkeypatch.setattr(config, "AUTO_VERIFY", True)
+
+
 class TestHasUsableAbstract:
     def test_none_abstract_false(self):
         paper = make_paper(abstract=None)
@@ -135,7 +143,7 @@ class TestDecideBucket:
 
     # --- Happy path: verified (source-agnostic) ---
 
-    def test_s2_full_metadata_high_confidence_verified(self):
+    def test_s2_full_metadata_high_confidence_verified(self, auto_verify):
         paper = make_paper(
             source=DiscoverySource.S2_CITATION,
             category=Category.USES_NNSIGHT,
@@ -146,7 +154,7 @@ class TestDecideBucket:
         assert bucket == Bucket.VERIFIED
         assert reason is None
 
-    def test_openalex_full_metadata_high_confidence_verified(self):
+    def test_openalex_full_metadata_high_confidence_verified(self, auto_verify):
         """OpenAlex papers with good data and high confidence go to verified."""
         paper = make_paper(
             source=DiscoverySource.OPENALEX_FULLTEXT,
@@ -158,7 +166,7 @@ class TestDecideBucket:
         assert bucket == Bucket.VERIFIED
         assert reason is None
 
-    def test_github_full_metadata_high_confidence_verified(self):
+    def test_github_full_metadata_high_confidence_verified(self, auto_verify):
         paper = make_paper(
             source=DiscoverySource.GITHUB_DEPENDENT,
             category=Category.USES_NNSIGHT,
@@ -191,7 +199,7 @@ class TestDecideBucket:
 class TestDecideBucketBands:
     """_decide_bucket should gate on Confidence band, not the legacy float."""
 
-    def test_high_band_goes_to_verified(self):
+    def test_high_band_goes_to_verified(self, auto_verify):
         from ndif_citations.models import Confidence
         paper = make_paper(
             year=2024,
@@ -230,7 +238,7 @@ class TestDecideBucketBands:
         assert bucket == Bucket.PENDING
         assert reason == PaperReason.LOW_CONFIDENCE
 
-    def test_certain_band_goes_to_verified(self):
+    def test_certain_band_goes_to_verified(self, auto_verify):
         from ndif_citations.models import Confidence
         paper = make_paper(
             year=2024,
@@ -242,3 +250,19 @@ class TestDecideBucketBands:
         bucket, reason = _decide_bucket(paper)
         assert bucket == Bucket.VERIFIED
         assert reason is None
+
+    def test_high_certain_pending_needs_review_when_auto_verify_off(self):
+        """Shipped default: HIGH/CERTAIN does NOT auto-verify — it lands in
+        pending with reason=needs_review for a curator to verify."""
+        from ndif_citations.models import Confidence
+        for band in (Confidence.HIGH, Confidence.CERTAIN):
+            paper = make_paper(
+                year=2024,
+                abstract="A real abstract that is long enough.",
+                arxiv_id="2407.14561",
+                category=Category.USES_NNSIGHT,
+                category_confidence_band=band,
+            )
+            bucket, reason = _decide_bucket(paper)
+            assert bucket == Bucket.PENDING
+            assert reason == PaperReason.NEEDS_REVIEW
