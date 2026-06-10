@@ -346,7 +346,7 @@ function RunResults({ papers }: { papers: ResultPaper[] }) {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium text-muted-foreground">
-          Results — {papers.length} new/changed · defaults to pending
+          Results — {papers.length} new/changed from this run
         </p>
         <Button size="sm" disabled={busy || selectedIds.length === 0} onClick={() => verify(selectedIds)} className="gap-1.5">
           <Check className="h-3.5 w-3.5" /> Verify {selectedIds.length} selected
@@ -375,15 +375,17 @@ function RunResults({ papers }: { papers: ResultPaper[] }) {
                 <td className="px-2 py-1.5 max-w-0"><span className="block truncate" title={p.title}>{p.title}</span></td>
                 <td className="px-2 py-1.5 w-20 text-muted-foreground">{p.bucket}</td>
                 <td className="px-2 py-1.5 w-28 text-right whitespace-nowrap">
-                  {p.bucket === 'pending' && (
-                    <>
-                      <button onClick={() => verify([p.id])} disabled={busy} className="px-1.5 py-0.5 rounded hover:bg-muted" title="Verify" aria-label={`Verify ${p.title}`}>
-                        <Check className="h-3.5 w-3.5 inline text-green-600" />
-                      </button>
-                      <button onClick={() => (p.source === 'manual_add' ? setPendingDiscard(p) : discard(p.id))} disabled={busy} className="px-1.5 py-0.5 rounded hover:bg-muted" title="Discard" aria-label={`Discard ${p.title}`}>
-                        <X className="h-3.5 w-3.5 inline text-red-600" />
-                      </button>
-                    </>
+                  {/* Show whichever verdict would change this paper's state, so a
+                      run's results stay actionable even after auto-verify. */}
+                  {p.bucket !== 'verified' && (
+                    <button onClick={() => verify([p.id])} disabled={busy} className="px-1.5 py-0.5 rounded hover:bg-muted" title="Verify" aria-label={`Verify ${p.title}`}>
+                      <Check className="h-3.5 w-3.5 inline text-green-600" />
+                    </button>
+                  )}
+                  {p.bucket !== 'discarded' && (
+                    <button onClick={() => (p.source === 'manual_add' ? setPendingDiscard(p) : discard(p.id))} disabled={busy} className="px-1.5 py-0.5 rounded hover:bg-muted" title="Discard" aria-label={`Discard ${p.title}`}>
+                      <X className="h-3.5 w-3.5 inline text-red-600" />
+                    </button>
                   )}
                   <Link to={`/papers?paper=${encodeURIComponent(p.id)}`} className="px-1.5 py-0.5 rounded hover:bg-muted inline-block" title="Open in Papers" aria-label={`Open ${p.title} in Papers`}>
                     <ExternalLink className="h-3.5 w-3.5 inline text-muted-foreground" />
