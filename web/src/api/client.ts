@@ -173,7 +173,10 @@ export interface BucketPayload {
   detail?: string
 }
 
-export async function setPaperBucket(id: string, payload: BucketPayload): Promise<PaperDetail> {
+export async function setPaperBucket(
+  id: string,
+  payload: BucketPayload,
+): Promise<PaperDetail & { deleted?: boolean; merge_key?: string }> {
   return post<PaperDetail>(`/papers/${encodeURIComponent(id)}/bucket`, payload)
 }
 
