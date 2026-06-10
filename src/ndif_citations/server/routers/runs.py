@@ -173,6 +173,35 @@ def list_runs(
     return runner.history(out)
 
 
+@router.delete("/runs/{run_id}")
+def delete_run(
+    run_id: str,
+    runner: JobRunner = Depends(get_runner),
+    out: Path = Depends(get_output_dir),
+) -> dict:
+    """Delete a persisted run record (history log).
+
+    Refuses to delete the currently-active run (409). Returns 404 if no
+    record file exists for *run_id*.
+    """
+    if runner.active:
+        try:
+            active_id = runner.status().run_id
+        except KeyError:
+            active_id = None
+        if active_id == run_id:
+            raise HTTPException(status_code=409, detail="Cannot delete an active run")
+
+    run_file = Path(out) / "runs" / f"{run_id}.json"
+    if not run_file.exists():
+        raise HTTPException(status_code=404, detail=f"Run {run_id!r} not found")
+    try:
+        run_file.unlink()
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to delete run: {exc}") from exc
+    return {"deleted": run_id}
+
+
 # ---------------------------------------------------------------------------
 # SSE live events + cancel
 # ---------------------------------------------------------------------------

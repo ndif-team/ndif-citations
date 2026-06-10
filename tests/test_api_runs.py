@@ -509,3 +509,35 @@ def test_sse_unknown_run_404(monkeypatch, fixture_state):
     client, _ = _make_client(monkeypatch, fixture_state)
     resp = client.get("/api/runs/does-not-exist/events")
     assert resp.status_code == 404, resp.text
+
+
+# ---------------------------------------------------------------------------
+# 12. DELETE a finished run record removes it from history.
+# ---------------------------------------------------------------------------
+
+def test_delete_run_removes_from_history(monkeypatch, fixture_state):
+    client, _ = _make_client(monkeypatch, fixture_state)
+
+    run_id = client.post("/api/runs", json={"mode": "fresh", "skip_github": True}).json()["run_id"]
+    assert _wait_until(lambda: client.get(f"/api/runs/{run_id}").json().get("state") == "done")
+
+    # Delete it.
+    resp = client.request("DELETE", f"/api/runs/{run_id}")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["deleted"] == run_id
+
+    # Gone from history (the file-backed list the UI renders).
+    assert run_id not in [r["run_id"] for r in client.get("/api/runs").json()]
+
+    # Deleting it again → 404 (the record file is gone).
+    assert client.request("DELETE", f"/api/runs/{run_id}").status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# 13. DELETE an unknown run id → 404.
+# ---------------------------------------------------------------------------
+
+def test_delete_unknown_run_404(monkeypatch, fixture_state):
+    client, _ = _make_client(monkeypatch, fixture_state)
+    resp = client.request("DELETE", "/api/runs/does-not-exist")
+    assert resp.status_code == 404, resp.text
