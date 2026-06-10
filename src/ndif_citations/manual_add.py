@@ -66,10 +66,11 @@ def run_manual_add_seed(out, seed_papers, *, pdf_bytes=None, cancel_check=None):
 def find_duplicate(out: Path, *, title: str, arxiv_id: str | None = None, doi: str | None = None) -> "DiscoveredPaper | None":
     """Return an existing catalog paper matching the seed metadata, or None.
 
-    Match precedence: exact arXiv id, exact DOI, then fuzzy title (rapidfuzz >= 90).
+    Match precedence: exact arXiv id, exact DOI, then lenient fuzzy title
+    (token_set_ratio >= 85, via utils.fuzzy_title_match).
     """
     from ndif_citations.output import load_existing_papers
-    from ndif_citations.utils import is_duplicate, normalize_arxiv_id
+    from ndif_citations.utils import fuzzy_title_match, normalize_arxiv_id
 
     existing = load_existing_papers(out)
     ax = normalize_arxiv_id(arxiv_id) if arxiv_id else None
@@ -83,7 +84,7 @@ def find_duplicate(out: Path, *, title: str, arxiv_id: str | None = None, doi: s
                 return p
     if title and title.strip():
         for p in existing:
-            if p.title and is_duplicate(title, p.title, threshold=90.0):
+            if p.title and fuzzy_title_match(title, p.title):
                 return p
     return None
 

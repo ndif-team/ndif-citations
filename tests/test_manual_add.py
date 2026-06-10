@@ -256,3 +256,16 @@ def test_manual_run_does_not_park_at_gate(fixture_state, monkeypatch):
         time.sleep(0.01)
     assert runner.status(rid).state == "done", f"states seen: {seen_states}"
     assert "awaiting_review" not in seen_states, f"states seen: {seen_states}"
+
+
+def test_find_duplicate_matches_title_subtitle(monkeypatch, tmp_path):
+    """A subtitle/prefix of an existing title should be detected as a duplicate."""
+    from ndif_citations import manual_add
+    from tests.conftest import make_paper
+
+    existing = [make_paper(
+        title="Not Just a Piece of Cake: Cross-Lingual Fine-Tuning for Idiom Identification",
+        arxiv_id=None, doi=None)]
+    monkeypatch.setattr("ndif_citations.output.load_existing_papers", lambda out: existing)
+
+    assert manual_add.find_duplicate(tmp_path, title="Not Just a Piece of Cake") is existing[0]
