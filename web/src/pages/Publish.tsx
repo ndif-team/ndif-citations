@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { AlertCircle, Upload, UploadCloud } from 'lucide-react'
+import { AlertCircle, Upload, UploadCloud, Download } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,7 +16,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { usePublishTarget, useActiveRun } from '@/api/hooks'
 import { useQueryClient } from '@tanstack/react-query'
-import { putPublishTarget, runPublish } from '@/api/client'
+import { putPublishTarget, runPublish, exportXlsx } from '@/api/client'
 import { toast } from 'sonner'
 import { SectionLabel, toastApiError, extractApiError } from '@/lib/apiError'
 import type { PublishDryRunResponse, PublishResponse } from '@/api/types'
@@ -62,6 +62,19 @@ export function Publish() {
   const [publishBusy, setPublishBusy] = useState(false)
   const [publishResult, setPublishResult] = useState<PublishResponse | null>(null)
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false)
+
+  const [exporting, setExporting] = useState(false)
+  async function handleExport() {
+    setExporting(true)
+    try {
+      await exportXlsx()
+      toast.success('Exported .xlsx')
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   // Sync target input when data loads
   useEffect(() => {
@@ -291,6 +304,23 @@ export function Publish() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Export</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between gap-4 max-w-2xl">
+            <p className="text-xs text-muted-foreground">
+              Download the full catalog as a multi-sheet workbook (Papers, Pending, Discarded, GitHub).
+            </p>
+            <Button onClick={handleExport} disabled={exporting} variant="outline" size="sm" className="h-7 text-xs gap-1 shrink-0">
+              <Download className="h-3 w-3" />
+              {exporting ? 'Exporting…' : 'Export .xlsx'}
+            </Button>
           </div>
         </CardContent>
       </Card>

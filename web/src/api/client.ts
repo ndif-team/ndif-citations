@@ -253,6 +253,20 @@ export async function runPublish(args: {
   return post<PublishDryRunResponse | PublishResponse>('/publish', args)
 }
 
+export async function exportXlsx(): Promise<void> {
+  const res = await fetch(`${BASE}/export.xlsx`)
+  if (!res.ok) throw new Error(`Export failed: ${res.status}`)
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `ndif-citations-${new Date().toISOString().slice(0, 10)}.xlsx`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 // ---------------------------------------------------------------------------
 // API Keys (write-only secrets)
 // ---------------------------------------------------------------------------
