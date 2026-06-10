@@ -495,17 +495,17 @@ def _write_repos_outputs(repos: list[DiscoveredRepo], output_dir: Path) -> None:
 
 
 
-def _write_xlsx(
+def build_xlsx(
     papers: list[DiscoveredPaper],
     repos: list[DiscoveredRepo],
-    output_dir: Path,
+    *,
     skip_papers: bool = False,
     skip_github: bool = False,
-) -> None:
-    """Write research-data.xlsx with Papers and GitHub sheets."""
+) -> bytes:
+    """Build the research-data workbook (Papers/Pending/Discarded/GitHub sheets) and return xlsx bytes."""
+    import io
     import openpyxl
     from openpyxl.styles import Font
-    from openpyxl.utils import get_column_letter
 
     wb = openpyxl.Workbook()
     # Remove default sheet
@@ -635,9 +635,23 @@ def _write_xlsx(
                     cell.hyperlink = value
                     cell.style = "Hyperlink"
 
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _write_xlsx(
+    papers: list[DiscoveredPaper],
+    repos: list[DiscoveredRepo],
+    output_dir: Path,
+    skip_papers: bool = False,
+    skip_github: bool = False,
+) -> None:
+    """Write research-data.xlsx (Papers/Pending/Discarded/GitHub) to *output_dir*."""
+    data = build_xlsx(papers, repos, skip_papers=skip_papers, skip_github=skip_github)
     xlsx_path = output_dir / "research-data.xlsx"
-    wb.save(xlsx_path)
-    logger.info(f"Wrote research-data.xlsx ({wb.sheetnames}) to {xlsx_path}")
+    xlsx_path.write_bytes(data)
+    logger.info(f"Wrote research-data.xlsx to {xlsx_path}")
 
 
 # ---------------------------------------------------------------------------

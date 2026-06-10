@@ -245,8 +245,26 @@ export async function putPublishTarget(path: string): Promise<{ publish_target: 
   return put<{ publish_target: string }>('/publish/target', { path })
 }
 
-export async function runPublish(dry_run: boolean): Promise<PublishDryRunResponse | PublishResponse> {
-  return post<PublishDryRunResponse | PublishResponse>('/publish', { dry_run })
+export async function runPublish(args: {
+  dry_run: boolean
+  publish_papers: boolean
+  publish_repos: boolean
+}): Promise<PublishDryRunResponse | PublishResponse> {
+  return post<PublishDryRunResponse | PublishResponse>('/publish', args)
+}
+
+export async function exportXlsx(): Promise<void> {
+  const res = await fetch(`${BASE}/export.xlsx`)
+  if (!res.ok) throw new Error(`Export failed: ${res.status}`)
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `ndif-citations-${new Date().toISOString().slice(0, 10)}.xlsx`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
 }
 
 // ---------------------------------------------------------------------------

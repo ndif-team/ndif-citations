@@ -269,7 +269,7 @@ function isSuggested(p: ResultPaper): boolean {
 function RunResults({ papers }: { papers: ResultPaper[] }) {
   const qc = useQueryClient()
   const [checked, setChecked] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(papers.map((p) => [p.id, isSuggested(p)]))
+    () => Object.fromEntries(papers.map((p) => [p.id, isSuggested(p) && p.bucket === 'pending']))
   )
   const [busy, setBusy] = useState(false)
   const [pendingDiscard, setPendingDiscard] = useState<ResultPaper | null>(null)
@@ -278,7 +278,9 @@ function RunResults({ papers }: { papers: ResultPaper[] }) {
     return <p className="text-xs text-muted-foreground">No new or changed papers from this run.</p>
   }
 
-  const selectedIds = papers.filter((p) => checked[p.id]).map((p) => p.id)
+  // Only pending rows are actionable; already verified/discarded papers can't be
+  // re-verified or re-discarded from the run results, so they expose no controls.
+  const selectedIds = papers.filter((p) => checked[p.id] && p.bucket === 'pending').map((p) => p.id)
 
   function refresh() {
     qc.invalidateQueries({ queryKey: ['papers'] })
@@ -329,12 +331,14 @@ function RunResults({ papers }: { papers: ResultPaper[] }) {
             {papers.map((p) => (
               <tr key={p.id} className="border-t border-border/50 hover:bg-muted/30">
                 <td className="px-2 py-1.5 w-6">
-                  <input
-                    type="checkbox"
-                    checked={!!checked[p.id]}
-                    onChange={(e) => setChecked((c) => ({ ...c, [p.id]: e.target.checked }))}
-                    aria-label={`Select ${p.title}`}
-                  />
+                  {p.bucket === 'pending' && (
+                    <input
+                      type="checkbox"
+                      checked={!!checked[p.id]}
+                      onChange={(e) => setChecked((c) => ({ ...c, [p.id]: e.target.checked }))}
+                      aria-label={`Select ${p.title}`}
+                    />
+                  )}
                 </td>
                 <td className="px-2 py-1.5 font-mono text-muted-foreground w-28">{p.category ?? '—'}</td>
                 <td className="px-2 py-1.5 w-20">
@@ -344,12 +348,16 @@ function RunResults({ papers }: { papers: ResultPaper[] }) {
                 <td className="px-2 py-1.5 max-w-0"><span className="block truncate" title={p.title}>{p.title}</span></td>
                 <td className="px-2 py-1.5 w-20 text-muted-foreground">{p.bucket}</td>
                 <td className="px-2 py-1.5 w-28 text-right whitespace-nowrap">
-                  <button onClick={() => verify([p.id])} disabled={busy} className="px-1.5 py-0.5 rounded hover:bg-muted" title="Verify" aria-label={`Verify ${p.title}`}>
-                    <Check className="h-3.5 w-3.5 inline text-green-600" />
-                  </button>
-                  <button onClick={() => (p.source === 'manual_add' ? setPendingDiscard(p) : discard(p.id))} disabled={busy} className="px-1.5 py-0.5 rounded hover:bg-muted" title="Discard" aria-label={`Discard ${p.title}`}>
-                    <X className="h-3.5 w-3.5 inline text-red-600" />
-                  </button>
+                  {p.bucket === 'pending' && (
+                    <>
+                      <button onClick={() => verify([p.id])} disabled={busy} className="px-1.5 py-0.5 rounded hover:bg-muted" title="Verify" aria-label={`Verify ${p.title}`}>
+                        <Check className="h-3.5 w-3.5 inline text-green-600" />
+                      </button>
+                      <button onClick={() => (p.source === 'manual_add' ? setPendingDiscard(p) : discard(p.id))} disabled={busy} className="px-1.5 py-0.5 rounded hover:bg-muted" title="Discard" aria-label={`Discard ${p.title}`}>
+                        <X className="h-3.5 w-3.5 inline text-red-600" />
+                      </button>
+                    </>
+                  )}
                   <Link to={`/papers?paper=${encodeURIComponent(p.id)}`} className="px-1.5 py-0.5 rounded hover:bg-muted inline-block" title="Open in Papers" aria-label={`Open ${p.title} in Papers`}>
                     <ExternalLink className="h-3.5 w-3.5 inline text-muted-foreground" />
                   </Link>

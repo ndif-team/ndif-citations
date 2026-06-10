@@ -38,6 +38,8 @@ class TargetRequest(BaseModel):
 class PublishRequest(BaseModel):
     """Body for POST /api/publish."""
     dry_run: bool = True
+    publish_papers: bool = True
+    publish_repos: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -156,12 +158,21 @@ def do_publish(
     400 if no target is configured or detected; the publish module raises a
     clear FileNotFoundError (→ 400) if the pipeline has not been run.
     """
+    if not (body.publish_papers or body.publish_repos):
+        raise HTTPException(status_code=422, detail="select papers and/or repos to publish")
+
     target = _resolve_target()
 
     try:
         if body.dry_run:
-            return publish.diff(out, target)
-        summary = publish.apply(out, target)
+            result = publish.diff(out, target)
+            if not body.publish_papers:
+                result["papers"] = {"added": [], "changed": [], "removed": []}
+                result["images"] = {"new": [], "changed": []}
+            if not body.publish_repos:
+                result["repos"] = {"added": [], "changed": [], "removed": []}
+            return result
+        summary = publish.apply(out, target, papers=body.publish_papers, repos=body.publish_repos)
         # Recompute diff post-apply for the response (should be empty buckets,
         # but informative — reflects what was just published).
         return {

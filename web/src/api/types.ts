@@ -3,7 +3,7 @@
 export type Bucket = 'verified' | 'pending' | 'discarded'
 export type Category = 'uses_ndif' | 'uses_nnsight' | 'referencing' | 'unclassified'
 export type ConfidenceBand = 'CERTAIN' | 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE'
-export type SortOption = 'year_desc' | 'year_asc' | 'title'
+export type SortOption = 'year_desc' | 'year_asc' | 'title' | 'date_added_desc' | 'date_added_asc'
 
 export interface StatsResponse {
   papers: {
@@ -280,8 +280,17 @@ export interface PublishDryRunResponse {
   images: { new: string[]; changed: string[] }
 }
 
+export interface PublishSummary {
+  files_written: string[]
+  images_copied: number
+  images_overwritten: number
+  images_unchanged: number
+  images_missing: number
+  backups: string[]
+}
+
 export interface PublishResponse {
-  summary: string
+  summary: PublishSummary
   diff: unknown
   build_hint: string
 }

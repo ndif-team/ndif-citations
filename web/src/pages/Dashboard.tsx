@@ -13,7 +13,6 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useStats } from '@/api/hooks'
 import { CategoryChart } from '@/components/dashboard/CategoryChart'
-import { toast } from 'sonner'
 
 function KpiCard({
   label,
@@ -97,7 +96,7 @@ export function Dashboard() {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => toast.info('Publish to site — coming soon')}
+            onClick={() => navigate('/publish')}
             className="gap-1.5"
           >
             <Upload className="h-3.5 w-3.5" />

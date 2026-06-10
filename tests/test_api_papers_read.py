@@ -409,3 +409,23 @@ def test_paper_detail_includes_missing_and_has_pdf(client: TestClient, fixture_s
     assert body["has_pdf"] is False, (
         f"Expected has_pdf=False (no cached PDF in fixture), got {body['has_pdf']!r}"
     )
+
+
+def test_list_rows_date_added_sort(tmp_path):
+    """date_added_desc orders newest-first by date_discovered; date_added_asc oldest-first."""
+    from datetime import datetime
+    from ndif_citations.models import PipelineRun
+    from ndif_citations.output import write_outputs
+    from ndif_citations.server.services import papers_svc
+    from tests.conftest import make_paper
+
+    # Same year so the year fields don't influence date ordering.
+    old = make_paper(title="Oldest", arxiv_id="2401.00001", date_discovered=datetime(2024, 1, 1))
+    mid = make_paper(title="Middle", arxiv_id="2401.00002", date_discovered=datetime(2024, 6, 1))
+    new = make_paper(title="Newest", arxiv_id="2401.00003", date_discovered=datetime(2024, 12, 1))
+    write_outputs([old, mid, new], tmp_path, PipelineRun())
+
+    desc = [r["title"] for r in papers_svc.list_rows(tmp_path, sort="date_added_desc")]
+    assert desc == ["Newest", "Middle", "Oldest"]
+    asc = [r["title"] for r in papers_svc.list_rows(tmp_path, sort="date_added_asc")]
+    assert asc == ["Oldest", "Middle", "Newest"]
