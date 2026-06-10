@@ -14,6 +14,7 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -276,7 +277,7 @@ function RunResults({ papers }: { papers: ResultPaper[] }) {
     return <p className="text-xs text-muted-foreground">No new or changed papers from this run.</p>
   }
 
-  const suggestedIds = papers.filter(isSuggested).map((p) => p.id)
+  const selectedIds = papers.filter((p) => checked[p.id]).map((p) => p.id)
 
   function refresh() {
     qc.invalidateQueries({ queryKey: ['papers'] })
@@ -317,8 +318,8 @@ function RunResults({ papers }: { papers: ResultPaper[] }) {
         <p className="text-xs font-medium text-muted-foreground">
           Results — {papers.length} new/changed · defaults to pending
         </p>
-        <Button size="sm" disabled={busy || suggestedIds.length === 0} onClick={() => verify(suggestedIds)} className="gap-1.5">
-          <Check className="h-3.5 w-3.5" /> Verify {suggestedIds.length} suggested
+        <Button size="sm" disabled={busy || selectedIds.length === 0} onClick={() => verify(selectedIds)} className="gap-1.5">
+          <Check className="h-3.5 w-3.5" /> Verify {selectedIds.length} selected
         </Button>
       </div>
       <div className="rounded-md border overflow-hidden">
@@ -348,9 +349,9 @@ function RunResults({ papers }: { papers: ResultPaper[] }) {
                   <button onClick={() => discard(p.id)} disabled={busy} className="px-1.5 py-0.5 rounded hover:bg-muted" title="Discard" aria-label={`Discard ${p.title}`}>
                     <X className="h-3.5 w-3.5 inline text-red-600" />
                   </button>
-                  <a href="/papers" className="px-1.5 py-0.5 rounded hover:bg-muted inline-block" title="Open in Papers" aria-label={`Open ${p.title} in Papers`}>
+                  <Link to={`/papers?paper=${encodeURIComponent(p.id)}`} className="px-1.5 py-0.5 rounded hover:bg-muted inline-block" title="Open in Papers" aria-label={`Open ${p.title} in Papers`}>
                     <ExternalLink className="h-3.5 w-3.5 inline text-muted-foreground" />
-                  </a>
+                  </Link>
                 </td>
               </tr>
             ))}
@@ -783,7 +784,7 @@ function LiveRunView({ runId, mode, onDone }: LiveRunViewProps) {
       />
 
       {/* Per-item progress — counts real work (LLM/PDF), not the routed total (F-012) */}
-      {eventState.currentItem && (
+      {!isDone && eventState.currentItem && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none flex-none text-blue-500" aria-hidden="true" />
           <span className="tabular-nums font-medium text-foreground">
@@ -835,7 +836,7 @@ function LiveRunView({ runId, mode, onDone }: LiveRunViewProps) {
       </div>
 
       {/* Results panel — shown once the run finishes */}
-      {isDone && doneRecord?.result_papers && doneRecord.result_papers.length > 0 && (
+      {isDone && Array.isArray(doneRecord?.result_papers) && (
         <div className="space-y-2">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Papers from this run</p>
           <RunResults papers={doneRecord.result_papers} />
@@ -1141,7 +1142,7 @@ function FinishedRunView({ run, onBack }: FinishedRunViewProps) {
           <EventLog events={run.events} />
         </div>
       )}
-      {Array.isArray(run.result_papers) && run.result_papers.length > 0 && (
+      {Array.isArray(run.result_papers) && (
         <div className="space-y-2">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Papers from this run</p>
           <RunResults papers={run.result_papers} />

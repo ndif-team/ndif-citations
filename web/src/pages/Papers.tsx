@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from 'react'
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import {
   useReactTable,
   getCoreRowModel,
@@ -31,7 +31,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { usePapers, useActiveRun } from '@/api/hooks'
 import { useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useDebounce } from '@/hooks/useDebounce'
 import { bucketBadge, confidenceBadge, categoryBadge, categoryLabel } from '@/lib/tokens'
 import { formatAuthors, truncate } from '@/lib/utils'
@@ -289,12 +289,27 @@ function SelectionToolbar({
 export function Papers() {
   const qc = useQueryClient()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [bucket, setBucket] = useState<'' | Bucket>('')
   const [searchInput, setSearchInput] = useState('')
   const [sort, setSort] = useState<SortOption>('year_desc')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set())
   const [needsAttention, setNeedsAttention] = useState(false)
+
+  // Deep-link: open a paper's detail sheet from ?paper=<id> (e.g. the RunResults "Open" action),
+  // then strip the param so a later refresh/close doesn't reopen it.
+  useEffect(() => {
+    const pid = searchParams.get('paper')
+    if (pid) {
+      setSelectedId(pid)
+      setSearchParams((prev) => {
+        prev.delete('paper')
+        return prev
+      }, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Add paper dialog state
   const [addOpen, setAddOpen] = useState(false)
@@ -325,7 +340,7 @@ export function Papers() {
     setSubmitting(true)
     try {
       await addPaper(linkUrl.trim())
-      toast.success('Added — review the candidate at the gate')
+      toast.success('Run started — auto-processing the paper')
       setAddOpen(false)
       resetAddDialog()
       navigate('/runs')
@@ -358,7 +373,7 @@ export function Papers() {
         doi: pdfDoi.trim() || undefined,
         file: pdfFile,
       })
-      toast.success('Added — review the candidate at the gate')
+      toast.success('Run started — auto-processing the paper')
       setAddOpen(false)
       resetAddDialog()
       navigate('/runs')
@@ -372,17 +387,21 @@ export function Papers() {
 
   async function handleAttachToExisting() {
     if (!dupMatch || !pendingFile) return
+    setSubmitting(true)
     try {
       await attachPdf(dupMatch.id, pendingFile)
       toast.success('PDF attached to existing paper — open it to backfill / re-extract')
       setDupMatch(null); setPendingFile(null); setAddOpen(false); resetAddDialog()
     } catch (err) {
       toast.error(`Attach failed: ${(err as Error).message}`)
+    } finally {
+      setSubmitting(false)
     }
   }
 
   async function handleAddAsNew() {
     if (!pendingFile) return
+    setSubmitting(true)
     try {
       await addPaperPdf({
         title: pdfTitle.trim(),
@@ -395,6 +414,8 @@ export function Papers() {
       navigate('/runs')
     } catch (err) {
       toast.error(`Failed: ${(err as Error).message}`)
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -757,7 +778,7 @@ export function Papers() {
           <DialogHeader>
             <DialogTitle>Add paper</DialogTitle>
             <DialogDescription>
-              Add a paper by URL or upload a PDF. This starts a gated manual-add run.
+              Add a paper by URL or upload a PDF. It auto-processes, then appears in the run's Results to verify or discard.
             </DialogDescription>
           </DialogHeader>
           <div className="px-6 pb-6">
@@ -867,8 +888,8 @@ export function Papers() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => { setDupMatch(null); setPendingFile(null) }}>Cancel</AlertDialogCancel>
-            <Button variant="outline" onClick={handleAddAsNew}>Add as new anyway</Button>
-            <Button onClick={handleAttachToExisting}>Attach to existing</Button>
+            <Button variant="outline" onClick={handleAddAsNew} disabled={submitting}>Add as new anyway</Button>
+            <Button onClick={handleAttachToExisting} disabled={submitting}>Attach to existing</Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
