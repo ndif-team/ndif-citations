@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from ndif_citations.jobs import JobRunner, RunActiveError
@@ -540,3 +540,21 @@ def backfill_evidence(
         return papers_svc.backfill_evidence(out, paper_id)
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Paper {paper_id!r} not found")
+
+
+@router.get("/export.xlsx")
+def export_xlsx(out: Path = Depends(deps.get_output_dir)) -> Response:
+    """Stream the full catalog as a multi-sheet xlsx workbook download (read-only)."""
+    from datetime import datetime
+
+    from ndif_citations.output import build_xlsx, load_existing_papers, load_existing_repos
+
+    papers = load_existing_papers(out)
+    repos = load_existing_repos(out)
+    data = build_xlsx(papers, repos)
+    fname = f"ndif-citations-{datetime.now():%Y%m%d}.xlsx"
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
