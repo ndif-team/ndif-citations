@@ -19,8 +19,11 @@ Two front-ends drive the **same** pipeline: the **CLI** runs it straight through
 - **v1.9.0 — CLI app.** Discovery (S2 / OpenAlex / Scholar / GitHub), metadata enrichment, LLM classification with confidence bands, and catalog + spreadsheet output.
 - **v2.0.0 — adds the local web app** (`serve`): data-dense dashboard, a curation workspace (browse / edit / promote / discard / reprocess, cached-PDF + figure + evidence views), a run console with a pre-LLM review gate, robust metadata re-enrichment (`re-enrich`), and one-click publish to the site. The CLI is unchanged.
 - **v2.1.0 — QA hardening + API-key management.** API Keys settings tab with real credential validation (1-token LLM check, SerpAPI account check), humanized Test results, Clear buttons, and run-start preflight that live-checks keys. Run console now reports *honest* LLM work — distinguishes processed from already-complete papers and previews true work at the review gate (no more "Processing 113/128" for a 1-paper approval). Live runs snapshot the catalog before overwriting it; the seed paper can no longer leak into the gate; abstracts are stripped of raw LaTeX during enrichment; the SPA shell is served `no-store` so a rebuild never serves a stale bundle; PaperSheet opens without a Radix a11y console error.
+- **v2.2.0 — run results + PDF curation.** Per-run **Results panel** (what each run added/changed, deep-link straight to a paper), PDF-upload de-dup + attach, a standalone **Backfill evidence** action, ungated manual-add, and evidence de-duplication.
+- **v2.3.0 — Publish tab + export + sort.** **Publish** promoted to its own nav tab with what-to-publish (papers / repos) scope, one-click **Export .xlsx** (Papers / Pending / Discarded / GitHub), and a **Date added ↓/↑** sort on the Papers page.
+- **v2.3.1 — reliability.** **Cancel** now stops a run mid-Discover/Enrich (not just at the gate), live-run spinner/scroll fixes, and API keys written to `.env` unquoted.
 
-See [Releases](https://github.com/ndif-team/ndif-citations/releases) for notes.
+See [Releases](https://github.com/ndif-team/ndif-citations/releases) for notes. A non-coding, end-to-end **[curator walkthrough](onboarding/README.md)** tracks the current (v2.3.1) UI.
 
 ## Quick start
 
@@ -63,10 +66,11 @@ The server (FastAPI) hosts a React SPA plus a JSON API at `/api` (`/docs` for Sw
 | Screen | What it does |
 |--------|--------------|
 | **Dashboard** | Catalog KPIs and category breakdown |
-| **Papers** | Browse / filter the catalog, inline-edit 16 curated fields, promote / demote / discard, batch-reprocess, manage thumbnails, attach PDFs, on-demand summarize / categorize. Flags column marks curator-locked (🔒) and missing-metadata (⚠) rows |
-| **Runs** | Trigger a run, watch live progress over SSE (phase stepper, per-source rate-limit cooldowns, event log), cancel, browse history. **Incremental runs pause at a review gate before any LLM spend** — the gate previews the *true* work (your selected candidates + automatic gap-fills, with already-complete papers skipped) so you approve first |
+| **Papers** | Browse / filter / sort (incl. **date added**) the catalog, inline-edit 16 curated fields, promote / demote / discard, batch-reprocess, manage thumbnails, attach PDFs, **backfill evidence**, on-demand summarize / categorize. Flags column marks curator-locked (🔒) and missing-metadata (⚠) rows |
+| **Runs** | Trigger a run, watch live progress over SSE (phase stepper, per-source rate-limit cooldowns, event log), cancel (stops mid-run), browse history, and review a finished run's **Results panel**. **Incremental runs pause at a review gate before any LLM spend** — the gate previews the *true* work (your selected candidates + automatic gap-fills, with already-complete papers skipped) so you approve first |
 | **Repos** | Browse / edit / exclude discovered GitHub repos |
-| **Settings** | Edit pipeline knobs and known venues; manage **API keys** (validate with a live Test, clear); **publish** the catalog to the `ndif-website` site (dry-run diff first, then apply) |
+| **Publish** | Push the curated catalog to the `ndif-website` site — choose what to publish (papers / repos), preview with a **dry-run diff**, then apply. Also **Export .xlsx** (full catalog workbook) |
+| **Settings** | Edit pipeline knobs and known venues; manage **API keys** (validate with a live Test, clear) |
 
 Everything the UI does maps to a CLI command, so the two workflows are interchangeable.
 
