@@ -300,3 +300,23 @@ def test_apply_missing_output_errors(tmp_path: Path):
     (out / "images").mkdir(parents=True)
     with pytest.raises(FileNotFoundError):
         publish.apply(out, ndif_us)
+
+
+def test_apply_papers_only_skips_repos(tmp_path: Path):
+    out = _make_out(tmp_path, [_slim_paper("P", "http://x")], [_slim_repo("o", "r")])
+    target = _make_target(tmp_path)
+    # seed the repos JSON with sentinel content the papers-only apply must NOT touch
+    _write_json(target / "public" / "data" / "github-repos.json", [{"sentinel": True}])
+    publish.apply(out, target, papers=True, repos=False)
+    assert json.loads((target / "public" / "data" / "github-repos.json").read_text()) == [{"sentinel": True}]
+    assert (target / "public" / "data" / "research-papers.json").exists()
+
+
+def test_apply_repos_only_skips_papers(tmp_path: Path):
+    out = _make_out(tmp_path, [_slim_paper("P", "http://x")], [_slim_repo("o", "r")])
+    target = _make_target(tmp_path)
+    # seed the papers JSON with sentinel content the repos-only apply must NOT touch
+    _write_json(target / "public" / "data" / "research-papers.json", [{"sentinel": True}])
+    publish.apply(out, target, papers=False, repos=True)
+    assert json.loads((target / "public" / "data" / "research-papers.json").read_text()) == [{"sentinel": True}]
+    assert (target / "public" / "data" / "github-repos.json").exists()

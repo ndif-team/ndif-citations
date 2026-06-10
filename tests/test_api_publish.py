@@ -255,3 +255,45 @@ def test_post_publish_no_target(monkeypatch, tmp_path, isolated_settings):
     client, _ = _make_client(out)
     resp = client.post("/api/publish", json={"dry_run": True})
     assert resp.status_code == 400, resp.text
+
+
+def _slim_repo(owner: str = "o", repo: str = "r") -> dict:
+    return {
+        "owner": owner, "repo": repo, "url": f"https://github.com/{owner}/{repo}",
+        "description": "d", "stars": 1, "forks": 0, "last_commit": None,
+        "language": "Python", "linked_paper_url": None, "is_course": False,
+        "is_fork": False, "parent_full_name": None,
+    }
+
+
+def test_post_publish_dry_run_scope_filters_repos(monkeypatch, tmp_path):
+    """publish_repos=False drops the repo buckets from the dry-run diff."""
+    ndif_us = _make_target(tmp_path)
+    out = tmp_path / "out"
+    out.mkdir()
+    _seed_out(out, papers=[_slim_paper("P", "https://x/p")], repos=[_slim_repo()])
+    monkeypatch.setattr(publish, "detect_target", lambda start=None: ndif_us)
+
+    client, _ = _make_client(out)
+    resp = client.post("/api/publish", json={"dry_run": True, "publish_repos": False})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["repos"] == {"added": [], "changed": [], "removed": []}
+    # papers scope still on → the new paper shows as added
+    assert {p["url"] for p in body["papers"]["added"]} == {"https://x/p"}
+
+
+def test_post_publish_both_scopes_false_422(monkeypatch, tmp_path):
+    """Selecting neither papers nor repos → 422."""
+    ndif_us = _make_target(tmp_path)
+    out = tmp_path / "out"
+    out.mkdir()
+    _seed_out(out, papers=[_slim_paper("P", "https://x/p")], repos=[])
+    monkeypatch.setattr(publish, "detect_target", lambda start=None: ndif_us)
+
+    client, _ = _make_client(out)
+    resp = client.post(
+        "/api/publish",
+        json={"dry_run": True, "publish_papers": False, "publish_repos": False},
+    )
+    assert resp.status_code == 422, resp.text

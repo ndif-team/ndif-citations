@@ -232,8 +232,13 @@ def _backup(src: Path, backups_dir: Path, timestamp: str) -> Path | None:
     return dest
 
 
-def apply(out: Path, target: Path) -> dict:
+def apply(out: Path, target: Path, *, papers: bool = True, repos: bool = True) -> dict:
     """Publish the slim outputs in *out* to *target*.
+
+    ``papers`` / ``repos`` scope the publish: ``papers`` controls
+    ``research-papers.json`` **and** the referenced-image sync (images are owned
+    by papers); ``repos`` controls ``github-repos.json``. Only the selected
+    sections are backed up and written. Defaults publish everything.
 
     Steps:
       1. Back up the existing destination ``research-papers.json`` &
@@ -281,8 +286,11 @@ def apply(out: Path, target: Path) -> dict:
         "backups": [],
     }
 
-    # 1 + 2: back up then copy each JSON (matching .mjs output formatting).
+    # 1 + 2: back up then copy each selected JSON (matching .mjs output formatting).
+    _scoped = {_PAPERS_JSON: papers, _REPOS_JSON: repos}
     for name in (_PAPERS_JSON, _REPOS_JSON):
+        if not _scoped[name]:
+            continue
         src = out / name
         if not src.exists():
             continue
@@ -296,7 +304,9 @@ def apply(out: Path, target: Path) -> dict:
         dest.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
         summary["files_written"].append(str(dest))
 
-    # 3: copy referenced images with FORCE-OVERWRITE on byte difference.
+    # 3: copy referenced images with FORCE-OVERWRITE on byte difference (papers scope only).
+    if not papers:
+        return summary
     out_papers = _load_json_list(out / _PAPERS_JSON)
     seen: set[str] = set()
     for p in out_papers:
