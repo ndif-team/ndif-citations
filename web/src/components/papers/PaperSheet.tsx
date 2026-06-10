@@ -257,6 +257,7 @@ interface BucketActionsProps {
   paperId: string
   disabled: boolean
   onMutate: (updater: (prev: PaperDetail) => PaperDetail) => void
+  onClose: () => void
 }
 
 // Local reason options for the demote select — uses SELECT_NONE instead of ""
@@ -274,11 +275,13 @@ const BUCKET_REASON_OPTIONS = [
   { value: 'manual_demote',            label: 'Manual demote' },
 ]
 
-function BucketActions({ paper, paperId, disabled, onMutate }: BucketActionsProps) {
+function BucketActions({ paper, paperId, disabled, onMutate, onClose }: BucketActionsProps) {
+  const qc = useQueryClient()
   const [demoteReason, setDemoteReason] = useState(SELECT_NONE)
   const [discardOpen, setDiscardOpen] = useState(false)
   const [demoteOpen, setDemoteOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const isManualAdd = paper.source === 'manual_add'
 
   async function handleBucket(
     bucket: Bucket,
@@ -294,6 +297,15 @@ function BucketActions({ paper, paperId, disabled, onMutate }: BucketActionsProp
         reason: reason || undefined,
         detail,
       })
+      // A manual-add discard deletes the paper outright (no full record returned,
+      // nothing to undo): refresh the list/stats and close the now-stale sheet.
+      if (updated.deleted) {
+        qc.invalidateQueries({ queryKey: ['papers'] })
+        qc.invalidateQueries({ queryKey: ['stats'] })
+        toast.success('Paper deleted')
+        onClose()
+        return
+      }
       onMutate(() => updated)
       toast.success(`Moved to ${bucket}`, {
         action: {
@@ -417,9 +429,13 @@ function BucketActions({ paper, paperId, disabled, onMutate }: BucketActionsProp
             <AlertDialog open={discardOpen} onOpenChange={setDiscardOpen}>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Discard this paper?</AlertDialogTitle>
+                  <AlertDialogTitle>
+                    {isManualAdd ? 'Delete this manually-added paper?' : 'Discard this paper?'}
+                  </AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will move the paper to the discarded bucket. You can undo via the toast.
+                    {isManualAdd
+                      ? "This paper was added manually. Discarding it permanently deletes it from the catalog (it won't be kept as a discarded record and can't be recovered)."
+                      : 'This will move the paper to the discarded bucket. You can undo via the toast.'}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -430,7 +446,7 @@ function BucketActions({ paper, paperId, disabled, onMutate }: BucketActionsProp
                       await handleBucket('discarded', 'manual_discard')
                     }}
                   >
-                    Discard
+                    {isManualAdd ? 'Delete permanently' : 'Discard'}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -1133,6 +1149,7 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
                     paperId={paperId ?? ''}
                     disabled={hasActiveRun}
                     onMutate={handleMutate}
+                    onClose={onClose}
                   />
 
                   {/* Image management */}
