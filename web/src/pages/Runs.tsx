@@ -272,6 +272,7 @@ function RunResults({ papers }: { papers: ResultPaper[] }) {
     () => Object.fromEntries(papers.map((p) => [p.id, isSuggested(p)]))
   )
   const [busy, setBusy] = useState(false)
+  const [pendingDiscard, setPendingDiscard] = useState<ResultPaper | null>(null)
 
   if (papers.length === 0) {
     return <p className="text-xs text-muted-foreground">No new or changed papers from this run.</p>
@@ -302,9 +303,9 @@ function RunResults({ papers }: { papers: ResultPaper[] }) {
   async function discard(id: string) {
     setBusy(true)
     try {
-      await setPaperBucket(id, { bucket: 'discarded' })
+      const res = await setPaperBucket(id, { bucket: 'discarded' })
       refresh()
-      toast.success('Discarded')
+      toast.success(res.deleted ? 'Deleted' : 'Discarded')
     } catch (err) {
       toast.error(`Failed: ${(err as Error).message}`)
     } finally {
@@ -346,7 +347,7 @@ function RunResults({ papers }: { papers: ResultPaper[] }) {
                   <button onClick={() => verify([p.id])} disabled={busy} className="px-1.5 py-0.5 rounded hover:bg-muted" title="Verify" aria-label={`Verify ${p.title}`}>
                     <Check className="h-3.5 w-3.5 inline text-green-600" />
                   </button>
-                  <button onClick={() => discard(p.id)} disabled={busy} className="px-1.5 py-0.5 rounded hover:bg-muted" title="Discard" aria-label={`Discard ${p.title}`}>
+                  <button onClick={() => (p.source === 'manual_add' ? setPendingDiscard(p) : discard(p.id))} disabled={busy} className="px-1.5 py-0.5 rounded hover:bg-muted" title="Discard" aria-label={`Discard ${p.title}`}>
                     <X className="h-3.5 w-3.5 inline text-red-600" />
                   </button>
                   <Link to={`/papers?paper=${encodeURIComponent(p.id)}`} className="px-1.5 py-0.5 rounded hover:bg-muted inline-block" title="Open in Papers" aria-label={`Open ${p.title} in Papers`}>
@@ -358,6 +359,22 @@ function RunResults({ papers }: { papers: ResultPaper[] }) {
           </tbody>
         </table>
       </div>
+      <AlertDialog open={pendingDiscard !== null} onOpenChange={(o) => !o && setPendingDiscard(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this manually-added paper?</AlertDialogTitle>
+            <AlertDialogDescription>
+              It was added manually, so discarding permanently deletes it (not recoverable).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingDiscard(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { if (pendingDiscard) discard(pendingDiscard.id); setPendingDiscard(null) }}>
+              Delete permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
