@@ -832,10 +832,13 @@ function LiveRunView({ runId, mode, onDone }: LiveRunViewProps) {
         )}
       </div>
 
-      {/* Rate limit cooldown */}
-      {typeof eventState.rateLimitWait === 'number' && eventState.rateLimitWait > 0 && (
-        <CooldownBadge seconds={eventState.rateLimitWait} label={eventState.rateLimitLabel} />
-      )}
+      {/* Rate limit cooldown — fixed-height slot so the chip can appear/disappear
+          without shifting the phase stepper and log below it. */}
+      <div className="h-7 flex items-center">
+        {typeof eventState.rateLimitWait === 'number' && eventState.rateLimitWait > 0 && (
+          <CooldownBadge seconds={eventState.rateLimitWait} label={eventState.rateLimitLabel} />
+        )}
+      </div>
 
       {/* Phase stepper */}
       <PhaseStepper
