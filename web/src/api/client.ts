@@ -120,6 +120,10 @@ export async function submitGate(runId: string, payload: GatePayload): Promise<v
   await post(`/runs/${encodeURIComponent(runId)}/gate`, payload)
 }
 
+export async function deleteRun(runId: string): Promise<{ deleted: string }> {
+  return del<{ deleted: string }>(`/runs/${encodeURIComponent(runId)}`)
+}
+
 export interface ReposParams {
   repo_type?: RepoType | ''
   q?: string

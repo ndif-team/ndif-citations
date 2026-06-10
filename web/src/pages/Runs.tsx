@@ -5,10 +5,11 @@ import {
   Square,
   AlertCircle,
   ChevronRight,
+  ChevronDown,
   Check,
   Loader2,
   Clock,
-  SkipForward,
+  Trash2,
   Pencil,
   X,
   ExternalLink,
@@ -30,7 +31,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useRuns, useActiveRun } from '@/api/hooks'
 import { useRunEvents } from '@/hooks/useRunEvents'
-import { startRun, cancelRun, submitGate, fetchRun, getPreflight, setPaperBucket } from '@/api/client'
+import { startRun, cancelRun, submitGate, fetchRun, deleteRun, getPreflight, setPaperBucket } from '@/api/client'
 import { runStateBadge, runStateLabel } from '@/lib/tokens'
 import { cn } from '@/lib/utils'
 import type { RunRecord, PipelineStage, PaperCandidate, RepoCandidate, RunMode, ProgressEvent, ResultPaper, RunState } from '@/api/types'
@@ -1101,13 +1102,47 @@ function TriggerPanel({ onStarted }: TriggerPanelProps) {
 
 // ─── History list ─────────────────────────────────────────────────────────────
 
-interface HistoryListProps {
-  onSelectRun: (runId: string) => void
-  activeRunId: string | null
-}
-
-function HistoryList({ onSelectRun, activeRunId }: HistoryListProps) {
+function HistoryList({ activeRunId }: { activeRunId: string | null }) {
   const { data: runs, isLoading } = useRuns()
+  const qc = useQueryClient()
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [record, setRecord] = useState<RunRecord | null>(null)
+  const [loadingId, setLoadingId] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  // Expand a run inline. Clicking a different run just switches the open
+  // detail — no need to close the current one first.
+  async function toggle(runId: string) {
+    if (expandedId === runId) { setExpandedId(null); setRecord(null); return }
+    setExpandedId(runId)
+    setRecord(null)
+    setLoadingId(runId)
+    try {
+      setRecord(await fetchRun(runId))
+    } catch {
+      toast.error('Failed to load run details')
+      setExpandedId(null)
+    } finally {
+      setLoadingId(null)
+    }
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) return
+    setDeleting(true)
+    try {
+      await deleteRun(pendingDelete)
+      if (expandedId === pendingDelete) { setExpandedId(null); setRecord(null) }
+      toast.success('Run log deleted')
+      qc.invalidateQueries({ queryKey: ['runs'] })
+    } catch (err) {
+      toast.error((err as Error).message || 'Delete failed')
+    } finally {
+      setDeleting(false)
+      setPendingDelete(null)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -1124,57 +1159,98 @@ function HistoryList({ onSelectRun, activeRunId }: HistoryListProps) {
   }
 
   return (
-    <div className="space-y-0 rounded-md border overflow-hidden">
+    <div className="rounded-md border overflow-hidden">
       {runs.map((run) => {
         const isActive = run.run_id === activeRunId
+        const isExpanded = expandedId === run.run_id
         return (
-          <button
-            key={run.run_id}
-            onClick={() => onSelectRun(run.run_id)}
-            className={cn(
-              'w-full flex items-center gap-3 px-3 py-2.5 text-left text-xs border-b last:border-b-0 hover:bg-muted/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-              isActive && 'bg-blue-50/60 dark:bg-blue-950/30'
+          <div key={run.run_id} className="border-b last:border-b-0">
+            <div
+              className={cn(
+                'flex items-center gap-2 px-3 py-2.5 text-xs hover:bg-muted/50 transition-colors',
+                (isActive || isExpanded) && 'bg-blue-50/60 dark:bg-blue-950/30'
+              )}
+            >
+              <button
+                onClick={() => { if (!isActive) toggle(run.run_id) }}
+                disabled={isActive}
+                aria-expanded={isExpanded}
+                className="flex items-center gap-3 flex-1 min-w-0 text-left focus-visible:outline-none disabled:cursor-default"
+              >
+                {isActive ? (
+                  <span className="h-3.5 w-3.5 flex-none" aria-hidden="true" />
+                ) : isExpanded ? (
+                  <ChevronDown className="h-3.5 w-3.5 flex-none text-muted-foreground" aria-hidden="true" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5 flex-none text-muted-foreground" aria-hidden="true" />
+                )}
+                <span className="font-mono text-muted-foreground truncate flex-1 min-w-0">{run.run_id}</span>
+                <span className={runStateBadge(run.state)}>{runStateLabel(run.state)}</span>
+                <span className="text-muted-foreground whitespace-nowrap">{fmtDate(run.started_at)}</span>
+                {run.total != null && (
+                  <span className="text-muted-foreground whitespace-nowrap tabular-nums">
+                    {run.processed ?? 0}/{run.total}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setPendingDelete(run.run_id)}
+                disabled={isActive}
+                title={isActive ? 'Cannot delete an active run' : 'Delete this run log'}
+                aria-label={`Delete run ${run.run_id}`}
+                className="flex-none p-1 rounded text-muted-foreground hover:text-destructive hover:bg-muted disabled:opacity-30 disabled:hover:text-muted-foreground disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </div>
+            {isExpanded && (
+              <div className="border-t bg-muted/20 px-3 py-3">
+                {loadingId === run.run_id || !record ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                    Loading…
+                  </div>
+                ) : (
+                  <RunDetailBody run={record} />
+                )}
+              </div>
             )}
-          >
-            <span className="font-mono text-muted-foreground truncate flex-1 min-w-0">{run.run_id}</span>
-            <span className={runStateBadge(run.state)}>
-              {runStateLabel(run.state)}
-            </span>
-            <span className="text-muted-foreground whitespace-nowrap">{fmtDate(run.started_at)}</span>
-            {run.total != null && (
-              <span className="text-muted-foreground whitespace-nowrap tabular-nums">
-                {run.processed ?? 0}/{run.total}
-              </span>
-            )}
-          </button>
+          </div>
         )
       })}
+
+      <AlertDialog open={pendingDelete !== null} onOpenChange={(o) => { if (!o) setPendingDelete(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this run log?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently removes the run record{' '}
+              <span className="font-mono break-all">{pendingDelete}</span> from history.
+              This only deletes the log — it does not affect the catalog.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} disabled={deleting}>
+              {deleting ? 'Deleting…' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
 
-// ─── Finished run read-only view ──────────────────────────────────────────────
+// ─── Finished run read-only detail (rendered inline inside the history) ─────────
 
-interface FinishedRunViewProps {
-  run: RunRecord
-  onBack: () => void
-}
-
-function FinishedRunView({ run, onBack }: FinishedRunViewProps) {
+function RunDetailBody({ run }: { run: RunRecord }) {
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3 justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-mono text-muted-foreground">{run.run_id}</span>
-          <span className={runStateBadge(run.state)}>{runStateLabel(run.state)}</span>
-          <span className="text-xs text-muted-foreground capitalize">({run.mode})</span>
-        </div>
-        <Button size="sm" variant="ghost" onClick={onBack} className="gap-1.5">
-          <X className="h-3.5 w-3.5" />
-          Close
-        </Button>
-      </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div>
+          <p className="text-muted-foreground">Mode</p>
+          <p className="font-medium mt-0.5 capitalize">{run.mode}</p>
+        </div>
         <div>
           <p className="text-muted-foreground">Started</p>
           <p className="font-medium mt-0.5">{fmtDate(run.started_at)}</p>
@@ -1187,13 +1263,21 @@ function FinishedRunView({ run, onBack }: FinishedRunViewProps) {
           <p className="text-muted-foreground">Duration</p>
           <p className="font-medium mt-0.5">{fmtDuration(run.started_at, run.finished_at)}</p>
         </div>
-        {run.counts && (
-          <div>
-            <p className="text-muted-foreground">Counts</p>
-            <p className="font-medium mt-0.5 font-mono">{Object.entries(run.counts).map(([k, v]) => `${k}:${v}`).join(' ')}</p>
-          </div>
-        )}
       </div>
+      {run.counts && Object.keys(run.counts).length > 0 && (
+        <div className="text-xs min-w-0">
+          <p className="text-muted-foreground mb-0.5">Counts</p>
+          {/* One entry per line, value wraps (break-all) so long values like a
+              reprocessed DOI don't overflow the box. */}
+          <div className="font-mono space-y-0.5">
+            {Object.entries(run.counts).map(([k, v]) => (
+              <div key={k} className="break-all leading-relaxed">
+                <span className="text-muted-foreground">{k}:</span> {String(v)}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {run.error && (
         <div className="flex items-center gap-2 text-destructive text-xs">
           <AlertCircle className="h-4 w-4 flex-none" />
@@ -1226,8 +1310,6 @@ export function Runs() {
 
   // Active run state (run_id + mode)
   const [activeRun, setActiveRun] = useState<{ runId: string; mode: RunMode } | null>(null)
-  // Selected finished run for read-only view
-  const [selectedRun, setSelectedRun] = useState<RunRecord | null>(null)
 
   // On mount: if there's a live active/awaiting run, attach to it
   const resumedRef = useRef(false)
@@ -1239,7 +1321,6 @@ export function Runs() {
   }, [activeRecord, activeRun])
 
   function handleStarted(runId: string, mode: RunMode) {
-    setSelectedRun(null)
     setActiveRun({ runId, mode })
     // Refresh active run query
     qc.invalidateQueries({ queryKey: ['runs', 'active'] })
@@ -1249,21 +1330,6 @@ export function Runs() {
     setActiveRun(null)
     qc.invalidateQueries({ queryKey: ['runs'] })
     qc.invalidateQueries({ queryKey: ['runs', 'active'] })
-  }
-
-  async function handleSelectRun(runId: string) {
-    // If this is the active run, switch to live view
-    if (activeRun?.runId === runId) {
-      setSelectedRun(null)
-      return
-    }
-    // Otherwise fetch and show read-only
-    try {
-      const record = await fetchRun(runId)
-      setSelectedRun(record)
-    } catch {
-      toast.error('Failed to load run details')
-    }
   }
 
   const showLive = !!activeRun
@@ -1316,28 +1382,10 @@ export function Runs() {
         </CardContent>
       </Card>
 
-      {/* Finished run detail (read-only) */}
-      {selectedRun && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-sm">
-              <SkipForward className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              Run details
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <FinishedRunView run={selectedRun} onBack={() => setSelectedRun(null)} />
-          </CardContent>
-        </Card>
-      )}
-
-      {/* History */}
+      {/* History — click a run to expand its details inline */}
       <div className="space-y-3">
         <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Run history</h3>
-        <HistoryList
-          onSelectRun={handleSelectRun}
-          activeRunId={activeRun?.runId ?? null}
-        />
+        <HistoryList activeRunId={activeRun?.runId ?? null} />
       </div>
     </div>
   )
