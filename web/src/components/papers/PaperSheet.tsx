@@ -1059,8 +1059,22 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => setPostAttachOpen(false)}>
-                          Not now
+                        <Button
+                          size="sm"
+                          disabled={hasActiveRun}
+                          title={hasActiveRun ? 'A run is already active' : undefined}
+                          onClick={async () => {
+                            setPostAttachOpen(false)
+                            try {
+                              const u = await backfillEvidence(paperId ?? '')
+                              handleMutate(() => u)
+                              toast.success('Evidence backfilled')
+                            } catch (err) {
+                              toast.error((err as Error).message || 'Backfill failed')
+                            }
+                          }}
+                        >
+                          Backfill evidence
                         </Button>
                         <Button
                           size="sm"
@@ -1079,22 +1093,8 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
                         >
                           Extract thumbnail
                         </Button>
-                        <Button
-                          size="sm"
-                          disabled={hasActiveRun}
-                          title={hasActiveRun ? 'A run is already active' : undefined}
-                          onClick={async () => {
-                            setPostAttachOpen(false)
-                            try {
-                              const u = await backfillEvidence(paperId ?? '')
-                              handleMutate(() => u)
-                              toast.success('Evidence backfilled')
-                            } catch (err) {
-                              toast.error((err as Error).message || 'Backfill failed')
-                            }
-                          }}
-                        >
-                          Backfill evidence
+                        <Button variant="ghost" size="sm" onClick={() => setPostAttachOpen(false)}>
+                          Not now
                         </Button>
                       </AlertDialogFooter>
                     </AlertDialogContent>
