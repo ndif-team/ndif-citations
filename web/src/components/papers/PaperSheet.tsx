@@ -521,7 +521,7 @@ function ImageActions({ paperId, disabled, procRunning, onMutate, onRunStarted }
           className="h-7 text-xs gap-1"
         >
           <RotateCcw className="h-3 w-3" />
-          Re-extract
+          Extract
         </Button>
       </div>
     </div>
@@ -581,6 +581,23 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
       setProcRunId(null)
     }
   }, [procRunId, procEvents.ended, qc, paperId, procLabel])
+
+  const [backfilling, setBackfilling] = useState(false)
+  async function handleBackfillEvidence() {
+    if (!paperId) return
+    setBackfilling(true)
+    try {
+      await backfillEvidence(paperId)
+      qc.invalidateQueries({ queryKey: ['paper', paperId] })
+      qc.invalidateQueries({ queryKey: ['papers'] })
+      qc.invalidateQueries({ queryKey: ['stats'] })
+      toast.success('Evidence backfilled')
+    } catch (err) {
+      toast.error((err as Error).message || 'Backfill failed')
+    } finally {
+      setBackfilling(false)
+    }
+  }
 
   const isOpen = !!paperId
 
@@ -1044,7 +1061,7 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
                             }
                           }}
                         >
-                          Re-extract thumbnail
+                          Extract thumbnail
                         </Button>
                         <Button
                           size="sm"
@@ -1084,6 +1101,15 @@ export function PaperSheet({ paperId, onClose, onPrev, onNext, hasPrev, hasNext 
                           no evidence
                         </span>
                       )}
+                      <button
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleBackfillEvidence() }}
+                        disabled={backfilling || !paperId}
+                        className="ml-auto inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded border border-input hover:bg-accent disabled:opacity-50"
+                        title="Recompute NDIF evidence from the cached PDF (no LLM)"
+                      >
+                        {backfilling ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : null}
+                        Backfill evidence
+                      </button>
                     </summary>
                     <div className="mt-2 space-y-2">
                       {(paper.ndif_context_windows ?? []).length > 0 ? (
