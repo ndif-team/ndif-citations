@@ -210,6 +210,10 @@ def test_get_paper_by_arxiv_id(client: TestClient):
     # Full dict should have many more fields than the list row
     assert "abstract" in data
     assert "category_confidence" in data
+    # Detail must also expose the `confidence_band` alias the frontend
+    # PaperSheet reads (to_full_dict only carries category_confidence_band;
+    # without the alias the sheet's confidence badge silently never renders).
+    assert data["confidence_band"] == data["category_confidence_band"]
 
 
 def test_get_paper_by_title_key(client: TestClient):

@@ -72,6 +72,18 @@ def _paper_to_row(paper: DiscoveredPaper) -> dict:
     }
 
 
+def _detail_dict(paper: DiscoveredPaper) -> dict:
+    """Full dict for paper detail / mutation responses.
+
+    Adds the ``confidence_band`` alias the frontend ``PaperDetail`` reads —
+    the persisted ``to_full_dict()`` only carries ``category_confidence_band``,
+    so without this the detail sheet's confidence badge never renders.
+    """
+    d = paper.to_full_dict()
+    d["confidence_band"] = paper.category_confidence_band.value
+    return d
+
+
 def list_rows(
     out: Path,
     *,
@@ -135,7 +147,7 @@ def get_paper(out: Path, paper_id: str) -> dict | None:
     if paper is None:
         return None
     from ndif_citations.pdf_cache import cached_pdf_path
-    d = paper.to_full_dict()
+    d = _detail_dict(paper)
     d["missing"] = _compute_missing(paper)
     d["has_pdf"] = cached_pdf_path(paper, out) is not None
     return d
@@ -198,7 +210,7 @@ def edit_paper(out: Path, paper_id: str, fields: dict[str, str]) -> dict:
         paper.bucket, paper.reason = _decide_bucket(paper)
 
     write_outputs(papers, out, PipelineRun())
-    return paper.to_full_dict()
+    return _detail_dict(paper)
 
 
 def set_bucket(
@@ -262,7 +274,7 @@ def set_bucket(
     paper.manual_override = True
 
     write_outputs(papers, out, PipelineRun())
-    return paper.to_full_dict()
+    return _detail_dict(paper)
 
 
 def attach_pdf(out: Path, paper_id: str, data: bytes) -> dict:
@@ -282,7 +294,7 @@ def attach_pdf(out: Path, paper_id: str, data: bytes) -> dict:
     if paper is None:
         raise KeyError(paper_id)
     write_pdf_to_cache(paper, data, out)
-    d = paper.to_full_dict()
+    d = _detail_dict(paper)
     d["missing"] = _compute_missing(paper)
     d["has_pdf"] = cached_pdf_path(paper, out) is not None
     return d
@@ -305,7 +317,7 @@ def backfill_evidence(out: Path, paper_id: str) -> dict:
     paper.ndif_context_windows = windows
     paper.context_source = source
     write_outputs(papers, out, PipelineRun())
-    d = paper.to_full_dict()
+    d = _detail_dict(paper)
     d["missing"] = _compute_missing(paper)
     d["has_pdf"] = cached_pdf_path(paper, out) is not None
     return d
@@ -361,4 +373,4 @@ def upload_image(out: Path, paper_id: str, file: "UploadFile") -> dict:
     paper.manual_override = True
 
     write_outputs(papers, out, PipelineRun())
-    return paper.to_full_dict()
+    return _detail_dict(paper)
