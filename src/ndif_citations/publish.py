@@ -85,6 +85,12 @@ def detect_target(start: Path | None = None) -> Path | None:
     search_roots = [start, start.parent]
     for root in search_roots:
         candidate = root / "ndif-website"
+        # 2026-06-11 restructure: the Next app (and its source public/) lives
+        # in src/; the repo-root public/ is the COMMITTED BUILD OUTPUT and
+        # must never be the publish target — anything written there is
+        # clobbered by the next `make all`. Prefer src/ when it qualifies.
+        if validate_target(candidate / "src"):
+            return (candidate / "src").resolve()
         if validate_target(candidate):
             return candidate.resolve()
     return None

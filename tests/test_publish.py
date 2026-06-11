@@ -324,3 +324,23 @@ def test_apply_repos_only_skips_papers(tmp_path: Path):
     publish.apply(out, target, papers=False, repos=True)
     assert json.loads((target / "public" / "data" / "research-papers.json").read_text()) == [{"sentinel": True}]
     assert (target / "public" / "data" / "github-repos.json").exists()
+
+
+def test_detect_target_prefers_src_layout(tmp_path: Path):
+    """ndif-website 2026-06-11 layout: app in src/ (source public/ inside),
+    repo-root public/ = committed build output. Publishing must target
+    src/, never the build output (which `make all` clobbers)."""
+    site = tmp_path / "ndif-website"
+    for base in (site / "src" / "public", site / "public"):
+        (base / "data").mkdir(parents=True)
+        (base / "images").mkdir(parents=True)
+    found = publish.detect_target(start=tmp_path / "ndif-citations")
+    assert found == (site / "src").resolve()
+
+
+def test_detect_target_still_accepts_flat_layout(tmp_path: Path):
+    site = tmp_path / "ndif-website"
+    (site / "public" / "data").mkdir(parents=True)
+    (site / "public" / "images").mkdir(parents=True)
+    found = publish.detect_target(start=tmp_path / "ndif-citations")
+    assert found == site.resolve()
