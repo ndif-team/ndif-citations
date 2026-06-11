@@ -261,8 +261,9 @@ def _slim_repo(owner: str = "o", repo: str = "r") -> dict:
     return {
         "owner": owner, "repo": repo, "url": f"https://github.com/{owner}/{repo}",
         "description": "d", "stars": 1, "forks": 0, "last_commit": None,
-        "language": "Python", "linked_paper_url": None, "is_course": False,
-        "is_fork": False, "parent_full_name": None,
+        "language": "Python", "license": None, "topics": [], "archived": False,
+        "category": "uses_nnsight", "linked_paper_url": None,
+        "linked_paper_tier": None, "repo_type": "experiment", "parent_full_name": None,
     }
 
 
