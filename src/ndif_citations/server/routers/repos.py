@@ -56,6 +56,7 @@ def list_repos(
         Case-insensitive substring search over ``owner/repo`` and description.
     sort:
         Sort order: ``stars_desc`` (default), ``recent`` (last_commit desc, None last),
+        ``added`` (first_seen desc, None last),
         or ``name`` (owner/repo alphabetical).
     """
     return repos_svc.list_rows(out, repo_type=repo_type, q=q, sort=sort)

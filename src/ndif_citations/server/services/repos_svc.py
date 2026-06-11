@@ -37,6 +37,11 @@ def _repo_to_row(repo: DiscoveredRepo) -> dict:
     }
 
 
+def _desc_str(value: "str | None") -> tuple:
+    """Sort key fragment: ISO date string descending (None handled by caller)."""
+    return tuple(-ord(c) for c in (value or ""))
+
+
 def list_rows(
     out: Path,
     *,
@@ -57,6 +62,7 @@ def list_rows(
         Optional case-insensitive substring search over ``owner/repo`` and description.
     sort:
         ``"stars_desc"`` (default), ``"recent"`` (by last_commit desc, None last),
+        ``"added"`` (by first_seen desc, None last),
         or ``"name"`` (owner/repo alphabetical).
     """
     repos = load_existing_repos(out)
@@ -81,6 +87,16 @@ def list_rows(
             key=lambda r: (
                 r.last_commit is None,            # False (0) before True (1) → dated first
                 -(r.last_commit.toordinal() if r.last_commit else 0),  # newer = higher ordinal = more negative
+            )
+        )
+    elif sort == "added":
+        # first_seen desc; repos without a stamp sort last; stars desc tiebreak
+        # (the whole pre-2026-06-10 catalog shares one backfilled first_seen)
+        repos.sort(
+            key=lambda r: (
+                r.first_seen is None,
+                _desc_str(r.first_seen),
+                -(r.stars or 0),
             )
         )
     elif sort == "name":

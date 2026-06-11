@@ -27,6 +27,7 @@ const REPO_TYPES: { label: string; value: '' | RepoType }[] = [
 const SORT_OPTIONS: { label: string; value: RepoSortOption }[] = [
   { label: 'Stars ↓', value: 'stars_desc' },
   { label: 'Recent', value: 'recent' },
+  { label: 'Added ↓', value: 'added' },
   { label: 'Name', value: 'name' },
 ]
 

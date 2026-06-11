@@ -21,7 +21,7 @@ SLIM_KEYS = {
     "owner", "repo", "url", "description", "stars", "forks",
     "last_commit", "language", "license", "topics", "archived",
     "category", "linked_paper_url", "linked_paper_tier",
-    "repo_type", "parent_full_name",
+    "repo_type", "parent_full_name", "first_seen",
 }
 
 
@@ -52,7 +52,7 @@ def test_to_website_dict_excludes_internal_state():
     r = DiscoveredRepo(owner="o", repo="r", url="https://github.com/o/r", repo_type="research")
     slim = r.to_website_dict()
     for internal in ("is_course", "is_fork", "content_hash", "manual_override",
-                     "processing_bucket", "first_seen", "last_seen"):
+                     "processing_bucket", "last_seen"):
         assert internal not in slim
 
 
@@ -244,3 +244,24 @@ def test_persisted_github_repos_json_matches_website_interface():
         assert set(entry.keys()) == SLIM_KEYS, \
             f"entry {i} ({entry.get('owner')}/{entry.get('repo')}) keys mismatch: " \
             f"missing={SLIM_KEYS - set(entry.keys())} extra={set(entry.keys()) - SLIM_KEYS}"
+
+
+def test_route_stage_logs_new_items_by_name(monkeypatch):
+    """The run event log must NAME new papers/repos (user requirement
+    2026-06-11), and say 'No new ...' explicitly when there are none."""
+    from ndif_citations import orchestrator
+
+    captured: list[str] = []
+    monkeypatch.setattr(
+        orchestrator.events, "emit",
+        lambda type, stage=None, **data: captured.append(data.get("message", "")),
+    )
+
+    orchestrator._emit_new_items("repos", [])
+    orchestrator._emit_new_items("repos", ["o/a", "o/b"])
+    orchestrator._emit_new_items("papers", [f"Paper {i}" for i in range(20)], cap=15)
+
+    assert "No new repos this run" in captured
+    assert "New repos this run (2): o/a, o/b" in captured
+    long_line = next(m for m in captured if m.startswith("New papers"))
+    assert "(20)" in long_line and "…(+5 more)" in long_line

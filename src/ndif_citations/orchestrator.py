@@ -312,6 +312,23 @@ def enrich_stage(
 # Stage 3: Routing  (cli.run Phase 2.5, lines ~181-199)
 # ---------------------------------------------------------------------------
 
+def _emit_new_items(kind: str, names: list[str], cap: int = 15) -> None:
+    """Log exactly what is NEW this run, by name — counts alone hide the story.
+
+    One line per run per kind, even when empty ("No new ..."), so a curator
+    scanning the event log always gets a definitive answer.
+    """
+    if not names:
+        events.emit("log", stage="route", message=f"No new {kind} this run")
+        return
+    shown = ", ".join(names[:cap])
+    more = f" …(+{len(names) - cap} more)" if len(names) > cap else ""
+    events.emit(
+        "log", stage="route",
+        message=f"New {kind} this run ({len(names)}): {shown}{more}",
+    )
+
+
 def route_stage(
     out: Path,
     e: EnrichResult,
@@ -337,6 +354,10 @@ def route_stage(
         existing_papers = load_existing_papers(out) if not fresh else []
         decisions = route_papers(unique_papers, existing_papers)
         paper_bucket_counts = get_bucket_summary(decisions)
+        _emit_new_items(
+            "papers",
+            [d.paper.title or d.paper.merge_key() for d in decisions if d.bucket.value == "new"],
+        )
         skipped = sum(1 for dd in decisions if dd.bucket.value in ("skip", "protected"))
         events.emit(
             "route_summary", stage="route",
@@ -356,6 +377,10 @@ def route_stage(
     if not skip_github and discovered_repos:
         existing_repos = load_existing_repos(out) if not fresh else []
         repo_decisions = route_repos(discovered_repos, existing_repos)
+        _emit_new_items(
+            "repos",
+            [d.repo.merge_key() for d in repo_decisions if d.bucket.value == "new"],
+        )
         repo_skipped = sum(1 for dd in repo_decisions if dd.bucket.value in ("skip", "protected"))
         events.emit(
             "route_summary", stage="route",

@@ -336,6 +336,7 @@ class DiscoveredRepo(BaseModel):
             "linked_paper_tier": self.linked_paper_tier,
             "repo_type": self.repo_type,
             "parent_full_name": self.parent_full_name,
+            "first_seen": self.first_seen,
         }
 
     def to_full_dict(self) -> dict:

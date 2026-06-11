@@ -195,7 +195,7 @@ export interface GatePayload {
 }
 
 export type RepoType = 'research' | 'course' | 'experiment'
-export type RepoSortOption = 'stars_desc' | 'recent' | 'name'
+export type RepoSortOption = 'stars_desc' | 'recent' | 'added' | 'name'
 
 export interface RepoRow {
   id: string
