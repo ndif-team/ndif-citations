@@ -991,8 +991,31 @@ def _fetch_repo_readme(owner: str, repo: str) -> Optional[str]:
         return None
 
 
-# Module-level rate-limit flag — set to True when we hit GitHub API rate limit
+# Module-level rate-limit flags. _github_rate_limited stops all calls once the
+# API quota is genuinely exhausted; _github_anon_rate_limited only disables the
+# anonymous fallback (60 req/hr) used for permission-403 repos.
 _github_rate_limited = False
+_github_anon_rate_limited = False
+
+
+def _is_rate_limit_response(resp) -> bool:
+    """True iff a 403/429 is a real rate limit, not a permission denial.
+
+    Fine-grained PATs get 403 for repos in orgs that forbid such tokens
+    (e.g. "The 'X' organization forbids access via a fine-grained personal
+    access tokens..."). Those must not be confused with quota exhaustion,
+    which GitHub signals via x-ratelimit-remaining: 0 or a 'rate limit'
+    message.
+    """
+    if resp.status_code == 429:
+        return True
+    if resp.headers.get("x-ratelimit-remaining") == "0":
+        return True
+    try:
+        message = resp.json().get("message", "")
+    except Exception:
+        message = ""
+    return "rate limit" in message.lower()
 
 
 def _github_api_get(path: str) -> tuple[Optional[dict], int]:
@@ -1001,10 +1024,13 @@ def _github_api_get(path: str) -> tuple[Optional[dict], int]:
     Returns (response_json_or_None, status_code).
     status_code=0 indicates a transport/connection error.
 
-    Sets module-level _github_rate_limited=True on 403/429 so callers
-    can skip subsequent requests in the same run.
+    Sets module-level _github_rate_limited=True only on a genuine rate
+    limit (quota exhausted) so callers skip subsequent requests this run.
+    A permission 403 (org policy rejecting the fine-grained PAT) affects
+    only that repo: we retry it once anonymously, which works for public
+    repos until the anonymous quota (60 req/hr) runs out.
     """
-    global _github_rate_limited
+    global _github_rate_limited, _github_anon_rate_limited
     from ndif_citations import config
 
     if _github_rate_limited:
@@ -1023,11 +1049,27 @@ def _github_api_get(path: str) -> tuple[Optional[dict], int]:
         resp = requests.get(url, headers=headers, timeout=config.GITHUB_API_TIMEOUT)
 
         if resp.status_code in (403, 429):
-            logger.warning(
-                f"GitHub API rate-limit hit ({resp.status_code}) — "
-                "skipping remaining API calls this run"
-            )
-            _github_rate_limited = True
+            if _is_rate_limit_response(resp):
+                logger.warning(
+                    f"GitHub API rate-limit hit ({resp.status_code}) — "
+                    "skipping remaining API calls this run"
+                )
+                _github_rate_limited = True
+                return None, resp.status_code
+
+            # Permission 403 (org forbids this token) — one anonymous retry.
+            if config.GITHUB_TOKEN and not _github_anon_rate_limited:
+                logger.info(f"Permission 403 for {path} — retrying anonymously")
+                anon_headers = {k: v for k, v in headers.items() if k != "Authorization"}
+                anon = requests.get(url, headers=anon_headers, timeout=config.GITHUB_API_TIMEOUT)
+                if anon.status_code == 200:
+                    try:
+                        return anon.json(), 200
+                    except Exception:
+                        return None, 200
+                if anon.status_code in (403, 429) and _is_rate_limit_response(anon):
+                    logger.warning("Anonymous GitHub quota exhausted — no more anonymous retries")
+                    _github_anon_rate_limited = True
             return None, resp.status_code
 
         if resp.status_code == 404:
