@@ -848,46 +848,58 @@ class JobRunner:
             if dec.bucket == ProcessingBucket.NEW
         ]
 
-        # Publish gate state + candidates, then block the worker. route_breakdown
-        # is the route-time per-bucket count so the gate can preview that approving
-        # also triggers automatic gap-fills on existing papers (F-012).
-        with self._lock:
-            record.route_result = route_result
-            record.paper_candidates = paper_candidates
-            record.repo_candidates = repo_candidates
-            record.route_breakdown = route_result.bucket_counts
-            record.state = "awaiting_review"
-        events.emit(
-            "awaiting_review",
-            paper_candidates=paper_candidates,
-            repo_candidates=repo_candidates,
-            route_breakdown=route_result.bucket_counts,
-        )
+        if not candidates:
+            # Nothing to gate: the gate exists to approve LLM spend on paper
+            # candidates, and repos always auto-flow (cheap, no LLM). Parking
+            # here would force a pointless "Submit & process 0" with no way
+            # forward (seen on --skip-papers incremental runs) — log and
+            # proceed straight to process/finalize.
+            events.emit(
+                "log", stage="route",
+                message="Review gate auto-advanced — no paper candidates to review",
+            )
+            route_result.paper_decisions = auto_flow
+        else:
+            # Publish gate state + candidates, then block the worker. route_breakdown
+            # is the route-time per-bucket count so the gate can preview that approving
+            # also triggers automatic gap-fills on existing papers (F-012).
+            with self._lock:
+                record.route_result = route_result
+                record.paper_candidates = paper_candidates
+                record.repo_candidates = repo_candidates
+                record.route_breakdown = route_result.bucket_counts
+                record.state = "awaiting_review"
+            events.emit(
+                "awaiting_review",
+                paper_candidates=paper_candidates,
+                repo_candidates=repo_candidates,
+                route_breakdown=route_result.bucket_counts,
+            )
 
-        # BLOCK (not under the lock) until submit_gate or cancel sets the event.
-        record.gate_event.wait()
+            # BLOCK (not under the lock) until submit_gate or cancel sets the event.
+            record.gate_event.wait()
 
-        # Woke up. If cancelled, abandon WITHOUT finalizing (no on-disk write).
-        if record.cancel_event.is_set():
-            return None
+            # Woke up. If cancelled, abandon WITHOUT finalizing (no on-disk write).
+            if record.cancel_event.is_set():
+                return None
 
-        with self._lock:
-            selection = record.gate_selection or {
-                "process_ids": [],
-                "discard_ids": [],
-                "edits": {},
-            }
-        process_ids = set(selection.get("process_ids", []))
-        discard_ids = set(selection.get("discard_ids", []))
-        edits = selection.get("edits", {})
+            with self._lock:
+                selection = record.gate_selection or {
+                    "process_ids": [],
+                    "discard_ids": [],
+                    "edits": {},
+                }
+            process_ids = set(selection.get("process_ids", []))
+            discard_ids = set(selection.get("discard_ids", []))
+            edits = selection.get("edits", {})
 
-        # Rebuild the kept candidate decisions from the curator selection.
-        kept_candidates = self._apply_gate_selection(
-            candidates, process_ids=process_ids, discard_ids=discard_ids, edits=edits
-        )
+            # Rebuild the kept candidate decisions from the curator selection.
+            kept_candidates = self._apply_gate_selection(
+                candidates, process_ids=process_ids, discard_ids=discard_ids, edits=edits
+            )
 
-        # Auto-flow decisions are always kept; gated candidates only if selected.
-        route_result.paper_decisions = auto_flow + kept_candidates
+            # Auto-flow decisions are always kept; gated candidates only if selected.
+            route_result.paper_decisions = auto_flow + kept_candidates
 
         completed = orchestrator.process_stage(
             out,

@@ -675,6 +675,7 @@ def print_report(
     skip_github: bool = False,
     skip_papers: bool = False,
     repos_removed_counts: dict[str, int] | None = None,
+    repo_coverage: dict[str, int] | None = None,
 ) -> None:
     """Print a rich CLI summary report."""
     from rich.console import Console
@@ -817,6 +818,17 @@ def print_report(
             count = bucket_counts.get(bucket, 0)
             if count > 0 or bucket in ("new", "skip"):
                 console.print(f"  > {count} [{bucket.upper()}]")
+        if repo_coverage and repo_coverage.get("total"):
+            cov_enriched = repo_coverage["enriched"]
+            cov_total = repo_coverage["total"]
+            if cov_enriched < cov_total:
+                console.print(
+                    f"  ! [yellow]Enrichment coverage: {cov_enriched}/{cov_total} repos — "
+                    f"{cov_total - cov_enriched} kept stale metadata "
+                    f"(permission 403 / rate limit / transport)[/yellow]"
+                )
+            else:
+                console.print(f"  > [green]Enrichment coverage: {cov_enriched}/{cov_total} repos (complete)[/green]")
         if repos_removed_counts:
             total_removed = sum(repos_removed_counts.values())
             if total_removed > 0:

@@ -144,6 +144,7 @@ def run(output_dir: str | None, fresh: bool, skip_github: bool, skip_papers: boo
         skip_github=skip_github,
         skip_papers=skip_papers,
         repos_removed_counts=result.removal_counts,
+        repo_coverage=result.repo_coverage,
     )
 
 

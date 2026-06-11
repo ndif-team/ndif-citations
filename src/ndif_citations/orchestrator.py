@@ -76,6 +76,11 @@ class EnrichResult:
     repos: list[DiscoveredRepo]
     removal_counts: dict[str, int]
     existing_repos: list[DiscoveredRepo]
+    # {"enriched": n, "total": m} for the repos track this run; None when the
+    # track didn't run. A gap (enriched < total) means repos kept stale
+    # metadata (permission 403 / rate limit / transport) — must be surfaced,
+    # never silent (2026-06-10 regression: 216/229 unenriched with "0 errors").
+    repo_coverage: dict[str, int] | None = None
 
 
 @dataclass
@@ -103,6 +108,7 @@ class FinalizeResult:
     merged_repos: list[DiscoveredRepo]
     run_stats: PipelineRun
     removal_counts: dict[str, int] = field(default_factory=dict)
+    repo_coverage: dict[str, int] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -213,10 +219,30 @@ def enrich_stage(
 
     repo_removal_counts: dict[str, int] = {"404": 0, "rename_redirect": 0, "archived": 0}
     existing_repos_loaded: list[DiscoveredRepo] = []
+    repo_coverage: dict[str, int] | None = None
     if not skip_github and discovered_repos:
         events.emit("log", stage="enrich", message="Enriching repos via GitHub API (stars, forks, last commit)...")
         discovered_repos, repo_removal_counts = enrich_repos_from_github_api(discovered_repos)
         events.emit("log", stage="enrich", message=f"{len(discovered_repos)} repos retained after staleness check")
+
+        # Coverage guardrail: has_metadata is only set by a successful API fill
+        # THIS run, so any shortfall means stale/empty repo metadata.
+        enriched_count = sum(1 for r in discovered_repos if r.has_metadata)
+        repo_coverage = {"enriched": enriched_count, "total": len(discovered_repos)}
+        if enriched_count < len(discovered_repos):
+            events.emit(
+                "log", stage="enrich",
+                message=(
+                    f"⚠ Enrichment coverage: {enriched_count}/{len(discovered_repos)} repos — "
+                    f"{len(discovered_repos) - enriched_count} kept stale metadata "
+                    "(permission 403 / rate limit / transport)"
+                ),
+            )
+        else:
+            events.emit(
+                "log", stage="enrich",
+                message=f"Enrichment coverage: {enriched_count}/{len(discovered_repos)} repos — complete",
+            )
 
         # Drop excluded repos (e.g. ndif-team/nnsight — the library itself)
         pre_filter = len(discovered_repos)
@@ -278,6 +304,7 @@ def enrich_stage(
         repos=discovered_repos,
         removal_counts=repo_removal_counts,
         existing_repos=existing_repos_loaded,
+        repo_coverage=repo_coverage,
     )
 
 
@@ -534,6 +561,7 @@ def finalize_stage(
         merged_repos=merged_repos,
         run_stats=run_stats,
         removal_counts=r.enrich.removal_counts,
+        repo_coverage=r.enrich.repo_coverage,
     )
 
 

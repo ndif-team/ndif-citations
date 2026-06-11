@@ -155,6 +155,7 @@ export type ProgressEventType =
   | 'error'
   | 'cancelled'
   | 'done'
+  | 'log'
 
 export interface ProgressEvent {
   type: ProgressEventType

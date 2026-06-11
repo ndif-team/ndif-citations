@@ -399,3 +399,42 @@ def test_gate_edit_parse_error_raises(monkeypatch, fixture_state):
     assert _wait_until(lambda: runner.status().state == "done"), (
         f"run did not finish after cleanup submit_gate; state={runner.status().state}"
     )
+
+
+# ---------------------------------------------------------------------------
+# 9. Gate auto-advance: nothing to review → no pause (2026-06-10).
+#    A --skip-papers incremental run produced zero paper candidates but still
+#    parked at the gate, forcing a pointless "Submit & process 0" with no
+#    cancel affordance. The gate only exists to approve LLM spend on papers,
+#    so with no candidates the worker must flow straight through to done.
+# ---------------------------------------------------------------------------
+
+def test_gate_auto_advances_when_no_paper_candidates(monkeypatch, fixture_state):
+    install_pipeline_fakes(monkeypatch, orchestrator)
+    out = fixture_state
+
+    runner = JobRunner()
+    runner.start(out, mode="incremental", skip_papers=True)
+
+    assert _wait_until(lambda: runner.status().state == "done", timeout=5.0), (
+        f"repos-only incremental run should finish without a gate; "
+        f"state={runner.status().state}"
+    )
+    # The run never parked: no candidates were ever published.
+    rec = runner.status()
+    assert rec.paper_candidates == []
+
+
+def test_gate_still_pauses_when_candidates_exist(monkeypatch, fixture_state):
+    """Counterpart guard: the auto-advance must NOT skip a real gate."""
+    install_pipeline_fakes(monkeypatch, orchestrator)
+    out = fixture_state
+
+    runner = JobRunner()
+    runner.start(out, mode="incremental")
+    assert _wait_until(lambda: runner.status().state == "awaiting_review"), (
+        "run with paper candidates must still park at the gate"
+    )
+    rec = runner.status()
+    runner.submit_gate(rec.run_id, process_ids=[], discard_ids=[], edits={})
+    assert _wait_until(lambda: runner.status().state == "done")

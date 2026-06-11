@@ -133,6 +133,12 @@ function eventToLine(e: ProgressEvent): string {
       }
       case 'cancelled': return `${prefix} Run cancelled`
       case 'done': return `${prefix} Run complete`
+      case 'log': {
+        const { message } = d as { message?: string }
+        return typeof message === 'string' && message
+          ? `${prefix} ${message}`
+          : `${prefix} log: ${JSON.stringify(d)}`
+      }
       default: return `${prefix} ${e.type}: ${JSON.stringify(d)}`
     }
   } catch {
@@ -533,7 +539,7 @@ function ReviewGate({ runId, papers, repos, routeBreakdown, onSubmitted }: Revie
     try {
       await submitGate(runId, { process_ids: processIds, discard_ids: discardIds, edits })
       onSubmitted()
-      toast.success(`Gate submitted — processing ${processIds.length} papers`)
+      toast.success(processIds.length === 0 ? 'Continuing — no papers selected for LLM processing' : `Gate submitted — processing ${processIds.length} papers`)
     } catch (err) {
       const status = (err as { status?: number }).status
       if (status === 409) {
@@ -720,7 +726,7 @@ function ReviewGate({ runId, papers, repos, routeBreakdown, onSubmitted }: Revie
           ) : (
             <Play className="h-3.5 w-3.5" aria-hidden="true" />
           )}
-          Submit &amp; process {processIds.length}
+          {papers.length === 0 ? 'Continue' : <>Submit &amp; process {processIds.length}</>}
         </Button>
         <p className="text-xs text-muted-foreground">
           {processIds.length === 0 && papers.length > 0
@@ -817,7 +823,7 @@ function LiveRunView({ runId, mode, onDone }: LiveRunViewProps) {
           </span>
           <span className="text-xs text-muted-foreground capitalize">({mode})</span>
         </div>
-        {isRunning && (
+        {(isRunning || isAwaiting) && (
           <Button
             size="sm"
             variant="outline"
