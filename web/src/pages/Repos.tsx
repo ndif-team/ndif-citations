@@ -58,7 +58,8 @@ export function Repos() {
 
   // useActiveRun kept here so the cache is warm for RepoSheet, and to
   // disable the refresh button while any run owns the pipeline.
-  const { data: activeRun } = useActiveRun()
+  const { data: activeRunData } = useActiveRun()
+  const hasActiveRun = !!activeRunData?.active
   const navigate = useNavigate()
   const [refreshing, setRefreshing] = useState(false)
 
@@ -292,7 +293,7 @@ export function Repos() {
           variant="outline"
           className="h-8 gap-1.5 text-xs"
           onClick={handleRefresh}
-          disabled={refreshing || !!activeRun}
+          disabled={refreshing || hasActiveRun}
           title="Re-fetch GitHub stats for all catalog repos (404/renamed/archived removed; no new repos discovered)"
         >
           <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
