@@ -15,6 +15,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from ndif_citations.jobs import JobRunner, RunActiveError
 from ndif_citations.server import deps
 from ndif_citations.server.services import repos_svc
 
@@ -120,6 +121,23 @@ def edit_repo(
         raise HTTPException(status_code=404, detail=f"Repo {repo_id!r} not found")
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.post("/repos/refresh")
+def refresh_repos(
+    runner: JobRunner = Depends(deps.get_runner),
+    out: Path = Depends(deps.get_output_dir),
+) -> dict:
+    """Start a repos-only refresh run (no dependents scrape, no papers).
+
+    Re-fetches GitHub stats for every catalog repo and applies the standard
+    staleness handling. Returns 409 if a run is already active.
+    """
+    try:
+        run_id = runner.start_repo_refresh(out)
+    except RunActiveError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"run_id": run_id, "state": "running"}
 
 
 @router.post("/repos/{owner}/{repo}/exclude")

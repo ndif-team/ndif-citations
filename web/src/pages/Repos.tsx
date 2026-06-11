@@ -5,7 +5,11 @@ import {
   flexRender,
   type ColumnDef,
 } from '@tanstack/react-table'
-import { Search, AlertCircle, GitBranch, ExternalLink } from 'lucide-react'
+import { Search, AlertCircle, GitBranch, ExternalLink, RefreshCw } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { startRepoRefresh } from '@/api/client' 
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -52,8 +56,26 @@ export function Repos() {
   const [selectedOwner, setSelectedOwner] = useState<string | null>(null)
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null)
 
-  // useActiveRun kept here so the cache is warm for RepoSheet
-  useActiveRun()
+  // useActiveRun kept here so the cache is warm for RepoSheet, and to
+  // disable the refresh button while any run owns the pipeline.
+  const { data: activeRun } = useActiveRun()
+  const navigate = useNavigate()
+  const [refreshing, setRefreshing] = useState(false)
+
+  async function handleRefresh() {
+    setRefreshing(true)
+    try {
+      await startRepoRefresh()
+      toast.success('Repo refresh started — stats updating in the background')
+      navigate('/runs')
+    } catch (err) {
+      const status = (err as { status?: number }).status
+      if (status === 409) toast.error('A run is already active — wait for it to finish')
+      else toast.error(`Failed to start refresh: ${(err as Error).message}`)
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   const q = useDebounce(searchInput, 300)
 
@@ -263,6 +285,19 @@ export function Repos() {
             ))}
           </SelectContent>
         </Select>
+
+        {/* Refresh stats — repos-only run: re-fetch GitHub stats + staleness, no scrape */}
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8 gap-1.5 text-xs"
+          onClick={handleRefresh}
+          disabled={refreshing || !!activeRun}
+          title="Re-fetch GitHub stats for all catalog repos (404/renamed/archived removed; no new repos discovered)"
+        >
+          <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+          Refresh stats
+        </Button>
 
         {/* Count */}
         {!isLoading && repos && (

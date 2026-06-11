@@ -157,6 +157,7 @@ class RunRecord:
     repo_candidates: list[dict] = field(default_factory=list)
     gate_selection: dict | None = None
     seed_papers: "list[DiscoveredPaper] | None" = None
+    seed_repos: "list[DiscoveredRepo] | None" = None
     pdf_bytes: "bytes | None" = None
     # Per-bucket routing breakdown ({"new": n, "fill_gaps": n, ...}) so the gate
     # can preview true work — incl. the automatic gap-fills the curator does NOT
@@ -274,6 +275,59 @@ class JobRunner:
                 "skip_github": skip_github,
             },
             name=f"pipeline-run-{run_id}",
+            daemon=True,
+        )
+        thread.start()
+        return run_id
+
+    def start_repo_refresh(self, out: "Path") -> str:
+        """Start an ungated repos-only refresh run; return its run_id.
+
+        Seeds the catalog's OWN repos in place of the dependents scrape, then
+        runs enrich -> route -> process -> finalize with the exact pipeline
+        semantics: stats re-fetched from the GitHub API, 404/renamed/archived
+        repos dropped, scrape-absent age-out unchanged, manual_override and
+        first_seen preserved by the merge. No new repos are discovered (that
+        still requires a pipeline run). Raises RunActiveError if a run is
+        already active.
+        """
+        from ndif_citations.output import load_existing_repos
+
+        self._warm_imports()
+
+        seeds = load_existing_repos(out)
+        # has_metadata is "filled by the API *this run*" — reset so the
+        # enrichment-coverage line reports honestly for refresh runs too.
+        for repo in seeds:
+            repo.has_metadata = False
+
+        with self._lock:
+            if (
+                self._current is not None
+                and self._current.state in self._ACTIVE_STATES
+            ):
+                raise RunActiveError("a pipeline run is already active")
+
+            run_id = self._new_run_id()
+            record = RunRecord(
+                run_id=run_id,
+                state="running",
+                mode="refresh",
+                skip_papers=True,
+                skip_github=False,
+                started_at=datetime.now().isoformat(),
+                seed_repos=seeds,
+            )
+            self._current = record
+
+        thread = threading.Thread(
+            target=self._run,
+            args=(record, out),
+            kwargs={
+                "mode": "refresh",
+                "skip_papers": True,
+                "skip_github": False,
+            },
             daemon=True,
         )
         thread.start()
@@ -646,12 +700,16 @@ class JobRunner:
                     "result_papers: pre-snapshot failed for %s", record.run_id
                 )
 
-            if mode == "incremental":
+            if mode in ("incremental", "refresh"):
                 # Stage-driven path with the human-in-the-loop gate (Task 3.1).
                 # Returns None if the run was cancelled at the gate (no finalize).
+                # mode="refresh" seeds the catalog's own repos in place of the
+                # dependents scrape — same enrich/route/merge semantics
+                # (stat updates, 404/rename/archived drops, 30d age-out).
                 result = self._run_incremental_with_gate(
                     record, out, skip_papers=skip_papers, skip_github=skip_github,
-                    seed_papers=record.seed_papers, pdf_bytes=record.pdf_bytes,
+                    seed_papers=record.seed_papers, seed_repos=record.seed_repos,
+                    pdf_bytes=record.pdf_bytes,
                 )
                 if result is None:
                     terminal_state = "cancelled"
@@ -793,6 +851,7 @@ class JobRunner:
         skip_papers: bool,
         skip_github: bool,
         seed_papers: "list[DiscoveredPaper] | None" = None,
+        seed_repos: "list[DiscoveredRepo] | None" = None,
         pdf_bytes: "bytes | None" = None,
     ) -> orchestrator.FinalizeResult | None:
         """Drive discover -> enrich -> route, PAUSE at the gate, then process.
@@ -815,6 +874,15 @@ class JobRunner:
 
         if seed_papers is not None:
             d = orchestrator.DiscoverResult(papers=seed_papers, repos=[], run_stats=PipelineRun())
+        elif seed_repos is not None:
+            events.emit(
+                "log", stage="discover",
+                message=(
+                    f"Repo refresh: re-checking {len(seed_repos)} catalog repos "
+                    "against the GitHub API (no dependents scrape)"
+                ),
+            )
+            d = orchestrator.DiscoverResult(papers=[], repos=seed_repos, run_stats=PipelineRun())
         else:
             d = orchestrator.discover_stage(
                 out, skip_papers=skip_papers, skip_github=skip_github, fresh=fresh

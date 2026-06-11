@@ -100,7 +100,7 @@ export interface ReprocessResponse {
 
 // Run state
 export type RunState = 'running' | 'awaiting_review' | 'done' | 'error' | 'cancelled'
-export type RunMode = 'fresh' | 'incremental'
+export type RunMode = 'fresh' | 'incremental' | 'refresh'
 export type PipelineStage = 'discover' | 'enrich' | 'route' | 'process' | 'finalize'
 
 export interface RunSummary {

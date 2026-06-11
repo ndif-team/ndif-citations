@@ -112,6 +112,10 @@ export async function startRun(payload: StartRunPayload): Promise<{ run_id: stri
   return post<{ run_id: string; state: string }>('/runs', payload)
 }
 
+export async function startRepoRefresh(): Promise<{ run_id: string; state: string }> {
+  return post<{ run_id: string; state: string }>('/repos/refresh')
+}
+
 export async function cancelRun(runId: string): Promise<void> {
   await post(`/runs/${encodeURIComponent(runId)}/cancel`)
 }

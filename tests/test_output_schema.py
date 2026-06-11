@@ -265,3 +265,45 @@ def test_route_stage_logs_new_items_by_name(monkeypatch):
     assert "New repos this run (2): o/a, o/b" in captured
     long_line = next(m for m in captured if m.startswith("New papers"))
     assert "(20)" in long_line and "…(+5 more)" in long_line
+
+
+def test_merge_repos_adopts_drifted_stats_on_skip(monkeypatch):
+    """Hash-unchanged (SKIP) repos must still pick up fresh GitHub stats:
+    stars/forks/language/license/topics drift without changing the content
+    hash, and previously stayed frozen on dormant repos forever."""
+    from datetime import date as _date
+    monkeypatch.setattr(output_module, "_today", lambda: _date(2026, 6, 11))
+
+    existing = DiscoveredRepo(
+        owner="o", repo="r", url="https://github.com/o/r",
+        stars=10, forks=1, language="Python", license=None, topics=[],
+        has_classification=True, first_seen="2026-01-01", last_seen="2026-06-01",
+    )
+    fresh = DiscoveredRepo(
+        owner="o", repo="r", url="https://github.com/o/r",
+        stars=42, forks=5, language="Python", license="MIT", topics=["interp"],
+        has_metadata=True,
+    )
+    fresh.processing_bucket = "skip"
+    merged = merge_repos(discovered=[fresh], existing=[existing])
+    target = next(m for m in merged if m.merge_key() == "o/r")
+    assert target is existing, "SKIP keeps the existing object"
+    assert (target.stars, target.forks) == (42, 5)
+    assert target.license == "MIT" and target.topics == ["interp"]
+    assert target.first_seen == "2026-01-01", "history preserved"
+    assert target.last_seen == "2026-06-11"
+
+
+def test_merge_repos_skip_does_not_blank_stats_on_failed_fetch(monkeypatch):
+    from datetime import date as _date
+    monkeypatch.setattr(output_module, "_today", lambda: _date(2026, 6, 11))
+    existing = DiscoveredRepo(
+        owner="o", repo="r", url="https://github.com/o/r",
+        stars=10, forks=1, license="MIT", has_classification=True,
+        first_seen="2026-01-01", last_seen="2026-06-01",
+    )
+    stale = DiscoveredRepo(owner="o", repo="r", url="https://github.com/o/r")
+    stale.processing_bucket = "skip"  # has_metadata=False — API fetch failed
+    merged = merge_repos(discovered=[stale], existing=[existing])
+    target = next(m for m in merged if m.merge_key() == "o/r")
+    assert (target.stars, target.license) == (10, "MIT"), "stale fetch must not blank stats"

@@ -438,3 +438,42 @@ def test_gate_still_pauses_when_candidates_exist(monkeypatch, fixture_state):
     rec = runner.status()
     runner.submit_gate(rec.run_id, process_ids=[], discard_ids=[], edits={})
     assert _wait_until(lambda: runner.status().state == "done")
+
+
+# ---------------------------------------------------------------------------
+# 10. Repo refresh runs (2026-06-11): catalog repos seeded in place of the
+#     dependents scrape; ungated (auto-advance — repos only), same merge
+#     semantics. No new repos can appear (discovery requires a real scrape).
+# ---------------------------------------------------------------------------
+
+def test_repo_refresh_runs_to_done_without_gate(monkeypatch, fixture_state):
+    install_pipeline_fakes(monkeypatch, orchestrator)
+    out = fixture_state
+
+    runner = JobRunner()
+    run_id = runner.start_repo_refresh(out)
+
+    assert _wait_until(lambda: runner.status().state == "done", timeout=5.0), (
+        f"refresh run should finish ungated; state={runner.status().state}"
+    )
+    rec = runner.status()
+    assert rec.run_id == run_id
+    assert rec.mode == "refresh"
+    assert rec.skip_papers is True
+    # Catalog survived the merge (fixture has 3 repos; fakes keep them alive).
+    repos = json.loads((out / "github-repos-full.json").read_text())
+    assert len(repos) >= 1
+
+
+def test_repo_refresh_respects_active_run_lock(monkeypatch, fixture_state):
+    install_pipeline_fakes(monkeypatch, orchestrator)
+    out = fixture_state
+
+    runner = JobRunner()
+    runner.start(out, mode="incremental")
+    assert _wait_until(lambda: runner.status().state == "awaiting_review")
+    with pytest.raises(RunActiveError):
+        runner.start_repo_refresh(out)
+    rec = runner.status()
+    runner.submit_gate(rec.run_id, process_ids=[], discard_ids=[], edits={})
+    assert _wait_until(lambda: runner.status().state == "done")

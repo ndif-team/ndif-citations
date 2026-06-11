@@ -278,7 +278,19 @@ def merge_repos(
             repo.last_seen = today_str
             merged.append(repo)
         elif repo.processing_bucket in ("skip", "protected"):
-            # Keep existing object; just bump last_seen
+            # Keep existing object (curated fields + classification) and bump
+            # last_seen. For SKIP, also adopt freshly observed GitHub stats:
+            # stars/forks/language/license/topics can drift without changing
+            # the content hash (description, last_commit, archived), and would
+            # otherwise stay frozen on dormant repos. PROTECTED stays fully
+            # curator-owned. Guard on has_metadata so a failed API fetch this
+            # run can't blank good stats.
+            if repo.processing_bucket == "skip" and repo.has_metadata:
+                existing_repo.stars = repo.stars
+                existing_repo.forks = repo.forks
+                existing_repo.language = repo.language
+                existing_repo.license = repo.license
+                existing_repo.topics = repo.topics
             existing_repo.first_seen = existing_repo.first_seen or today_str
             existing_repo.last_seen = today_str
             merged.append(existing_repo)
