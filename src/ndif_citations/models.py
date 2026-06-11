@@ -314,19 +314,27 @@ class DiscoveredRepo(BaseModel):
             self.content_hash = self.compute_content_hash()
 
     def to_website_dict(self) -> dict:
-        """Export slim dict for github-repos.json — exactly 12 fields, no internal state."""
+        """Export slim dict for github-repos.json — no internal state.
+
+        Must match the website's GitHubRepo TS interface
+        (ndif-website/data/github-repos.ts): 16 keys, always present.
+        """
         return {
             "owner": self.owner,
             "repo": self.repo,
             "url": self.url,
             "description": self.description,
-            "stars": self.stars,
-            "forks": self.forks,
+            "stars": self.stars or 0,
+            "forks": self.forks or 0,
             "last_commit": self.last_commit.isoformat() if self.last_commit else None,
             "language": self.language,
+            "license": self.license,
+            "topics": self.topics,
+            "archived": self.archived,
+            "category": self.category.value,
             "linked_paper_url": self.linked_paper_url,
-            "is_course": self.is_course,
-            "is_fork": self.is_fork,
+            "linked_paper_tier": self.linked_paper_tier,
+            "repo_type": self.repo_type,
             "parent_full_name": self.parent_full_name,
         }
 

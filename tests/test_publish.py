@@ -65,9 +65,13 @@ def _slim_repo(owner: str, repo: str, stars: int = 1) -> dict:
         "forks": 0,
         "last_commit": None,
         "language": "Python",
+        "license": None,
+        "topics": [],
+        "archived": False,
+        "category": "uses_nnsight",
         "linked_paper_url": None,
-        "is_course": False,
-        "is_fork": False,
+        "linked_paper_tier": None,
+        "repo_type": "experiment",
         "parent_full_name": None,
     }
 
