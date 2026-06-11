@@ -6,7 +6,7 @@ import {
   type ColumnDef,
 } from '@tanstack/react-table'
 import { Search, AlertCircle, GitBranch, ExternalLink, RefreshCw } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { startRepoRefresh } from '@/api/client' 
@@ -52,7 +52,13 @@ function TableSkeleton() {
 export function Repos() {
   const [repoType, setRepoType] = useState<'' | RepoType>('')
   const [searchInput, setSearchInput] = useState('')
-  const [sort, setSort] = useState<RepoSortOption>('stars_desc')
+  const [searchParams] = useSearchParams()
+  const initialSort = searchParams.get('sort')
+  const [sort, setSort] = useState<RepoSortOption>(
+    initialSort === 'recent' || initialSort === 'added' || initialSort === 'name'
+      ? initialSort
+      : 'stars_desc'
+  )
   const [selectedOwner, setSelectedOwner] = useState<string | null>(null)
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null)
 

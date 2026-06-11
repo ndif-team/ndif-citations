@@ -25,18 +25,80 @@ function isDryRunResponse(r: PublishDryRunResponse | PublishResponse): r is Publ
   return (r as PublishDryRunResponse).papers !== undefined
 }
 
+type DiffRecord = Record<string, unknown> & { _changed_fields?: string[] }
+
+/** Identity label for a diff record: papers have a title, repos owner/repo. */
+function diffLabel(item: DiffRecord): string {
+  if (typeof item.title === 'string') return item.title
+  if (typeof item.owner === 'string' && typeof item.repo === 'string') return `${item.owner}/${item.repo}`
+  return JSON.stringify(item).slice(0, 60)
+}
+
+function DiffBucket({
+  label, items, tone,
+}: { label: string; items: DiffRecord[]; tone: 'added' | 'changed' | 'removed' }) {
+  if (!items.length) return null
+  const toneCls =
+    tone === 'added' ? 'text-green-700 dark:text-green-400'
+    : tone === 'changed' ? 'text-amber-700 dark:text-amber-400'
+    : 'text-red-700 dark:text-red-400'
+  const sigil = tone === 'added' ? '+' : tone === 'changed' ? '~' : '−'
+  return (
+    <details className="group">
+      <summary className={`cursor-pointer select-none ${toneCls}`}>
+        {sigil}{items.length} {label}
+      </summary>
+      <ul className="mt-1 ml-4 space-y-0.5">
+        {items.map((item, i) => (
+          <li key={i} className="text-foreground/80 flex flex-wrap items-baseline gap-1.5">
+            <span className="truncate max-w-md">{diffLabel(item)}</span>
+            {tone === 'changed' && Array.isArray(item._changed_fields) && item._changed_fields.length > 0 && (
+              <span className="text-2xs text-muted-foreground">
+                ({item._changed_fields.join(', ')})
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </details>
+  )
+}
+
 function DiffSummary({ result }: { result: PublishDryRunResponse }) {
   const { papers, repos, images } = result
-  // diff buckets are arrays of affected records — render their lengths as counts.
   const len = (a: unknown[] | undefined) => (Array.isArray(a) ? a.length : 0)
+  const total =
+    len(papers?.added) + len(papers?.changed) + len(papers?.removed) +
+    len(repos?.added) + len(repos?.changed) + len(repos?.removed) +
+    len(images?.new) + len(images?.changed)
   return (
-    <div className="rounded-md border bg-muted/30 p-3 text-xs space-y-1.5">
-      <p className="font-medium text-foreground">Dry-run diff</p>
-      <div className="space-y-0.5 text-muted-foreground">
-        <p>Papers: <span className="text-green-700 dark:text-green-400">+{len(papers?.added)} added</span>, <span className="text-amber-700 dark:text-amber-400">~{len(papers?.changed)} changed</span>, <span className="text-red-700 dark:text-red-400">-{len(papers?.removed)} removed</span></p>
-        <p>Repos: <span className="text-green-700 dark:text-green-400">+{len(repos?.added)} added</span>, <span className="text-amber-700 dark:text-amber-400">~{len(repos?.changed)} changed</span>, <span className="text-red-700 dark:text-red-400">-{len(repos?.removed)} removed</span></p>
-        <p>Images: <span className="text-green-700 dark:text-green-400">{len(images?.new)} new</span>, <span className="text-amber-700 dark:text-amber-400">{len(images?.changed)} changed</span></p>
-      </div>
+    <div className="rounded-md border bg-muted/30 p-3 text-xs space-y-2">
+      <p className="font-medium text-foreground">
+        Dry-run diff {total === 0 && <span className="font-normal text-muted-foreground">— nothing to publish, site is up to date</span>}
+      </p>
+      {(len(papers?.added) + len(papers?.changed) + len(papers?.removed)) > 0 && (
+        <div className="space-y-1">
+          <p className="text-muted-foreground font-medium">Papers</p>
+          <DiffBucket label="added" tone="added" items={(papers?.added ?? []) as DiffRecord[]} />
+          <DiffBucket label="changed" tone="changed" items={(papers?.changed ?? []) as DiffRecord[]} />
+          <DiffBucket label="removed" tone="removed" items={(papers?.removed ?? []) as DiffRecord[]} />
+        </div>
+      )}
+      {(len(repos?.added) + len(repos?.changed) + len(repos?.removed)) > 0 && (
+        <div className="space-y-1">
+          <p className="text-muted-foreground font-medium">Repos</p>
+          <DiffBucket label="added" tone="added" items={(repos?.added ?? []) as DiffRecord[]} />
+          <DiffBucket label="changed" tone="changed" items={(repos?.changed ?? []) as DiffRecord[]} />
+          <DiffBucket label="removed" tone="removed" items={(repos?.removed ?? []) as DiffRecord[]} />
+        </div>
+      )}
+      {(len(images?.new) + len(images?.changed)) > 0 && (
+        <div className="space-y-1">
+          <p className="text-muted-foreground font-medium">Images</p>
+          <DiffBucket label="new" tone="added" items={(images?.new ?? []).map((f) => ({ title: f })) as DiffRecord[]} />
+          <DiffBucket label="changed" tone="changed" items={(images?.changed ?? []).map((f) => ({ title: f })) as DiffRecord[]} />
+        </div>
+      )}
     </div>
   )
 }

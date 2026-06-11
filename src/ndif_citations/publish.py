@@ -152,11 +152,18 @@ def _diff_list(out_items: list[dict], target_items: list[dict], key_fn) -> dict:
 
     added = [out_by_key[k] for k in out_by_key if k not in tgt_by_key]
     removed = [tgt_by_key[k] for k in tgt_by_key if k not in out_by_key]
-    changed = [
-        out_by_key[k]
-        for k in out_by_key
-        if k in tgt_by_key and out_by_key[k] != tgt_by_key[k]
-    ]
+    changed = []
+    for k in out_by_key:
+        if k in tgt_by_key and out_by_key[k] != tgt_by_key[k]:
+            # Copy + annotate with WHICH fields differ so the publish preview
+            # can say "stars, description" instead of an opaque "changed".
+            item = dict(out_by_key[k])
+            item["_changed_fields"] = sorted(
+                f
+                for f in set(out_by_key[k]) | set(tgt_by_key[k])
+                if out_by_key[k].get(f) != tgt_by_key[k].get(f)
+            )
+            changed.append(item)
     return {"added": added, "changed": changed, "removed": removed}
 
 

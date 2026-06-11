@@ -310,6 +310,10 @@ export function Papers() {
         return prev
       }, { replace: true })
     }
+    // Deep-link: ?bucket=pending (post-run "Edit entries first" lands on the
+    // entries awaiting curation).
+    const b = searchParams.get('bucket')
+    if (b === 'pending' || b === 'verified' || b === 'discarded') setBucket(b)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

@@ -917,6 +917,11 @@ class JobRunner:
         ]
 
         if not candidates:
+            # Stash the visibility data even though we skip the gate — the
+            # post-run summary card lists this run's new repos from it.
+            with self._lock:
+                record.repo_candidates = repo_candidates
+                record.route_breakdown = route_result.bucket_counts
             # Nothing to gate: the gate exists to approve LLM spend on paper
             # candidates, and repos always auto-flow (cheap, no LLM). Parking
             # here would force a pointless "Submit & process 0" with no way

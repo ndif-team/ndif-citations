@@ -15,6 +15,7 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useNavigate } from 'react-router-dom'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -916,6 +917,11 @@ function LiveRunView({ runId, mode, onDone }: LiveRunViewProps) {
         </div>
       )}
 
+      {/* Publish prompt — only for successful runs */}
+      {isDone && displayState === 'done' && doneRecord && (
+        <PublishPrompt record={doneRecord} />
+      )}
+
       {/* Cancel AlertDialog */}
       <AlertDialog open={cancelOpen} onOpenChange={setCancelOpen}>
         <AlertDialogContent>
@@ -936,6 +942,58 @@ function LiveRunView({ runId, mode, onDone }: LiveRunViewProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  )
+}
+
+// ─── Post-run publish prompt ──────────────────────────────────────────────────
+
+/** Shown when a run completes successfully: summarizes what changed and asks
+ *  whether to publish now (Publish page previews the authoritative dry-run
+ *  diff before applying) or curate the new entries first. */
+function PublishPrompt({ record }: { record: RunRecord }) {
+  const navigate = useNavigate()
+  const newRepos = record.repo_candidates ?? []
+  const resultPapers = record.result_papers ?? []
+  const hasPapers = resultPapers.length > 0
+
+  const editTarget = hasPapers ? '/papers?bucket=pending' : '/repos?sort=added'
+  const editLabel = hasPapers ? 'Edit pending papers first' : 'Review repos first'
+
+  return (
+    <div className="rounded-md border bg-muted/30 p-4 space-y-3">
+      <div>
+        <p className="text-sm font-semibold">Run complete — publish to the site?</p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          {newRepos.length > 0
+            ? `${newRepos.length} new repo${newRepos.length === 1 ? '' : 's'} this run`
+            : 'No new repos this run'}
+          {hasPapers ? ` · ${resultPapers.length} paper${resultPapers.length === 1 ? '' : 's'} touched` : ''}
+          {' '}— the Publish page shows the full diff against the live site before anything is applied.
+        </p>
+      </div>
+
+      {newRepos.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {newRepos.slice(0, 8).map((r) => (
+            <span key={r.id} className="px-2 py-0.5 rounded-full bg-background border text-xs font-mono">
+              {r.owner}/{r.repo}
+            </span>
+          ))}
+          {newRepos.length > 8 && (
+            <span className="px-2 py-0.5 text-xs text-muted-foreground">+{newRepos.length - 8} more</span>
+          )}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2">
+        <Button size="sm" className="gap-1.5" onClick={() => navigate('/publish')}>
+          Review &amp; publish
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => navigate(editTarget)}>
+          {editLabel}
+        </Button>
+      </div>
     </div>
   )
 }
@@ -1104,6 +1162,35 @@ function TriggerPanel({ onStarted }: TriggerPanelProps) {
         )}
         Start run
       </Button>
+    </div>
+  )
+}
+
+// ─── Latest-run publish prompt ────────────────────────────────────────────────
+
+/** When nothing is running, surface the publish prompt for the most recent
+ *  successful run — so a run that finished while you were elsewhere still
+ *  ends with "want to publish?". */
+function LatestRunPublishPrompt() {
+  const { data: runs } = useRuns()
+  const [record, setRecord] = useState<RunRecord | null>(null)
+  const latest = runs?.[0]
+
+  useEffect(() => {
+    if (latest?.state === 'done') {
+      fetchRun(latest.run_id).then(setRecord).catch(() => {})
+    } else {
+      setRecord(null)
+    }
+  }, [latest?.run_id, latest?.state])
+
+  if (!record) return null
+  return (
+    <div className="space-y-2">
+      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        Latest run · {record.run_id}
+      </h3>
+      <PublishPrompt record={record} />
     </div>
   )
 }
@@ -1389,6 +1476,10 @@ export function Runs() {
           )}
         </CardContent>
       </Card>
+
+      {/* Standing publish prompt for the latest completed run, so finishing
+          a run while away from this page still surfaces the publish step. */}
+      {!activeRun && <LatestRunPublishPrompt />}
 
       {/* History — click a run to expand its details inline */}
       <div className="space-y-3">
