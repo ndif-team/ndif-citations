@@ -119,6 +119,15 @@ def run(output_dir: str | None, fresh: bool, skip_github: bool, skip_papers: boo
         console.print("[bold red]Error:[/bold red] --skip-github and --skip-papers cannot both be set (nothing to do)")
         raise SystemExit(1)
 
+    from ndif_citations.preflight import preflight
+    pf = preflight(skip_papers=skip_papers, skip_github=skip_github, validate=True, validate_llm=True)
+    for w in pf["warnings"]:
+        console.print(f"[yellow]Warning:[/yellow] {w}")
+    if not pf["ok"]:
+        for b in pf["blocking"]:
+            console.print(f"[bold red]Blocked:[/bold red] {b}")
+        raise SystemExit(1)
+
     from ndif_citations import events, orchestrator
     from ndif_citations.output import print_report
 

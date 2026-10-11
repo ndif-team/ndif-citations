@@ -135,3 +135,17 @@ def _fresh_llm_breaker():
     process._reset_llm_failures()
     yield
     process._reset_llm_failures()
+
+
+@pytest.fixture(autouse=True)
+def _no_live_key_checks(request, monkeypatch):
+    """Preflight now live-checks the LLM and GitHub token; keep every test offline.
+
+    test_key_validation.py exercises the real functions (with mocked requests), so it's exempt.
+    Tests that need a failing check override this with their own monkeypatch.
+    """
+    if request.module.__name__.endswith("test_key_validation"):
+        return
+    ok = lambda *a, **k: {"ok": True, "detail": "stubbed"}  # noqa: E731
+    monkeypatch.setattr("ndif_citations.key_validation.test_llm", ok)
+    monkeypatch.setattr("ndif_citations.key_validation.test_github", ok)
