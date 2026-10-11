@@ -483,6 +483,39 @@ def extract_arxiv_id_from_doi(doi: str) -> Optional[str]:
     return None
 
 
+def find_arxiv_pdf_by_title(title: str) -> Optional[str]:
+    """arXiv PDF URL for the paper titled *title* (fuzz.ratio >= 90), else None.
+
+    Last-resort resolver for papers whose landing page is paywalled. Returns a URL
+    only — callers must not derive identity (arxiv_id) from it.
+    """
+    # ElementTree, like query_arxiv_api: arXiv is a trusted HTTPS source, ElementTree
+    # does not resolve external entities, and modern expat blocks entity bombs.
+    import xml.etree.ElementTree as ET
+    from urllib.parse import quote
+    from ndif_citations import config
+
+    want = " ".join((title or "").split())
+    clean = re.sub(r"[^\w\s]", " ", want).strip()
+    if not clean:
+        return None
+    query = quote('ti:"' + clean[:200] + '"')
+    try:
+        resp = requests.get(f"{config.ARXIV_API_BASE_URL}?search_query={query}&max_results=3", timeout=20)
+        rate_limit_sleep(config.ARXIV_API_RATE_LIMIT_SLEEP, "arXiv")
+        resp.raise_for_status()
+        ns = {"a": "http://www.w3.org/2005/Atom"}
+        for entry in ET.fromstring(resp.text).findall("a:entry", ns):
+            found = " ".join((entry.findtext("a:title", "", ns) or "").split())
+            if fuzz.ratio(found.lower(), want.lower()) >= 90:
+                abs_id = (entry.findtext("a:id", "", ns) or "").rsplit("/abs/", 1)[-1]
+                if abs_id:
+                    return f"https://arxiv.org/pdf/{abs_id}"
+    except Exception as e:  # noqa: BLE001 — resolver must never crash the run
+        logger.debug(f"arXiv title search failed for {want[:60]!r}: {e}")
+    return None
+
+
 def looks_like_pdf_url(url: str) -> bool:
     """Return False for URLs that are clearly DOI/landing-page redirects, not actual PDFs.
 
