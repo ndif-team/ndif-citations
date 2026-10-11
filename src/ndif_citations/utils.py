@@ -329,49 +329,55 @@ def extract_affiliations_from_pdf(pdf_path: Path, authors: str = "") -> list[str
             pass
 
 
+_NO_TEXT = "No text could be extracted from the PDF."
+_NO_MENTIONS = "No direct mentions of NDIF or nnsight found in the paper text."
+
+
+def find_mentions(text: str, keywords: list[str] | None = None) -> list[int]:
+    """Start offsets of NDIF/NNsight mentions in *text* — exactly one per mention.
+
+    All keywords go into ONE case-insensitive, longest-first alternation, so
+    overlapping keywords ("import nnsight" / "nnsight" / "nnsight.net") count once.
+    Only the bare keyword "ndif" is word-bounded (rejects "endif", "indifferent");
+    nnsight-family keywords stay substrings so PDF-glued text like "nnsight3"
+    (a footnote marker) still counts.
+    """
+    from ndif_citations.config import NDIF_KEYWORDS
+
+    if not text:
+        return []
+    kws = sorted({k.lower() for k in (keywords or NDIF_KEYWORDS) if k}, key=len, reverse=True)
+    if not kws:
+        return []
+    parts = [rf"\b{re.escape(k)}\b" if k == "ndif" else re.escape(k) for k in kws]
+    return [m.start() for m in re.finditer("|".join(parts), text, re.IGNORECASE)]
+
+
 def extract_ndif_context(pdf_path: Path, keywords: list[str] | None = None,
                          window: int = 500, max_excerpts: int = 5) -> str:
-    """Extract text around NDIF/nnsight mentions in a PDF."""
-    from ndif_citations.config import NDIF_KEYWORDS, CONTEXT_WINDOW, MAX_CONTEXT_EXCERPTS
+    """Excerpts (±window chars) around each NDIF/nnsight mention in a PDF.
 
-    keywords = keywords or NDIF_KEYWORDS
+    One excerpt per mention (no merging — merged windows would lower confidence
+    bands). Excerpts quoting the NNsight paper's own reference entry carry no usage
+    signal, so they sort last; within each group document order is kept.
+    """
+    from ndif_citations.config import CONTEXT_WINDOW, MAX_CONTEXT_EXCERPTS
+
     window = window or CONTEXT_WINDOW
     max_excerpts = max_excerpts or MAX_CONTEXT_EXCERPTS
 
     full_text = extract_text_from_pdf(pdf_path)
     if not full_text:
-        return "No text could be extracted from the PDF."
+        return _NO_TEXT
 
-    logger.debug(f"extract_ndif_context: text length={len(full_text)} chars")
+    positions = find_mentions(full_text, keywords)
+    logger.debug(f"extract_ndif_context: {len(positions)} mention(s), text length={len(full_text)}")
+    if not positions:
+        return _NO_MENTIONS
 
-    text_lower = full_text.lower()
-    contexts: list[str] = []
-
-    for kw in keywords:
-        kw_lower = kw.lower()
-        positions: list[int] = []
-        idx = 0
-        while True:
-            idx = text_lower.find(kw_lower, idx)
-            if idx == -1:
-                break
-            positions.append(idx)
-            start = max(0, idx - window)
-            end = min(len(full_text), idx + len(kw) + window)
-            contexts.append(full_text[start:end])
-            idx += len(kw)
-        if positions:
-            logger.debug(
-                f"  keyword '{kw}': {len(positions)} occurrence(s), "
-                f"first 5 positions: {positions[:5]}"
-            )
-
-    logger.debug(f"extract_ndif_context: {len(contexts)} context windows produced (cap={max_excerpts})")
-
-    if not contexts:
-        return "No direct mentions of NDIF or nnsight found in the paper text."
-
-    return "\n---\n".join(contexts[:max_excerpts])
+    excerpts = [full_text[max(0, p - window): p + window] for p in positions]
+    excerpts.sort(key=lambda e: "democratizing access" in e.lower())  # stable sort
+    return "\n---\n".join(excerpts[:max_excerpts])
 
 
 # ---------------------------------------------------------------------------

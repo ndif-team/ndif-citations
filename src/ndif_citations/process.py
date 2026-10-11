@@ -18,6 +18,7 @@ from ndif_citations.utils import (
     download_pdf,
     extract_ndif_context,
     extract_text_from_pdf,
+    find_mentions,
     rate_limit_sleep,
     slugify,
 )
@@ -391,19 +392,27 @@ def compute_context(
         from ndif_citations.pdf_cache import get_cached_pdf as _get_cached_pdf
         pdf_path = _get_cached_pdf(paper, out)
 
+    have_pdf = bool(pdf_path and pdf_path.exists())
+
+    # Never downgrade evidence: with no PDF available now (e.g. a cloud run without
+    # the local PDF cache), reuse the full-text windows extracted earlier.
+    if not have_pdf and paper.context_source == "pdf":
+        windows = list(paper.ndif_context_windows or [])
+        signal = paper.classification_signal or ""
+        return windows, "pdf", (None if windows else (signal if signal.startswith("pre_filter:") else None))
+
     context = ""
     context_source = "none"
 
-    if pdf_path and pdf_path.exists():
+    if have_pdf:
         context = extract_ndif_context(pdf_path, window=config.CONTEXT_WINDOW)
         logger.debug(f"PDF text extracted for '{paper.title}': context length={len(context)}")
 
-    # If no PDF context, try using abstract
-    if not context or "No direct mentions" in context:
+    no_pdf_context = (not context or context.startswith("No direct mentions")
+                      or context.startswith("No text could be extracted"))
+    if no_pdf_context:
         if paper.abstract:
-            abstract_lower = paper.abstract.lower()
-            has_mention = any(kw.lower() in abstract_lower for kw in config.NDIF_KEYWORDS)
-            if has_mention:
+            if find_mentions(paper.abstract):
                 context = paper.abstract
                 context_source = "abstract"
                 logger.debug(f"Using abstract as context for '{paper.title}'")
@@ -842,10 +851,8 @@ def _check_discard_zero_pdf_hits(paper: DiscoveredPaper, pdf_path: Optional[Path
     if len(text) < 1000:
         return False
 
-    text_lower = text.lower()
-    for kw in config.NDIF_KEYWORDS:
-        if kw.lower() in text_lower:
-            return False
+    if find_mentions(text):
+        return False
 
     # All keywords checked, zero matches in a substantial PDF
     kw_list = ", ".join(config.NDIF_KEYWORDS[:5]) + ("..." if len(config.NDIF_KEYWORDS) > 5 else "")
@@ -961,6 +968,15 @@ def process_papers(
             paper.url = existing.url or paper.url
             paper.pdf_url = existing.pdf_url or paper.pdf_url
             paper.manual_override = True
+
+        # Never downgrade evidence (spec §4.2): decision.paper is the freshly discovered
+        # copy (context_source "none"), so hand it the stored PDF evidence. With no PDF
+        # this run, compute_context then reuses it instead of falling back to the abstract.
+        ex = decision.existing_paper
+        if ex is not None and paper.context_source == "none" and ex.context_source == "pdf":
+            paper.context_source = "pdf"
+            paper.ndif_context_windows = list(ex.ndif_context_windows or [])
+            paper.classification_signal = ex.classification_signal
 
         # Get PDF path if needed for classification, thumbnail, or affiliations
         pdf_path = None
