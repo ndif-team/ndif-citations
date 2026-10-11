@@ -100,10 +100,40 @@ UNPAYWALL_RATE_LIMIT_SLEEP = 0.1  # ~10 req/sec (100K/day limit)
 # ---------------------------------------------------------------------------
 # LLM (OpenAI-compatible)
 # ---------------------------------------------------------------------------
-LLM_BASE_URL: str = os.environ.get("LLM_BASE_URL", "https://integrate.api.nvidia.com/v1")
+def _env_or(name: str, default: str) -> str:
+    """Env var value, treating unset AND empty (Actions passes unset vars as "") as default."""
+    return os.environ.get(name) or default
+
+
+def _parse_extra_body(raw: str | None) -> dict:
+    """LLM_EXTRA_BODY: unset/empty → NVIDIA thinking-off default; "{}" → no extra body."""
+    if not raw:
+        return {"chat_template_kwargs": {"enable_thinking": False}}
+    value = json.loads(raw)
+    if not isinstance(value, dict):
+        raise ValueError(f"LLM_EXTRA_BODY must be a JSON object, got {type(value).__name__}")
+    return value
+
+
+def _parse_bool_env(raw: str | None, default: bool) -> bool:
+    if raw is None or raw.strip() == "":
+        return default
+    return raw.strip().lower() not in ("0", "false", "no", "off")
+
+
+DEFAULT_LLM_BASE_URL = "https://integrate.api.nvidia.com/v1"
+DEFAULT_LLM_MODEL = "nvidia/nemotron-3-super-120b-a12b"  # free; reasoning model → needs extra body below
+
+LLM_BASE_URL: str = _env_or("LLM_BASE_URL", DEFAULT_LLM_BASE_URL)
 LLM_API_KEY: str | None = os.environ.get("LLM_API_KEY") or None
-LLM_MODEL: str = os.environ.get("LLM_MODEL", "meta/llama-3.1-70b-instruct")
+LLM_MODEL: str = _env_or("LLM_MODEL", DEFAULT_LLM_MODEL)
+# Provider-specific request fields merged into every chat completion. The NVIDIA
+# default turns reasoning off so the answer lands in message.content. OpenRouter: {}.
+LLM_EXTRA_BODY: dict = _parse_extra_body(os.environ.get("LLM_EXTRA_BODY"))
 LLM_RATE_LIMIT_SLEEP = 12.0  # NVIDIA Build free tier is ~5 req/min
+
+# Kill switch for the auto-publish rule (process._passes_auto_publish_rule).
+AUTO_PUBLISH_RULES: bool = _parse_bool_env(os.environ.get("AUTO_PUBLISH_RULES"), True)
 
 # ---------------------------------------------------------------------------
 # GitHub scraping + API
@@ -247,6 +277,7 @@ _SETTINGS_KEY_MAP: dict[str, tuple[str, object]] = {
     "ndif_readme_negative_patterns":("NDIF_README_NEGATIVE_PATTERNS", list),
     "llm_model":                  ("LLM_MODEL",                  str),
     "llm_base_url":               ("LLM_BASE_URL",               str),
+    "llm_extra_body":             ("LLM_EXTRA_BODY",             dict),
     "llm_rate_limit_sleep":       ("LLM_RATE_LIMIT_SLEEP",       float),
     "s2_rate_limit_sleep":        ("S2_RATE_LIMIT_SLEEP",        float),
     "github_rate_limit_sleep":    ("GITHUB_RATE_LIMIT_SLEEP",    float),

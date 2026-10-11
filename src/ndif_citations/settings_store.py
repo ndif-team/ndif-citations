@@ -31,7 +31,8 @@ DEFAULTS: dict[str, Any] = {
         "NDIF Pilot Program",
         "join the NDIF",
     ],
-    "llm_model": "meta/llama-3.1-70b-instruct",
+    "llm_model": "nvidia/nemotron-3-super-120b-a12b",
+    "llm_extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
     "llm_base_url": "https://integrate.api.nvidia.com/v1",
     "llm_rate_limit_sleep": 12.0,
     "s2_rate_limit_sleep": 3.0,
@@ -130,6 +131,9 @@ def _validate_value(key: str, value: Any) -> None:
     elif isinstance(default, list):
         if not isinstance(value, list):
             raise ValueError(f"{key!r} must be list, got {type(value).__name__!r}")
+    elif isinstance(default, dict):
+        if not isinstance(value, dict):
+            raise ValueError(f"{key!r} must be an object, got {type(value).__name__!r}")
 
 
 def save(path: Path | str, partial: dict[str, Any]) -> None:
