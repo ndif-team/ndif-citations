@@ -126,3 +126,12 @@ def make_repo(
     if content_hash:
         r.content_hash = content_hash
     return r
+
+
+@pytest.fixture(autouse=True)
+def _fresh_llm_breaker():
+    """The LLM circuit-breaker counter is module-global; start and end every test at zero."""
+    from ndif_citations import process
+    process._reset_llm_failures()
+    yield
+    process._reset_llm_failures()

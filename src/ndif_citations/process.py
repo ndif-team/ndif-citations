@@ -43,6 +43,48 @@ def _get_llm_client():
     )
 
 
+class LLMUnavailableError(RuntimeError):
+    """LLM_FAILURE_LIMIT consecutive LLM call failures — abort the run, write nothing."""
+
+
+LLM_FAILURE_LIMIT = 3
+_consecutive_llm_failures = 0
+
+
+def _reset_llm_failures() -> None:
+    global _consecutive_llm_failures
+    _consecutive_llm_failures = 0
+
+
+def _record_llm_failure(context: str, err: Exception) -> None:
+    """Count a failed LLM call; raise LLMUnavailableError once the limit is reached.
+
+    Called from inside an ``except`` block, so the raise is NOT swallowed by it.
+    """
+    global _consecutive_llm_failures
+    _consecutive_llm_failures += 1
+    if _consecutive_llm_failures >= LLM_FAILURE_LIMIT:
+        raise LLMUnavailableError(
+            f"{_consecutive_llm_failures} consecutive LLM failures (last: {context}: {err}) — "
+            f"model {config.LLM_MODEL} at {config.LLM_BASE_URL}"
+        ) from err
+
+
+def _llm_text(client, messages: list[dict], *, temperature: float, max_tokens: int) -> str:
+    """One chat completion with the configured model + extra body. Empty reply raises."""
+    response = client.chat.completions.create(
+        model=config.LLM_MODEL,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        extra_body=config.LLM_EXTRA_BODY or None,
+    )
+    content = response.choices[0].message.content
+    if not content or not content.strip():
+        raise ValueError("empty LLM reply (reasoning model? check llm_extra_body)")
+    return content.strip()
+
+
 # ---------------------------------------------------------------------------
 # Confidence band derivation (pure function)
 # ---------------------------------------------------------------------------
@@ -123,21 +165,22 @@ def generate_summary(paper: DiscoveredPaper) -> str:
         return _fallback_summary(paper.abstract)
 
     try:
-        response = client.chat.completions.create(
-            model=config.LLM_MODEL,
-            messages=[
+        summary = _llm_text(
+            client,
+            [
                 {"role": "system", "content": SUMMARY_SYSTEM_PROMPT},
                 {"role": "user", "content": f"Summarize this abstract:\n\n{paper.abstract}"},
             ],
             temperature=0.3,
             max_tokens=200,
         )
-        summary = response.choices[0].message.content.strip()
+        _reset_llm_failures()
         rate_limit_sleep(config.LLM_RATE_LIMIT_SLEEP, "LLM summary")
         return summary
 
     except Exception as e:
         logger.warning(f"LLM summary failed for '{paper.title}': {e}")
+        _record_llm_failure(f"summary '{paper.title[:40]}'", e)
         return _fallback_summary(paper.abstract)
 
 
@@ -473,13 +516,8 @@ def classify_category(
                 f"{context if context and 'No direct mentions' not in context else 'No direct mentions found in available text.'}"
             )},
         ]
-        response = client.chat.completions.create(
-            model=config.LLM_MODEL,
-            messages=messages,
-            temperature=0.1,
-            max_tokens=20,
-        )
-        raw = response.choices[0].message.content.strip().lower()
+        raw = _llm_text(client, messages, temperature=0.1, max_tokens=20).lower()
+        _reset_llm_failures()
         logger.debug(f"LLM raw reply for '{paper.title}': {raw!r}")
         rate_limit_sleep(config.LLM_RATE_LIMIT_SLEEP, "LLM classify")
 
@@ -513,6 +551,7 @@ def classify_category(
         return cat, _BAND_TO_FLOAT[band], band
 
     except Exception as e:
+        _record_llm_failure(f"classify '{paper.title[:40]}'", e)
         logger.warning(f"LLM classification failed for '{paper.title}': {e}")
         cat = _fallback_classification(context)
         paper.classification_signal = "keyword_fallback"
@@ -838,6 +877,7 @@ def process_papers(
     """
     from ndif_citations.pdf_cache import get_cached_pdf
 
+    _reset_llm_failures()
     logger.info(f"Processing {len(decisions)} papers (skip_llm={skip_llm})...")
 
     # Ensure cache directories exist
