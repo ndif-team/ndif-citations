@@ -34,10 +34,11 @@ SEED_OPENREVIEW_ID = "MxbEiFRf39"  # ICLR 2025
 # the stub_metadata bucket where a human can review them.
 MIN_PAPER_YEAR = 2024
 
-# When False, the pipeline never moves a paper to `verified` on its own —
-# even a HIGH/CERTAIN classification lands in `pending` (reason=needs_review)
-# for a curator to verify explicitly (from the run Results panel or Papers
-# page). When True, HIGH/CERTAIN classifications auto-verify (legacy behavior).
+# When False, a HIGH/CERTAIN classification lands in `pending` (reason=needs_review)
+# for a curator to verify (from the run Results panel or Papers page), except that
+# the auto-publish rule (process._passes_auto_publish_rule, kill switch
+# AUTO_PUBLISH_RULES) can verify a pipeline paper; USES_NDIF always waits for a
+# human. When True, HIGH/CERTAIN classifications auto-verify (legacy behavior).
 # Existing curator-set verified papers are never demoted by this policy.
 AUTO_VERIFY = False
 

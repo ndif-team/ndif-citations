@@ -847,7 +847,8 @@ def _decide_bucket(paper: DiscoveredPaper) -> tuple[Bucket, Optional[PaperReason
         return Bucket.PENDING, PaperReason.LOW_CONFIDENCE
 
     # HIGH/CERTAIN. Auto-verify only when explicitly enabled; otherwise hold in
-    # pending for a curator to verify (nothing gets verified without a human).
+    # pending for a curator to verify (only the auto-publish rule can verify a
+    # pipeline paper; USES_NDIF always waits for a human).
     # Curator-set papers (manual_override) keep their verified decision — the
     # hold is only for pipeline-classified papers.
     if not config.AUTO_VERIFY and not paper.manual_override:

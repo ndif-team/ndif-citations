@@ -101,3 +101,4 @@ def test_redact_emails():
     from ndif_citations.utils import redact_emails
     assert redact_emails("Contact jane.doe+x@uni.edu or a@b.io.") == "Contact [email] or [email]."
     assert redact_emails("no address here") == "no address here"
+    assert redact_emails("pip install nnsight@0.4.2") == "pip install nnsight@0.4.2"

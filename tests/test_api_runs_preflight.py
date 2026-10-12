@@ -59,7 +59,7 @@ def test_post_runs_blocks_when_llm_check_fails(monkeypatch, fixture_state):
     monkeypatch.setenv("GITHUB_TOKEN", "t")
     monkeypatch.setattr("ndif_citations.key_validation.test_llm",
                         lambda *a, **k: {"ok": False, "detail": "HTTP 410"})
-    class _NoRun:  # before Step 4 the preflight passes: never launch a real (networked) run
+    class _NoRun:  # never launch a real (networked) run
         def start(self, *a, **k):
             raise AssertionError("run must not start")
 

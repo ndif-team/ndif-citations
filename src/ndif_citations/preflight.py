@@ -4,7 +4,8 @@ Papers are LLM-classified -> need LLM_API_KEY; repos are discovered + README
 keyword-classified via the GitHub API -> need GITHUB_TOKEN. Optional keys only
 warn.
 
-validate_llm=True is used only by CLI run and POST /runs (never by the polled GET /runs/preflight).
+validate_llm=True is never set by the polled GET /runs/preflight; its callers are CLI run,
+POST /runs and the Phase 3 LLM-using commands (spec 4.2).
 """
 from __future__ import annotations
 
@@ -14,11 +15,10 @@ import os
 def preflight(*, skip_papers: bool, skip_github: bool, validate: bool = False, validate_llm: bool = False) -> dict:
     # Reads the live os.environ — kept in sync with config by secrets_store.set_keys()
     # (which writes os.environ + calls config.reload_settings before any run starts).
-    # validate=False keeps this a pure, fast presence check. validate=True adds a
-    # live GitHub token check (free api.github.com/user call) so a present-but-DEAD
-    # token is caught before the run instead of failing mid-discovery. The LLM key is
-    # intentionally NOT live-validated here (a completion costs tokens on every poll);
-    # use the Settings -> API Keys "Test" button for that.
+    # validate=False keeps this a pure, fast presence check. validate=True checks
+    # GitHub via /rate_limit so a present-but-DEAD token is caught before the run
+    # instead of failing mid-discovery. validate_llm=True sends one tiny completion
+    # with the real model + extra body (costs tokens, so never on the polled endpoint).
     blocking: list[str] = []
     warnings: list[str] = []
     if not skip_papers:

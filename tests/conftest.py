@@ -18,6 +18,13 @@ def no_sleep(monkeypatch):
     monkeypatch.setattr("ndif_citations.utils.time.sleep", lambda s: None)
 
 
+@pytest.fixture(autouse=True)
+def _auto_publish_rules_on(monkeypatch):
+    """Config reads AUTO_PUBLISH_RULES at import; keep tests independent of the dev's env/.env."""
+    from ndif_citations import config
+    monkeypatch.setattr(config, "AUTO_PUBLISH_RULES", True)
+
+
 @pytest.fixture()
 def fixture_state(tmp_path: Path) -> Path:
     """Copy the mini fixture files into a fresh tmp_path/output tree.

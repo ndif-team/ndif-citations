@@ -74,3 +74,32 @@ def test_merge_keeps_auto_discards_discarded():
     rediscovered = make_paper()
     merged, _ = merge_papers([existing], [rediscovered], PipelineRun())
     assert merged[0].bucket == Bucket.DISCARDED
+
+
+def test_gapfill_band_none_signal_llm_does_not_adopt_default_category():
+    # Task 4 hand-off copies signal="llm" onto the fresh copy; a zero-hit discard fires before
+    # classify, so the copy keeps defaults (REFERENCING, band NONE) and must not be adopted.
+    existing = make_paper(category=Category.UNCLASSIFIED)
+    new = make_paper(category=Category.REFERENCING)
+    new.category_confidence_band = Confidence.NONE
+    new.classification_signal = "llm"
+    _update_existing(existing, new)
+    assert existing.category == Category.UNCLASSIFIED
+
+
+def test_zero_hit_discard_does_not_touch_verified_paper():
+    existing = make_paper(bucket=Bucket.VERIFIED, category=Category.USES_NNSIGHT)
+    new = make_paper(bucket=Bucket.DISCARDED)
+    new.reason = PaperReason.ZERO_PDF_HITS
+    _update_existing(existing, new)
+    assert existing.bucket == Bucket.VERIFIED
+
+
+def test_gapfill_windows_only_branch_adopts_windows_and_source():
+    existing = make_paper(category=Category.USES_NNSIGHT)
+    existing.ndif_context_windows = []
+    new = make_paper(category=Category.USES_NNSIGHT)
+    new.ndif_context_windows = ["we use nnsight"]
+    new.context_source = "pdf"
+    assert _update_existing(existing, new) is True
+    assert existing.ndif_context_windows == ["we use nnsight"] and existing.context_source == "pdf"
