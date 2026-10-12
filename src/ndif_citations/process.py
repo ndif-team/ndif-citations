@@ -791,6 +791,27 @@ def extract_thumbnail(paper: DiscoveredPaper, output_dir: Path,
 # Bucket decision helpers (US-D2, US-D3)
 # ---------------------------------------------------------------------------
 
+def _passes_auto_publish_rule(paper: DiscoveredPaper) -> bool:
+    """High-confidence auto-publish gate (spec §4.7). USES_NDIF always needs a human.
+
+    Requires full-PDF evidence and a HIGH/CERTAIN band; then REFERENCING passes (its
+    worst case is under-claiming), and USES_NNSIGHT passes only when the LLM said so
+    AND the evidence contains an explicit usage phrase.
+    """
+    if not config.AUTO_PUBLISH_RULES:
+        return False
+    if paper.context_source != "pdf":
+        return False
+    if paper.category_confidence_band not in (Confidence.HIGH, Confidence.CERTAIN):
+        return False
+    if paper.category == Category.REFERENCING:
+        return True
+    if paper.category == Category.USES_NNSIGHT and paper.classification_signal == "llm":
+        text = " ".join(" ".join(paper.ndif_context_windows or []).lower().split())
+        return any(phrase in text for phrase in config.AUTO_PUBLISH_PHRASES)
+    return False
+
+
 def _decide_bucket(paper: DiscoveredPaper) -> tuple[Bucket, Optional[PaperReason]]:
     """Return (bucket, reason) for a paper based on ordered demotion rules.
 
@@ -800,7 +821,8 @@ def _decide_bucket(paper: DiscoveredPaper) -> tuple[Bucket, Optional[PaperReason
     3. medium_confidence — band == MEDIUM
     4. low_confidence    — band == LOW
 
-    Papers with band CERTAIN or HIGH pass through to VERIFIED.
+    Papers with band CERTAIN or HIGH pass through to VERIFIED when AUTO_VERIFY is on, or
+    (pipeline papers) when the auto-publish rule passes.
     """
     has_any_identifier = bool(
         paper.arxiv_id or paper.doi or paper.s2_paper_id
@@ -829,6 +851,8 @@ def _decide_bucket(paper: DiscoveredPaper) -> tuple[Bucket, Optional[PaperReason
     # Curator-set papers (manual_override) keep their verified decision — the
     # hold is only for pipeline-classified papers.
     if not config.AUTO_VERIFY and not paper.manual_override:
+        if _passes_auto_publish_rule(paper):
+            return Bucket.VERIFIED, None
         return Bucket.PENDING, PaperReason.NEEDS_REVIEW
 
     return Bucket.VERIFIED, None

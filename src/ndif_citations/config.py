@@ -41,6 +41,17 @@ MIN_PAPER_YEAR = 2024
 # Existing curator-set verified papers are never demoted by this policy.
 AUTO_VERIFY = False
 
+# Phrases that, inside FULL-PDF evidence, mark genuine NNsight USE (spec §4.7).
+# Measured 2026-10-10 on the 102 human-labeled papers: 54 matches, 0 wrong,
+# covering 48/69 uses_nnsight. Deliberately excluded because they appear in
+# related-work prose: "nnsight (fiotto", "rely on nnsight", "ndif.us".
+AUTO_PUBLISH_PHRASES: list[str] = [
+    "import nnsight", "nnsight.trace", "from nnsight", "nnsight backend", "nnsight library",
+    "using nnsight", "using the nnsight", "use nnsight", "used nnsight", "use the nnsight",
+    "used the nnsight", "via nnsight", "through nnsight", "implemented with nnsight",
+    "implemented using nnsight", "employ nnsight", "built on nnsight",
+]
+
 # Exactly match these full lowercase titles to drop them from discovery (the origin papers themselves)
 EXCLUDED_PAPER_TITLES = {
     "nnsight and ndif: democratizing access to open-weight foundation model internals",
