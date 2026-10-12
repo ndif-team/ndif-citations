@@ -1043,6 +1043,20 @@ def edit(paper_id: str, output_dir: str | None,
     console.print("\n[green][OK] Saved.[/green]")
 
 
+@cli.command(name="push-catalog")
+@click.option("--message", "-m", required=True, help="Commit message")
+@click.option("--push-conflict-branch", is_flag=True, help="(CI) also push the conflict branch to origin")
+def push_catalog_cmd(message: str, push_conflict_branch: bool) -> None:
+    """Commit + push the tracked catalog safely (validated; conflicts leave a branch)."""
+    from ndif_citations import catalog_git
+    try:
+        res = catalog_git.push_catalog(config._PROJECT_ROOT, message, push_conflict_branch=push_conflict_branch)
+    except catalog_git.CatalogPushError as e:
+        console.print(f"[bold red]Push failed:[/bold red] {e}")
+        raise SystemExit(1)
+    console.print(res["message"])
+
+
 @cli.command()
 @click.option("--port", default=8723, show_default=True, help="Port to bind on localhost")
 @click.option("--host", default="127.0.0.1", show_default=True, help="Host to bind (localhost only by default)")
