@@ -512,6 +512,15 @@ def write_outputs(papers: list[DiscoveredPaper], output_dir: Path, run: Pipeline
         and p.category != Category.UNCLASSIFIED
     ]
 
+    # The catalog is committed to a public repo (spec §5.1): scrub email addresses
+    # at the one place every catalog write goes through.
+    from ndif_citations.utils import redact_emails
+    for p in papers:
+        if p.affiliations:
+            p.affiliations = redact_emails(p.affiliations)
+        if p.ndif_context_windows:
+            p.ndif_context_windows = [redact_emails(w) for w in p.ndif_context_windows]
+
     # 1. Website JSON — verified papers only (matches ResearchPaper TS interface)
     verified_papers = [p for p in papers if p.bucket == Bucket.VERIFIED]
     website_data = [p.to_website_dict() for p in verified_papers]
