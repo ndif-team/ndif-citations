@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
-from ndif_citations.models import DiscoveredPaper, DiscoveredRepo
+from ndif_citations.models import Bucket, DiscoveredPaper, DiscoveredRepo
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +135,11 @@ def _route_single_paper(
     if not existing:
         logger.debug(f"NEW: {paper.title[:50]}...")
         return RoutingDecision(paper, ProcessingBucket.NEW, None, _all_true())
+
+    # Discards stick (spec §4.5): never spend LLM/PDF work re-processing them.
+    if existing.bucket == Bucket.DISCARDED:
+        bucket = ProcessingBucket.PROTECTED if existing.manual_override else ProcessingBucket.SKIP
+        return RoutingDecision(paper, bucket, existing, _all_false())
 
     # PROTECTED: Manual override — but allow fill-gaps for empty fields so the
     # pipeline can backfill description / thumbnail / affiliations without
