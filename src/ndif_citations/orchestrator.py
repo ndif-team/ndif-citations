@@ -549,7 +549,7 @@ def finalize_stage(
             processed_repo_objs = r.processed_repos[:n_repos]
         else:
             processed_repo_objs = [d.repo for d in r.repo_decisions[:n_repos]]
-        merged_repos = merge_repos(processed_repo_objs, existing_repos_for_merge)
+        merged_repos = merge_repos(processed_repo_objs, existing_repos_for_merge, run=run_stats)
         _write_repos_outputs(merged_repos, out)
         events.emit(
             "merge_result", stage="finalize",

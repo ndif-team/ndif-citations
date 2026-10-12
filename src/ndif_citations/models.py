@@ -372,3 +372,4 @@ class PipelineRun(BaseModel):
     # Auto-recovery tracking (populated during merge)
     auto_promoted: list[str] = Field(default_factory=list)   # titles promoted pending→verified
     auto_demoted: list[str] = Field(default_factory=list)    # titles demoted verified→pending
+    age_out_skipped: int = 0  # repos spared because a mass age-out looked like a broken scrape

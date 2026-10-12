@@ -220,6 +220,7 @@ def merge_papers(existing: list[DiscoveredPaper],
 def merge_repos(
     discovered: list[DiscoveredRepo],
     existing: list[DiscoveredRepo],
+    run: PipelineRun | None = None,
 ) -> list[DiscoveredRepo]:
     """Merge discovered repos into existing state.
 
@@ -249,8 +250,7 @@ def merge_repos(
     # BEFORE they reach this function, so they tend to be old `last_seen`
     # values and naturally age out.
     AGE_OUT_DAYS = 30
-    removed_count = 0
-    aged_out_count = 0
+    stale: list[DiscoveredRepo] = []
     for existing_repo in existing:
         key = existing_repo.merge_key()
         if key in discovered_keys:
@@ -259,11 +259,9 @@ def merge_repos(
             logger.debug(f"Keeping protected repo not seen this run: {key}")
             merged.append(existing_repo)
             continue
-        # Soft age-out
         if existing_repo.last_seen:
             try:
-                last = date.fromisoformat(existing_repo.last_seen)
-                days_since = (today_date - last).days
+                days_since = (today_date - date.fromisoformat(existing_repo.last_seen)).days
             except ValueError:
                 days_since = AGE_OUT_DAYS + 1  # bad data → age out
         else:
@@ -272,15 +270,24 @@ def merge_repos(
             logger.debug(f"Keeping scrape-absent repo (within {AGE_OUT_DAYS}d): {key}")
             merged.append(existing_repo)
         else:
-            logger.info(f"Aging out scrape-absent repo ({days_since}d since last seen): {key}")
-            aged_out_count += 1
-            removed_count += 1
+            stale.append(existing_repo)
 
-    if removed_count:
-        logger.info(
-            f"Removed {removed_count} stale repo(s) from state "
-            f"({aged_out_count} aged out past {AGE_OUT_DAYS}d)"
+    # Breaker (spec §5.4): a mass age-out means the dependents scrape broke (soft
+    # block, HTML change, partial page set) — keep everything this run and flag it.
+    non_manual = sum(1 for r in existing if not r.manual_override)
+    limit = max(5, non_manual // 10)
+    if len(stale) > limit:
+        logger.warning(
+            f"Age-out SKIPPED: {len(stale)} repos would be removed (> {limit}); "
+            "the dependents scrape looks partial — keeping them"
         )
+        merged.extend(stale)
+        if run is not None:
+            run.age_out_skipped = len(stale)
+    elif stale:
+        for r in stale:
+            logger.info(f"Aging out scrape-absent repo: {r.merge_key()}")
+        logger.info(f"Removed {len(stale)} stale repo(s) from state (aged out past {AGE_OUT_DAYS}d)")
 
     # Merge each discovered repo, stamping first_seen / last_seen
     for repo in discovered:
@@ -895,6 +902,11 @@ def print_report(
                 )
             else:
                 console.print(f"  > [green]Enrichment coverage: {cov_enriched}/{cov_total} repos (complete)[/green]")
+        if getattr(run, "age_out_skipped", 0):
+            console.print(
+                f"  ! [yellow]Age-out skipped: {run.age_out_skipped} repos looked stale at once "
+                "— the dependents scrape is probably partial; nothing was removed[/yellow]"
+            )
         if repos_removed_counts:
             total_removed = sum(repos_removed_counts.values())
             if total_removed > 0:
