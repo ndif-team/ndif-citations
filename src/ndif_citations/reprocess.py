@@ -23,7 +23,8 @@ that guard:
 4. Restore thumbnails that weren't re-extracted (old PNGs are parked in a temp
    dir, never in ``images/``, and restored in a ``finally``); re-derive
    ``has_*``; re-decide the bucket only for re-classified PENDING papers (hold
-   active, so the auto-publish rule gates VERIFIED); then lock
+   active, so the auto-publish rule gates VERIFIED; a reprocess zero-hit goes to
+   review with the prior category kept); then lock
    (``manual_override=True``).
 5. Write the whole list back (no merge — merge would re-protect the curated
    values we just overwrote).
@@ -167,8 +168,10 @@ def reprocess_papers(
     # lock. Pending papers are decided with the hold active (lock state irrelevant),
     # so they reach VERIFIED only via the auto-publish rule. A verified paper whose
     # category changed goes back to review (a published category — above all the
-    # uses_ndif badge — never changes without a human). Discards stand. Without
-    # "classify", the bucket never changes.
+    # uses_ndif badge — never changes without a human). Already-discarded papers stay
+    # discarded; a zero-hit auto-discard during a reprocess (always human-triggered)
+    # goes to review with the prior category kept. Without "classify", the bucket
+    # never changes.
     for p in targets:
         prior_bucket, prior_reason, prior_detail, prior_category, prior_image = prior[id(p)]
         if "thumbnail" in fields and not p.image:
@@ -183,10 +186,16 @@ def reprocess_papers(
         p.has_affiliations = bool(p.affiliations)
         reclassified = "classify" in fields
         auto_discarded = p.bucket == Bucket.DISCARDED and p.reason == PaperReason.ZERO_PDF_HITS
-        if reclassified and prior_bucket == Bucket.PENDING:
-            if not auto_discarded:  # keep process_papers' zero-hit discard
-                p.manual_override = False
-                p.bucket, p.reason = _decide_bucket(p)
+        if reclassified and auto_discarded and prior_bucket != Bucket.DISCARDED:
+            # Every reprocess is human-triggered (web Classify, /retry, /pdf): surface the
+            # 0 hits for review, never discard or wipe the label on the curator's behalf.
+            p.category = prior_category
+            p.has_classification = p.category != Category.UNCLASSIFIED
+            p.bucket, p.reason = Bucket.PENDING, PaperReason.NEEDS_REVIEW
+            p.reason_detail = "re-classified: no NDIF/NNsight mention found in the PDF"
+        elif reclassified and prior_bucket == Bucket.PENDING:
+            p.manual_override = False
+            p.bucket, p.reason = _decide_bucket(p)
         elif reclassified and prior_bucket == Bucket.VERIFIED and p.category != prior_category:
             p.bucket, p.reason = Bucket.PENDING, PaperReason.NEEDS_REVIEW
             p.reason_detail = f"re-classified: {prior_category.value} → {p.category.value}"

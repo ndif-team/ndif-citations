@@ -4,7 +4,7 @@ import json
 import pytest
 
 from ndif_citations import process
-from ndif_citations.models import Bucket, Category, Confidence
+from ndif_citations.models import Bucket, Category, Confidence, PaperReason
 from ndif_citations.output import load_existing_papers
 from ndif_citations.reprocess import reprocess_papers
 from tests.conftest import make_paper
@@ -204,3 +204,35 @@ def test_thumbnail_kept_when_image_name_is_not_the_title_slug(tmp_path, monkeypa
     monkeypatch.setattr("ndif_citations.pdf_cache.get_cached_pdf", lambda paper, out: None)
     reprocess_papers(tmp_path, [p.merge_key()], ["thumbnail"])
     assert _only(tmp_path).image == "/images/Old-Title.png"
+
+
+_ZERO_HIT_DETAIL = "re-classified: no NDIF/NNsight mention found in the PDF"
+
+
+def _stub_zero_hit(monkeypatch):
+    def _f(paper, pdf_path):
+        paper.bucket = Bucket.DISCARDED
+        paper.reason = PaperReason.ZERO_PDF_HITS
+        paper.reason_detail = "0 hits"
+        return True
+    monkeypatch.setattr(process, "_check_discard_zero_pdf_hits", _f)
+
+
+@pytest.mark.parametrize("bucket", [Bucket.PENDING, Bucket.VERIFIED])
+def test_reprocess_zero_hit_goes_to_review_keeping_category(tmp_path, monkeypatch, pdf, bucket):
+    p = make_paper(year=2025, bucket=bucket, manual_override=True, category=Category.USES_NNSIGHT)
+    _write(tmp_path, [p])
+    _stub_zero_hit(monkeypatch)
+    reprocess_papers(tmp_path, [p.merge_key()], ["classify"])
+    got = _only(tmp_path)
+    assert got.bucket == Bucket.PENDING and got.reason == PaperReason.NEEDS_REVIEW
+    assert got.category == Category.USES_NNSIGHT
+    assert got.reason_detail == _ZERO_HIT_DETAIL
+
+
+def test_reprocess_zero_hit_on_discarded_paper_stays_discarded(tmp_path, monkeypatch, pdf):
+    p = make_paper(year=2025, bucket=Bucket.DISCARDED, manual_override=True, category=Category.USES_NNSIGHT)
+    _write(tmp_path, [p])
+    _stub_zero_hit(monkeypatch)
+    reprocess_papers(tmp_path, [p.merge_key()], ["classify"])
+    assert _only(tmp_path).bucket == Bucket.DISCARDED
