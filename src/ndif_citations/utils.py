@@ -1242,7 +1242,7 @@ def extract_bibtex_arxiv_ids(readme_text: str) -> list[str]:
     return result
 
 
-_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}\b")
+_EMAIL_RE = re.compile(r"(?:\{[^{}@\s]+\}|[\w.+-]+)@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}\b")
 
 
 def redact_emails(text: str) -> str:

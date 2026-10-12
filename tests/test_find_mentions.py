@@ -102,3 +102,5 @@ def test_redact_emails():
     assert redact_emails("Contact jane.doe+x@uni.edu or a@b.io.") == "Contact [email] or [email]."
     assert redact_emails("no address here") == "no address here"
     assert redact_emails("pip install nnsight@0.4.2") == "pip install nnsight@0.4.2"
+    assert redact_emails("{a.b,c}@uni-x.de") == "[email]"
+    assert redact_emails("{k: v}@decorator.call") == "{k: v}@decorator.call"
