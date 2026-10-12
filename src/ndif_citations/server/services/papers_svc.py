@@ -179,7 +179,7 @@ def edit_paper(out: Path, paper_id: str, fields: dict[str, str]) -> dict:
         If a field name is unknown/non-editable, or if parsing fails.
     """
     from ndif_citations import edit_schema
-    from ndif_citations.process import _decide_bucket
+    from ndif_citations.process import _bucket_after_edit
 
     papers = load_existing_papers(out)
     paper: DiscoveredPaper | None = None
@@ -205,9 +205,9 @@ def edit_paper(out: Path, paper_id: str, fields: dict[str, str]) -> dict:
     paper.has_thumbnail = bool(paper.image)
     paper.has_affiliations = bool(paper.affiliations)
 
-    # Re-run _decide_bucket only when bucket was not explicitly edited
+    # Bucket safety (spec §4.5): an edit never publishes. An explicit "bucket" edit wins.
     if "bucket" not in fields:
-        paper.bucket, paper.reason = _decide_bucket(paper)
+        paper.bucket, paper.reason = _bucket_after_edit(paper)
 
     write_outputs(papers, out, PipelineRun())
     return _detail_dict(paper)

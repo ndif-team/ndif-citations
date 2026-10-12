@@ -858,6 +858,23 @@ def _decide_bucket(paper: DiscoveredPaper) -> tuple[Bucket, Optional[PaperReason
     return Bucket.VERIFIED, None
 
 
+def _bucket_after_edit(paper: DiscoveredPaper) -> tuple[Bucket, Optional[PaperReason]]:
+    """(bucket, reason) after a curator's metadata edit (spec §4.5, §4.7): an edit never publishes.
+
+    Verified/discarded decisions stand, except that a verified paper edited to UNCLASSIFIED
+    goes back to pending (the site never shows "unclassified"). A pending paper stays
+    pending; only its reason is refreshed (e.g. stub_metadata clears once the year is fixed).
+    Never trust a lock-time band here: models.model_post_init forces CERTAIN on every
+    locked paper at load.
+    """
+    if paper.bucket == Bucket.VERIFIED and paper.category == Category.UNCLASSIFIED:
+        return _decide_bucket(paper)  # always PENDING for UNCLASSIFIED
+    if paper.bucket != Bucket.PENDING:
+        return paper.bucket, paper.reason
+    bucket, reason = _decide_bucket(paper)
+    return Bucket.PENDING, (reason if bucket == Bucket.PENDING else PaperReason.NEEDS_REVIEW)
+
+
 def _check_discard_zero_pdf_hits(paper: DiscoveredPaper, pdf_path: Optional[Path]) -> bool:
     """Return True and mutate paper if PDF has ≥1000 chars and zero keyword matches.
 
