@@ -236,7 +236,7 @@ When you open a paper you'll see a few labels. Here's how to read them.
 
 | Bucket | Meaning |
 |---|---|
-| **Verified** | Reviewed and good. **Only Verified papers publish to the website**, and **only you** put a paper here — the pipeline never auto-verifies. |
+| **Verified** | Reviewed and good. **Only Verified papers publish to the website.** The pipeline auto-verifies just two kinds of paper, both with full-PDF evidence: ones the model calls *referencing*, and *uses_nnsight* ones whose text explicitly says it used NNsight (e.g. "we use nnsight"). Anything claiming NDIF use (the public "NDIF-supported" badge) always waits for you. Set `AUTO_PUBLISH_RULES=0` to turn auto-verify off. |
 | **Pending** | Needs your attention — every freshly-processed paper, plus anything low-confidence or missing data. Your work queue. |
 | **Discarded** | Not relevant. Kept for the record, never published. |
 

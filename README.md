@@ -278,7 +278,7 @@ The LLM integration is provider-agnostic via the `openai` Python library:
 ```bash
 # NVIDIA Build (default, free tier)
 LLM_BASE_URL=https://integrate.api.nvidia.com/v1
-LLM_MODEL=meta/llama-3.1-70b-instruct
+LLM_MODEL=nvidia/nemotron-3-super-120b-a12b
 
 # OpenAI
 LLM_BASE_URL=https://api.openai.com/v1
@@ -290,6 +290,8 @@ LLM_MODEL=llama3.1
 ```
 
 </details>
+
+`LLM_EXTRA_BODY` carries provider-specific request fields (default turns NVIDIA reasoning off); to switch to OpenRouter set `LLM_BASE_URL=https://openrouter.ai/api/v1`, `LLM_API_KEY`, `LLM_MODEL`, and `LLM_EXTRA_BODY={}`. `AUTO_PUBLISH_RULES=0` sends every paper to human review.
 
 ## Configuration
 
