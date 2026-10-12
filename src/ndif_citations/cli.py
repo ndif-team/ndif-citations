@@ -526,6 +526,7 @@ def reclassify(ids: str | None, output_dir: str | None, dry_run: bool) -> None:
                     # A published category (above all uses_ndif) never changes without a human.
                     paper.bucket, paper.reason = Bucket.PENDING, PaperReason.NEEDS_REVIEW
                     paper.reason_detail = f"re-classified: {old_cat} → {new_cat.value}"
+                    paper.manual_override = True  # lock, like reprocess: the next merge must not re-publish it
 
     # Print diff
     if changes:

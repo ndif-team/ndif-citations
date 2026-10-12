@@ -127,7 +127,7 @@ def reprocess_papers(
     park_dir = Path(tempfile.mkdtemp(prefix="reprocess-thumbs-")) if "thumbnail" in fields else None
     try:
         for p in targets:
-            prior[id(p)] = (p.bucket, p.reason, p.reason_detail, p.category)
+            prior[id(p)] = (p.bucket, p.reason, p.reason_detail, p.category, p.image)
             for field in fields:
                 _clear_field(p, field)
             if park_dir is not None:
@@ -170,10 +170,12 @@ def reprocess_papers(
     # uses_ndif badge — never changes without a human). Discards stand. Without
     # "classify", the bucket never changes.
     for p in targets:
-        prior_bucket, prior_reason, prior_detail, prior_category = prior[id(p)]
+        prior_bucket, prior_reason, prior_detail, prior_category, prior_image = prior[id(p)]
         if "thumbnail" in fields and not p.image:
             png = out / "images" / f"{slugify(p.title)}.png"
-            if png.exists():  # the old thumbnail, restored above
+            if prior_image and prior_image.startswith("/images/") and (out / prior_image[1:]).exists():
+                p.image = prior_image  # not the title slug (e.g. after a title edit); never moved
+            elif png.exists():  # the old thumbnail, restored above
                 p.image = f"/images/{png.name}"
         p.has_summary = bool(p.description)
         p.has_classification = p.category != Category.UNCLASSIFIED

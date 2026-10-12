@@ -179,3 +179,28 @@ def test_thumbnail_restored_when_processing_raises(tmp_path, monkeypatch):
         reprocess_papers(tmp_path, [p.merge_key()], ["thumbnail"])
     assert png.read_bytes() == b"old-png"
     assert [f.name for f in (tmp_path / "images").iterdir()] == ["Test-Paper.png"]
+
+
+def test_cli_reclassify_review_hold_survives_next_merge(tmp_path, monkeypatch, pdf):
+    from click.testing import CliRunner
+    from ndif_citations.cli import cli
+    from ndif_citations.models import PipelineRun
+    from ndif_citations.output import merge_papers
+    p = make_paper(year=2025, bucket=Bucket.VERIFIED, category=Category.USES_NDIF)  # unlocked
+    _write(tmp_path, [p])
+    monkeypatch.setattr(process, "classify_category",
+                        _fake_classify(Category.REFERENCING, Confidence.HIGH, ["see NNsight (Fiotto-Kaufman)"]))
+    r = CliRunner().invoke(cli, ["reclassify", "--ids", p.arxiv_id, "-o", str(tmp_path)])
+    assert r.exit_code == 0, r.output
+    merged, _ = merge_papers(load_existing_papers(tmp_path), [make_paper(year=2025)], PipelineRun())
+    assert merged[0].bucket == Bucket.PENDING
+    assert "uses_ndif → referencing" in merged[0].reason_detail
+
+
+def test_thumbnail_kept_when_image_name_is_not_the_title_slug(tmp_path, monkeypatch):
+    p = make_paper(year=2025, bucket=Bucket.VERIFIED, manual_override=True, image="/images/Old-Title.png")
+    _write(tmp_path, [p])
+    (tmp_path / "images" / "Old-Title.png").write_bytes(b"old-png")
+    monkeypatch.setattr("ndif_citations.pdf_cache.get_cached_pdf", lambda paper, out: None)
+    reprocess_papers(tmp_path, [p.merge_key()], ["thumbnail"])
+    assert _only(tmp_path).image == "/images/Old-Title.png"
