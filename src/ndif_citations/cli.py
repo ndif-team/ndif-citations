@@ -113,7 +113,9 @@ def cli(verbose: bool) -> None:
 @click.option("--fresh", is_flag=True, help="Ignore existing data, start from scratch")
 @click.option("--skip-github", is_flag=True, default=False, help="Skip GitHub repo discovery and output")
 @click.option("--skip-papers", is_flag=True, default=False, help="Skip paper discovery, LLM processing, and paper output")
-def run(output_dir: str | None, fresh: bool, skip_github: bool, skip_papers: bool) -> None:
+@click.option("--summary-json", default=None, help="(CI) write run stats JSON here for the digest")
+def run(output_dir: str | None, fresh: bool, skip_github: bool, skip_papers: bool,
+        summary_json: str | None) -> None:
     """Full pipeline: discover → extract → process → output."""
     if skip_github and skip_papers:
         console.print("[bold red]Error:[/bold red] --skip-github and --skip-papers cannot both be set (nothing to do)")
@@ -155,6 +157,8 @@ def run(output_dir: str | None, fresh: bool, skip_github: bool, skip_papers: boo
         repos_removed_counts=result.removal_counts,
         repo_coverage=result.repo_coverage,
     )
+    if summary_json:
+        Path(summary_json).write_text(result.run_stats.model_dump_json(indent=2))
 
 
 @cli.command()
@@ -1055,6 +1059,37 @@ def push_catalog_cmd(message: str, push_conflict_branch: bool) -> None:
         console.print(f"[bold red]Push failed:[/bold red] {e}")
         raise SystemExit(1)
     console.print(res["message"])
+
+
+@cli.command()
+@click.option("--before-ref", default="HEAD", show_default=True, help="git ref holding the pre-run catalog")
+@click.option("--summary-json", default=None, help="run --summary-json output (age-out info)")
+@click.option("--out", "out_path", required=True, help="Write the Markdown digest here")
+def digest(before_ref: str, summary_json: str | None, out_path: str) -> None:
+    """Write the run digest (vs the committed catalog) and expose has_changes to Actions."""
+    import json
+    import os
+    from ndif_citations import catalog_git
+    from ndif_citations.digest import build_digest
+
+    root = config._PROJECT_ROOT
+    before = catalog_git._show_json(root, before_ref, catalog_git.PAPERS_FULL)
+    before_repos = catalog_git._show_json(root, before_ref, catalog_git.REPOS_FULL)
+    after = json.loads((root / catalog_git.PAPERS_FULL).read_text())
+    repos_path = root / catalog_git.REPOS_FULL
+    after_repos = json.loads(repos_path.read_text()) if repos_path.exists() else []
+    age = json.loads(Path(summary_json).read_text()).get("age_out_skipped", 0) if summary_json else 0
+    run_url = None
+    if os.environ.get("GITHUB_RUN_ID"):
+        run_url = (f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"
+                   f"/actions/runs/{os.environ['GITHUB_RUN_ID']}")
+    md, changed = build_digest(before, after, before_repos, after_repos, age_out_skipped=age, run_url=run_url)
+    Path(out_path).write_text(md)
+    for var, text in (("GITHUB_STEP_SUMMARY", md), ("GITHUB_OUTPUT", f"has_changes={'true' if changed else 'false'}\n")):
+        if os.environ.get(var):
+            with open(os.environ[var], "a") as fh:
+                fh.write(text)
+    console.print(f"digest written ({'changes' if changed else 'no changes'}) → {out_path}")
 
 
 @cli.command()
