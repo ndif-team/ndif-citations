@@ -1240,3 +1240,11 @@ def extract_bibtex_arxiv_ids(readme_text: str) -> list[str]:
                         result.append(arxiv_id)
 
     return result
+
+
+_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+
+
+def redact_emails(text: str) -> str:
+    """Replace email addresses with "[email]" (the catalog becomes public in Phase 2)."""
+    return _EMAIL_RE.sub("[email]", text or "")

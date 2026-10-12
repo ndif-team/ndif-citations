@@ -95,3 +95,9 @@ def test_process_papers_hands_stored_pdf_evidence_to_classify(tmp_path, monkeypa
     needs = {"summary": False, "classify": True, "thumbnail": False, "affiliations": False}
     process.process_papers([RoutingDecision(fresh, ProcessingBucket.FILL_GAPS, existing, needs)], tmp_path)
     assert seen == [("pdf", ["we use nnsight to trace activations"])]
+
+
+def test_redact_emails():
+    from ndif_citations.utils import redact_emails
+    assert redact_emails("Contact jane.doe+x@uni.edu or a@b.io.") == "Contact [email] or [email]."
+    assert redact_emails("no address here") == "no address here"
