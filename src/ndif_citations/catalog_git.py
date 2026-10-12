@@ -105,6 +105,10 @@ def _git_or_fail(repo: Path, *args: str, what: str) -> subprocess.CompletedProce
     return r
 
 
+def _ahead(repo: Path, upstream: str) -> int:
+    return int(_git_or_fail(repo, "rev-list", "--count", f"{upstream}..HEAD", what="git rev-list").stdout)
+
+
 def _resolvable(path: str) -> bool:
     """Conflicts we can resolve mechanically: generated slim files and thumbnails."""
     return path in SLIM_PATHS or path.startswith("output/images/")
@@ -122,7 +126,8 @@ def _rebase_onto(repo: Path, remote: str, branch: str) -> bool:
     try:
         r = _git(repo, "rebase", upstream, check=False, env_extra=no_editor)
         while r.returncode != 0:
-            conflicted = _git(repo, "diff", "--name-only", "--diff-filter=U", check=False).stdout.split()
+            conflicted = _git(repo, "-c", "core.quotepath=off", "diff", "--name-only", "--diff-filter=U",
+                              check=False).stdout.splitlines()  # thumbnail names have spaces / non-ASCII
             if conflicted and all(_resolvable(c) for c in conflicted):
                 for c in conflicted:  # either side will do: slim files are regenerated below
                     _git(repo, "checkout", "--theirs", "--", c)
@@ -131,6 +136,8 @@ def _rebase_onto(repo: Path, remote: str, branch: str) -> bool:
                 continue
             _git(repo, "rebase", "--abort", check=False)
             return False
+        if _ahead(repo, upstream) == 0:  # every local commit was already upstream: HEAD is published, never amend
+            return True
         problems: list[str] = []
         for path, (b, o, t) in snaps.items():
             merged = json.loads((repo / path).read_text())
@@ -182,8 +189,7 @@ def push_catalog(repo: Path, message: str, *, push_conflict_branch: bool = False
     if _git(repo, "fetch", remote, branch, check=False).returncode != 0:
         raise CatalogPushError("couldn't reach GitHub — your changes are committed locally and will be "
                                "pushed the next time you push the catalog")
-    ahead = int(_git_or_fail(repo, "rev-list", "--count", f"{remote}/{branch}..HEAD", what="git rev-list").stdout)
-    if ahead == 0:
+    if _ahead(repo, f"{remote}/{branch}") == 0:
         return {"pushed": False, "commit": None, "conflict_branch": None, "message": "no catalog changes"}
     # HEAD:main pushes every unpushed commit; code must go through a PR, never through Push catalog.
     bad = [f for f in _git_or_fail(repo, "-c", "core.quotepath=off", "diff", "--name-only",
@@ -204,6 +210,9 @@ def push_catalog(repo: Path, message: str, *, push_conflict_branch: bool = False
                 f"catalog changes conflict with {remote}/{branch}; your commit is saved on branch {name!r} "
                 f"and the catalog now shows the latest {remote}/{branch} — redo the conflicting edits"
             )
+        if _ahead(repo, f"{remote}/{branch}") == 0:
+            return {"pushed": False, "commit": None, "conflict_branch": None,
+                    "message": f"already on {remote}/{branch}"}
     raise CatalogPushError(f"push to {remote}/{branch} kept being rejected after {attempts} rebases: "
                            f"{(last.stderr or '').strip()[:300]}")
 

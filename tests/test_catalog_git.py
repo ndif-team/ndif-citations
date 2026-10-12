@@ -35,6 +35,10 @@ def read_keys(repo: Path) -> dict[str, list[str]]:
     return {b: sorted(i["arxiv_id"] for i in data[b]) for b in data}
 
 
+def _buckets_with(data: dict, arxiv_id: str) -> list[str]:
+    return [b for b in data if any(i["arxiv_id"] == arxiv_id for i in data[b])]
+
+
 @pytest.fixture()
 def remote_and_clones(tmp_path):
     """bare remote + clone A (bot) + clone B (curator), both on main with one seed commit."""
@@ -103,16 +107,57 @@ def test_race_on_different_papers_merges(remote_and_clones):
 def test_same_paper_two_buckets_leaves_conflict_branch(remote_and_clones, caplog):
     """Non-adjacent hunks (verified and discarded both non-empty) → git merges the TEXT
     cleanly into a paper in two buckets; only the validator can catch it."""
-    _, a, b, seed = remote_and_clones
+    bare, a, b, seed = remote_and_clones
     seed_b = [p.model_copy(deep=True) for p in seed]
     _move(a, seed, "2401.00002", Bucket.VERIFIED)
     catalog_git.push_catalog(a, "bot publishes 2")
+    bot_sha = git(bare, "rev-parse", "main")
     _move(b, seed_b, "2401.00002", Bucket.DISCARDED)
     with pytest.raises(catalog_git.CatalogPushError, match="catalog-conflict-"):
         catalog_git.push_catalog(b, "curator discards 2")
     assert "new duplicate keys" in caplog.text
-    assert any(br.strip().startswith("catalog-conflict-") for br in git(b, "branch").splitlines())
+    conflict = [br.strip() for br in git(b, "branch").splitlines() if br.strip().startswith("catalog-conflict-")]
+    assert len(conflict) == 1
     assert git(b, "rev-parse", "HEAD") == git(b, "rev-parse", "origin/main")  # local main reset to remote
+    # nothing was pushed: the remote still holds exactly the bot's commit and catalog
+    assert git(bare, "rev-parse", "main") == bot_sha
+    remote_cat = json.loads(git(bare, "show", "main:output/research-papers-full.json"))
+    assert _buckets_with(remote_cat, "2401.00002") == ["verified"]
+    saved = json.loads(git(b, "show", f"{conflict[0]}:output/research-papers-full.json"))
+    assert _buckets_with(saved, "2401.00002") == ["discarded"]  # the curator's edit is kept on the branch
+
+
+def test_identical_edit_already_upstream_is_not_repushed(remote_and_clones):
+    """B's commit becomes empty on rebase (same edit already upstream): nothing to push, and
+    the already-published upstream commit must never be amended."""
+    bare, a, b, seed = remote_and_clones
+    seed_b = [p.model_copy(deep=True) for p in seed]
+    _edit_venue(a, seed, "2401.00001", "ICML 2026")
+    catalog_git.push_catalog(a, "bot")
+    bot_sha = git(bare, "rev-parse", "main")
+    _edit_venue(b, seed_b, "2401.00001", "ICML 2026")
+    res = catalog_git.push_catalog(b, "curator")
+    assert res["pushed"] is False and res["conflict_branch"] is None
+    assert git(b, "rev-parse", "HEAD") == git(b, "rev-parse", "origin/main") == bot_sha
+    assert git(bare, "rev-parse", "main") == bot_sha  # no extra commit, no rewritten history
+
+
+def test_thumbnail_conflict_with_space_and_non_ascii_name_auto_resolves(remote_and_clones):
+    """Real thumbnail names have spaces and non-ASCII chars (git quotes those by default)."""
+    bare, a, b, seed = remote_and_clones
+    img = "output/images/Trigonometry for Café Models.png"
+    (a / img).write_bytes(b"\x89PNG\x00seed")
+    catalog_git.push_catalog(a, "add thumbnail")
+    git(b, "pull", "--ff-only")
+    (a / img).write_bytes(b"\x89PNG\x00bot")
+    catalog_git.push_catalog(a, "bot re-renders thumbnail")
+    (b / img).write_bytes(b"\x89PNG\x00curator")
+    res = catalog_git.push_catalog(b, "curator re-renders thumbnail")
+    assert res["pushed"] is True and res["conflict_branch"] is None
+    assert not any("catalog-conflict-" in br for br in git(b, "branch").splitlines())
+    assert git(bare, "rev-parse", "main") == git(b, "rev-parse", "HEAD")
+    keys = read_keys(b)
+    assert sorted(sum(keys.values(), [])) == sorted(p.arxiv_id for p in seed)  # every paper exactly once
 
 
 def test_unpushed_commit_is_pushed_next_time(remote_and_clones):
