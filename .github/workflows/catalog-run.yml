@@ -1,0 +1,142 @@
+# Weekly autonomous catalog run (spec §5.3): discover → classify → auto-publish the
+# high-confidence papers → commit the catalog → digest issue. ndif.us pulls the
+# committed catalog daily (ndif-website/.github/workflows/build-public.yml).
+name: Catalog run
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"   # Mondays 05:17 UTC (off the hour: less schedule delay)
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run everything but don't push or open issues"
+        type: boolean
+        default: false
+      skip_github:
+        description: "Skip the GitHub repos track"
+        type: boolean
+        default: false
+
+# One FIFO queue for every catalog writer (this + catalog-apply.yml in Phase 3).
+concurrency:
+  group: catalog-writer
+  queue: max
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+      issues: write
+    env:
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+      S2_API_KEY: ${{ secrets.S2_API_KEY }}
+      SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
+      GITHUB_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ github.token }}
+      LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+      LLM_MODEL: ${{ vars.LLM_MODEL }}
+      LLM_EXTRA_BODY: ${{ vars.LLM_EXTRA_BODY }}
+      AUTO_PUBLISH_RULES: ${{ vars.AUTO_PUBLISH_RULES }}
+      OPENALEX_EMAIL: ${{ vars.OPENALEX_EMAIL }}
+      UNPAYWALL_EMAIL: ${{ vars.UNPAYWALL_EMAIL }}
+      CURATORS: ${{ vars.CURATORS }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main   # not the event SHA: see every push made while we waited in the queue
+
+      - id: py
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/venv
+          # exact Python patch in the key: the venv's interpreter symlinks into the toolcache
+          key: venv-${{ runner.os }}-py${{ steps.py.outputs.python-version }}-${{ hashFiles('constraints-ci.txt', 'pyproject.toml') }}
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ runner.os }}-${{ hashFiles('constraints-ci.txt') }}
+
+      - name: Install (rebuild the venv if missing or broken)
+        run: |
+          if [ -x ~/venv/bin/python ] && ~/venv/bin/python -c "import ndif_citations, torch, surya, openpyxl" 2>/dev/null; then
+            ~/venv/bin/pip install -q -e . --no-deps
+          else
+            rm -rf ~/venv
+            python -m venv ~/venv
+            ~/venv/bin/pip install -q torch==2.11.0 --index-url https://download.pytorch.org/whl/cpu
+            ~/venv/bin/pip install -q -e . -c constraints-ci.txt
+          fi
+          echo "$HOME/venv/bin" >> "$GITHUB_PATH"
+
+      - name: Ensure labels
+        run: |
+          gh label create digest --color 0e8a16 --force >/dev/null
+          gh label create run-failure --color d73a4a --force >/dev/null
+
+      - name: Pipeline
+        timeout-minutes: 75
+        run: python -m ndif_citations run ${{ inputs.skip_github && '--skip-github' || '' }} --summary-json "$RUNNER_TEMP/run-summary.json"
+
+      - name: Digest
+        id: digest
+        run: python -m ndif_citations digest --before-ref HEAD --summary-json "$RUNNER_TEMP/run-summary.json" --out "$RUNNER_TEMP/digest.md"
+
+      - name: Push catalog
+        if: ${{ !inputs.dry_run }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python -m ndif_citations push-catalog --push-conflict-branch -m "data: weekly catalog run $(date -u +%F)"
+
+      - name: Digest issue
+        if: ${{ !inputs.dry_run && steps.digest.outputs.has_changes == 'true' }}
+        run: |
+          for n in $(gh issue list --label digest --state open --json number --jq '.[].number'); do
+            gh issue close "$n" --comment "Superseded by the latest digest." >/dev/null
+          done
+          args=(--label digest --title "Catalog digest — $(date -u +%F)" --body-file "$RUNNER_TEMP/digest.md")
+          [ -n "$CURATORS" ] && args+=(--assignee "$CURATORS")
+          gh issue create "${args[@]}"
+
+      - name: Keep this run's catalog if anything failed
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: catalog-${{ github.run_id }}
+          path: |
+            output/research-papers-full.json
+            output/research-papers.json
+            output/github-repos-full.json
+            output/github-repos.json
+            output/images/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  notify:
+    needs: run
+    if: ${{ always() && needs.run.result != 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Open or update the run-failure issue
+        run: |
+          url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          msg="Catalog run ended **${{ needs.run.result }}**: $url — see \"Operations runbook\" in README.md. If it got as far as processing, the run's catalog is attached as an artifact."
+          n=$(gh issue list --label run-failure --state open --json number --jq '.[0].number // empty')
+          if [ -n "$n" ]; then
+            gh issue comment "$n" --body "$msg"
+          else
+            gh label create run-failure --color d73a4a --force >/dev/null
+            gh issue create --label run-failure --title "Catalog run failed" --body "$msg"
+          fi
