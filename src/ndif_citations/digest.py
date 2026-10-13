@@ -30,7 +30,7 @@ def _flatten(full: dict | None) -> dict[str, dict]:
 def _link(p: dict) -> str:
     """First of url/pdf_url that is a plain http(s) URL (verbatim, so /discard matches the stored URL), else ""."""
     for u in (p.get("url"), p.get("pdf_url")):
-        if u and _SAFE_URL.match(u):
+        if u and _SAFE_URL.fullmatch(u):
             return u
     return ""
 

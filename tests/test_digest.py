@@ -65,7 +65,7 @@ def test_plain_collapses_newlines():
 
 
 def test_unsafe_urls_are_dropped_and_safe_ones_keep_hint():
-    for bad in ("https://x.org/a`b", "https://x.org/a\n# Injected", "https://x.org/<!--", "javascript:alert(1)"):
+    for bad in ("https://x.org/a`b", "https://x.org/a\n# Injected", "https://x.org/a\n", "https://x.org/<!--", "javascript:alert(1)"):
         p = make_paper(title="T", arxiv_id="1", bucket=Bucket.VERIFIED, url=bad)
         p.pdf_url = None
         md, _ = build_digest(cat(), cat(p), [], [])
