@@ -14,6 +14,7 @@ def _repos(n, prefix):
         r = make_repo(owner=prefix, repo=f"r{i}")
         r.last_seen = OLD
         out.append(r)
+    out[0].last_seen = date.today().isoformat()  # previous-run reference = today; the rest are 60d older
     return out
 
 
@@ -36,3 +37,14 @@ def test_small_age_out_still_happens():
 def test_run_argument_is_optional():
     existing = _repos(3, "o")
     assert len(merge_repos(existing, existing)) == 3
+
+
+def test_age_out_is_relative_to_previous_run_not_today():
+    def ago(days):
+        return (date.today() - timedelta(days=days)).isoformat()
+
+    a, b, c = (make_repo(owner="o", repo=n) for n in "abc")
+    a.last_seen, b.last_seen, c.last_seen = ago(120), ago(125), ago(160)
+    # Previous run was 120 days ago: b is 5d older (kept), c is 40d older (aged out).
+    merged = merge_repos([], [a, b, c])
+    assert {r.repo for r in merged} == {"a", "b"}

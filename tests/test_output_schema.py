@@ -131,7 +131,10 @@ def test_merge_repos_ages_out_scrape_absent_repo_past_30_days(monkeypatch):
     monkeypatch.setattr(output_module, "_today", lambda: date(2026, 5, 20))
     existing = [DiscoveredRepo(
         owner="o", repo="r", url="https://github.com/o/r",
-        first_seen="2025-01-01", last_seen="2026-04-01",  # 49 days ago
+        first_seen="2025-01-01", last_seen="2026-04-01",  # 49 days before the previous run
+    ), DiscoveredRepo(  # previous run (age-out is relative to it, not today) was 2026-05-20
+        owner="o", repo="fresh", url="https://github.com/o/fresh",
+        first_seen="2026-05-20", last_seen="2026-05-20",
     )]
     merged = merge_repos(discovered=[], existing=existing)
     assert all(m.merge_key() != "o/r" for m in merged), \

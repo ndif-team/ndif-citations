@@ -250,6 +250,14 @@ def merge_repos(
     # BEFORE they reach this function, so they tend to be old `last_seen`
     # values and naturally age out.
     AGE_OUT_DAYS = 30
+    # Age relative to the previous run, not the wall clock: after a long gap between runs
+    # (the catalog sat 4 months before the Phase 1 rollout), one missed scrape must not drop a
+    # repo that is still in use (callummcdougall/ARENA_3.0 was lost that way).
+    seen = [r.last_seen for r in existing if r.last_seen]
+    try:
+        ref_date = date.fromisoformat(max(seen)) if seen else today_date
+    except ValueError:
+        ref_date = today_date
     stale: list[DiscoveredRepo] = []
     for existing_repo in existing:
         key = existing_repo.merge_key()
@@ -261,7 +269,7 @@ def merge_repos(
             continue
         if existing_repo.last_seen:
             try:
-                days_since = (today_date - date.fromisoformat(existing_repo.last_seen)).days
+                days_since = (ref_date - date.fromisoformat(existing_repo.last_seen)).days
             except ValueError:
                 days_since = AGE_OUT_DAYS + 1  # bad data → age out
         else:
