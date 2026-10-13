@@ -37,5 +37,16 @@ def test_push_conflict_is_409_with_message(fixture_state, monkeypatch):
     assert r.status_code == 409 and "catalog-conflict-x" in r.json()["detail"]
 
 
+def test_push_blocked_by_active_run(fixture_state, monkeypatch):
+    from types import SimpleNamespace
+    pushes = []
+    monkeypatch.setattr("ndif_citations.catalog_git.push_catalog", lambda repo, msg, **k: pushes.append(msg))
+    app = create_app()
+    app.dependency_overrides[deps.get_output_dir] = lambda: fixture_state
+    app.dependency_overrides[deps.get_runner] = lambda: SimpleNamespace(active=True)
+    r = TestClient(app).post("/api/publish")
+    assert r.status_code == 409 and pushes == []
+
+
 def test_publish_target_endpoints_are_gone(fixture_state):
     assert _client(fixture_state).get("/api/publish/target").status_code == 404

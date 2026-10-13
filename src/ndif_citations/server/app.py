@@ -10,15 +10,26 @@ appropriate host/port; this module only builds the app.
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from ndif_citations.server.routers import images, keys, papers, publish, repos, runs, settings, stats
 
 # SPA dist directory — populated by the frontend build (Task 3+).
 _WEB_DIST = Path(__file__).resolve().parent.parent.parent.parent / "web" / "dist"
+
+_WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def _is_loopback_origin(origin: str) -> bool:
+    try:
+        return urlsplit(origin).hostname in _LOOPBACK_HOSTS  # "null" → hostname None → refused
+    except ValueError:  # malformed, e.g. "http://["
+        return False
 
 
 def create_app() -> FastAPI:
@@ -34,6 +45,17 @@ def create_app() -> FastAPI:
         description="Pipeline API for the NDIF citations tracker.",
         version="0.1.0",
     )
+
+    # CSRF guard: the app is unauthenticated, so any site the curator visits could otherwise
+    # fire a cross-origin POST /api/publish and push the catalog to GitHub. Browsers always
+    # send Origin on cross-origin writes; no Origin (curl, CLI, TestClient) is allowed.
+    @app.middleware("http")
+    async def refuse_cross_origin_writes(request: Request, call_next):
+        origin = request.headers.get("origin")
+        if (request.method in _WRITE_METHODS and request.url.path.startswith("/api/")
+                and origin is not None and not _is_loopback_origin(origin)):
+            return JSONResponse({"detail": "cross-origin request refused"}, status_code=403)
+        return await call_next(request)
 
     # JSON API — always mounted.
     app.include_router(runs.router)

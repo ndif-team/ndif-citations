@@ -17,7 +17,7 @@ def _repo(tmp_path, papers):
     out = tmp_path / "output"
     (out / "images").mkdir(parents=True)
     (out / "research-papers.json").write_text(json.dumps(papers))
-    (out / "github-repos.json").write_text("[]")
+    (out / "github-repos.json").write_text(json.dumps([{"owner": "o", "repo": "r", "stars": 1}]))
     subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
     subprocess.run(["git", "-C", str(tmp_path), "commit", "-m", "seed"], check=True, capture_output=True)
     return out
@@ -26,12 +26,14 @@ def _repo(tmp_path, papers):
 def test_preview_against_head(tmp_path):
     out = _repo(tmp_path, [{"title": "A", "url": "u1"}, {"title": "B", "url": "u2"}])
     (out / "research-papers.json").write_text(json.dumps([{"title": "A2", "url": "u1"}, {"title": "C", "url": "u3"}]))
+    (out / "github-repos.json").write_text(json.dumps([{"owner": "o", "repo": "r", "stars": 2}]))
     (out / "images" / "C.png").write_bytes(b"png")
     diff = publish.preview(out, tmp_path)
     assert [p["title"] for p in diff["papers"]["added"]] == ["C"]
     assert [p["title"] for p in diff["papers"]["removed"]] == ["B"]
     assert len(diff["papers"]["changed"]) == 1
     assert diff["images"]["new"] == ["C.png"]
+    assert [r["_changed_fields"] for r in diff["repos"]["changed"]] == [["stars"]]
 
 
 def test_preview_outside_git_treats_everything_as_added(tmp_path):

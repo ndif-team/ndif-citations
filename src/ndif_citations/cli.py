@@ -1107,7 +1107,10 @@ def serve(port, host, no_open):
     import os
     if not os.environ.get("NDIF_NO_GIT_PULL"):
         from ndif_citations import catalog_git
-        console.print(f"[dim]{catalog_git.pull_if_clean(config._PROJECT_ROOT)}[/dim]")
+        try:
+            console.print(f"[dim]{catalog_git.pull_if_clean(config._PROJECT_ROOT)}[/dim]")
+        except OSError as exc:  # e.g. git not installed
+            console.print(f"[dim]couldn't check for catalog updates: {exc}[/dim]")
 
     if not no_open:
         timer = threading.Timer(1.0, lambda: webbrowser.open(url))

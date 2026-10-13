@@ -226,3 +226,43 @@ def test_validate_catalog_rules():
     assert any("duplicate" in m for m in catalog_git.validate_catalog(base, ours, theirs, dup))
     pre_dup = cat(p("2"), p("2", "verified"))   # duplicate already in base → tolerated
     assert catalog_git.validate_catalog(pre_dup, pre_dup, pre_dup, pre_dup) == []
+
+
+@pytest.mark.parametrize("damage", ["delete", "truncate"])
+def test_refuses_missing_or_corrupt_full_catalog(remote_and_clones, damage):
+    bare, a, _, _ = remote_and_clones
+    full = a / catalog_git.PAPERS_FULL
+    if damage == "delete":
+        full.unlink()
+    else:
+        full.write_text(full.read_text()[:40])
+    remote_before, head_before = git(bare, "rev-parse", "main"), git(a, "rev-parse", "HEAD")
+    with pytest.raises(catalog_git.CatalogPushError, match="research-papers-full.json"):
+        catalog_git.push_catalog(a, "x")
+    assert git(bare, "rev-parse", "main") == remote_before and git(a, "rev-parse", "HEAD") == head_before
+
+
+def _grow_to_twelve(a, seed):
+    papers = seed + [make_paper(title=f"Extra {i}", arxiv_id=f"2402.0000{i}", bucket=Bucket.PENDING) for i in range(6)]
+    write_catalog(a, papers)
+    assert catalog_git.push_catalog(a, "grow")["pushed"] is True
+    return papers
+
+
+@pytest.mark.parametrize("keep", [lambda ps: ps[6:], lambda ps: []], ids=["six-deleted", "empty-but-valid"])
+def test_shrink_guard_refuses_a_gutted_catalog(remote_and_clones, keep):
+    bare, a, _, seed = remote_and_clones
+    papers = _grow_to_twelve(a, seed)
+    write_catalog(a, keep(papers))
+    remote_before = git(bare, "rev-parse", "main")
+    with pytest.raises(catalog_git.CatalogPushError, match="would lose"):
+        catalog_git.push_catalog(a, "gut")
+    assert git(bare, "rev-parse", "main") == remote_before
+
+
+def test_shrink_guard_allows_a_single_deletion(remote_and_clones):
+    """A manual_add discard deletes outright; one lost entry is normal."""
+    _, a, _, seed = remote_and_clones
+    papers = _grow_to_twelve(a, seed)
+    write_catalog(a, papers[1:])
+    assert catalog_git.push_catalog(a, "drop one")["pushed"] is True

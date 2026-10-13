@@ -160,3 +160,18 @@ class TestServeCLI:
         result = CliRunner().invoke(cli, ["serve", "--no-open"])
         assert result.exit_code == 0, result.output
         assert pulls == [config._PROJECT_ROOT] and "catalog up to date" in result.output
+
+    def test_serve_survives_missing_git(self, monkeypatch):
+        """No git binary → serve prints a dim note and still starts."""
+        from ndif_citations import catalog_git
+
+        def _no_git(repo):
+            raise FileNotFoundError("git")
+
+        calls = []
+        monkeypatch.delenv("NDIF_NO_GIT_PULL")
+        monkeypatch.setattr(catalog_git, "pull_if_clean", _no_git)
+        monkeypatch.setattr(uvicorn, "run", lambda *a, **k: calls.append(a))
+        result = CliRunner().invoke(cli, ["serve", "--no-open"])
+        assert result.exit_code == 0, result.output
+        assert "couldn't check for catalog updates" in result.output and len(calls) == 1

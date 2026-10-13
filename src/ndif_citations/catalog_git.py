@@ -171,6 +171,16 @@ def _save_conflict_branch(repo: Path, remote: str, branch: str, push: bool) -> s
     return name
 
 
+def _refuse_shrink(repo: Path, upstream: str) -> None:
+    """The repo is the source of truth: never push a catalog that lost a big slice of its entries."""
+    for path, keys in ((PAPERS_FULL, _paper_keys), (REPOS_FULL, _repo_keys)):
+        before = set(keys(_show_json(repo, upstream, path)))
+        lost = before - set(keys(_show_json(repo, "HEAD", path)))
+        if len(lost) > max(5, len(before) // 10):
+            raise CatalogPushError(f"refusing to push: {path} would lose {len(lost)} of {len(before)} "
+                                   f"entries (e.g. {sorted(lost)[:3]}); if that's intended, push it yourself with git")
+
+
 def push_catalog(repo: Path, message: str, *, push_conflict_branch: bool = False,
                  remote: str = "origin", branch: str = "main", attempts: int = 3) -> dict:
     """Commit the tracked catalog paths (if changed) and push every unpushed catalog commit."""
@@ -183,6 +193,13 @@ def push_catalog(repo: Path, message: str, *, push_conflict_branch: bool = False
                        check=False).stdout.splitlines()
     if other_dirty:
         raise CatalogPushError(f"commit or stash your other changes first: {other_dirty[:5]}")
+    for rel, kind in ((PAPERS_FULL, dict), (REPOS_FULL, list)):  # never commit a missing/corrupt catalog
+        try:
+            ok = isinstance(json.loads((repo / rel).read_text()), kind)
+        except (OSError, ValueError):
+            ok = False
+        if not ok:
+            raise CatalogPushError(f"{rel} is missing or not a valid JSON {kind.__name__}; nothing was committed")
     _git(repo, "add", "--", *CATALOG_PATHS)
     if _git(repo, "diff", "--cached", "--quiet", check=False).returncode != 0:
         _git_or_fail(repo, "commit", "-m", message, what="git commit")
@@ -199,6 +216,7 @@ def push_catalog(repo: Path, message: str, *, push_conflict_branch: bool = False
         raise CatalogPushError(f"local {branch} has non-catalog commits — push them via a PR first: {bad[:5]}")
     last = None
     for _ in range(attempts):
+        _refuse_shrink(repo, f"{remote}/{branch}")  # every attempt: a rebase can change what HEAD holds
         last = _git(repo, "push", remote, f"HEAD:{branch}", check=False)
         if last.returncode == 0:
             sha = _git(repo, "rev-parse", "--short", "HEAD").stdout.strip()
