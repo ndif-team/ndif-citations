@@ -13,6 +13,5 @@
   "llm_base_url": "https://integrate.api.nvidia.com/v1",
   "llm_rate_limit_sleep": 12.0,
   "s2_rate_limit_sleep": 3.0,
-  "github_rate_limit_sleep": 2.0,
-  "publish_target": null
+  "github_rate_limit_sleep": 2.0
 }

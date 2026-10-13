@@ -169,26 +169,10 @@ def test_validate_rejects_list_for_string(tmp_path):
         settings_store.save(tmp_path / "s.json", {"llm_model": ["bad"]})
 
 
-def test_validate_accepts_none_for_publish_target(tmp_path):
-    """publish_target accepts None (its default type)."""
-    f = tmp_path / "s.json"
-    settings_store.save(f, {"publish_target": None})
-    s = settings_store.load(f)
-    assert s["publish_target"] is None
-
-
-def test_validate_accepts_str_for_publish_target(tmp_path):
-    """publish_target accepts a str value."""
-    f = tmp_path / "s.json"
-    settings_store.save(f, {"publish_target": "s3://bucket/key"})
-    s = settings_store.load(f)
-    assert s["publish_target"] == "s3://bucket/key"
-
-
-def test_validate_rejects_int_for_publish_target(tmp_path):
-    """publish_target rejects non-str, non-None values."""
+def test_publish_target_key_is_gone(tmp_path):
+    """publish_target was retired (catalog is pushed to git now); saving it is an unknown key."""
     with pytest.raises(ValueError):
-        settings_store.save(tmp_path / "s.json", {"publish_target": 42})
+        settings_store.save(tmp_path / "s.json", {"publish_target": None})
 
 
 # ---------------------------------------------------------------------------

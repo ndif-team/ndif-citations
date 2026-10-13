@@ -293,7 +293,6 @@ _SETTINGS_KEY_MAP: dict[str, tuple[str, object]] = {
     "llm_rate_limit_sleep":       ("LLM_RATE_LIMIT_SLEEP",       float),
     "s2_rate_limit_sleep":        ("S2_RATE_LIMIT_SLEEP",        float),
     "github_rate_limit_sleep":    ("GITHUB_RATE_LIMIT_SLEEP",    float),
-    # publish_target has no direct config attribute; skip it
 }
 
 

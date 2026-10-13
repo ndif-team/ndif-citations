@@ -37,7 +37,6 @@ DEFAULTS: dict[str, Any] = {
     "llm_rate_limit_sleep": 12.0,
     "s2_rate_limit_sleep": 3.0,
     "github_rate_limit_sleep": 2.0,
-    "publish_target": None,
 }
 
 
@@ -99,14 +98,6 @@ def _validate_value(key: str, value: Any) -> None:
             f"Valid keys: {sorted(DEFAULTS.keys())}"
         )
     default = DEFAULTS[key]
-
-    # publish_target: None or str
-    if key == "publish_target":
-        if value is not None and not isinstance(value, str):
-            raise ValueError(
-                f"'publish_target' must be None or str, got {type(value).__name__!r}"
-            )
-        return
 
     # Dispatch on the default's type
     if isinstance(default, bool):

@@ -156,3 +156,9 @@ def _no_live_key_checks(request, monkeypatch):
     ok = lambda *a, **k: {"ok": True, "detail": "stubbed"}  # noqa: E731
     monkeypatch.setattr("ndif_citations.key_validation.test_llm", ok)
     monkeypatch.setattr("ndif_citations.key_validation.test_github", ok)
+
+
+@pytest.fixture(autouse=True)
+def _no_git_pull_on_serve(monkeypatch):
+    """`serve` fast-forwards the catalog from git; never in tests."""
+    monkeypatch.setenv("NDIF_NO_GIT_PULL", "1")

@@ -144,3 +144,19 @@ class TestServeCLI:
         assert result.exit_code == 0, result.output
 
         assert len(_FakeTimer._instances) == 0
+
+    def test_serve_pulls_catalog_unless_disabled(self, monkeypatch):
+        """serve fast-forwards the catalog from the project root; NDIF_NO_GIT_PULL skips it."""
+        from ndif_citations import catalog_git, config
+
+        pulls = []
+        monkeypatch.setattr(uvicorn, "run", lambda *a, **k: None)
+        monkeypatch.setattr(catalog_git, "pull_if_clean", lambda repo: pulls.append(repo) or "catalog up to date")
+
+        assert CliRunner().invoke(cli, ["serve", "--no-open"]).exit_code == 0
+        assert pulls == []  # conftest sets NDIF_NO_GIT_PULL
+
+        monkeypatch.delenv("NDIF_NO_GIT_PULL")
+        result = CliRunner().invoke(cli, ["serve", "--no-open"])
+        assert result.exit_code == 0, result.output
+        assert pulls == [config._PROJECT_ROOT] and "catalog up to date" in result.output

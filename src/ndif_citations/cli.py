@@ -1104,6 +1104,10 @@ def serve(port, host, no_open):
 
     url = f"http://{host}:{port}"
     console.print(f"[bold cyan]NDIF Citations[/bold cyan] — serving at {url}")
+    import os
+    if not os.environ.get("NDIF_NO_GIT_PULL"):
+        from ndif_citations import catalog_git
+        console.print(f"[dim]{catalog_git.pull_if_clean(config._PROJECT_ROOT)}[/dim]")
 
     if not no_open:
         timer = threading.Timer(1.0, lambda: webbrowser.open(url))
