@@ -29,19 +29,6 @@ jobs:
     permissions:
       contents: write
       issues: write
-    env:
-      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-      S2_API_KEY: ${{ secrets.S2_API_KEY }}
-      SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
-      GITHUB_TOKEN: ${{ github.token }}
-      GH_TOKEN: ${{ github.token }}
-      LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
-      LLM_MODEL: ${{ vars.LLM_MODEL }}
-      LLM_EXTRA_BODY: ${{ vars.LLM_EXTRA_BODY }}
-      AUTO_PUBLISH_RULES: ${{ vars.AUTO_PUBLISH_RULES }}
-      OPENALEX_EMAIL: ${{ vars.OPENALEX_EMAIL }}
-      UNPAYWALL_EMAIL: ${{ vars.UNPAYWALL_EMAIL }}
-      CURATORS: ${{ vars.CURATORS }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -76,12 +63,25 @@ jobs:
           echo "$HOME/venv/bin" >> "$GITHUB_PATH"
 
       - name: Ensure labels
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh label create digest --color 0e8a16 --force >/dev/null
           gh label create run-failure --color d73a4a --force >/dev/null
 
       - name: Pipeline
         timeout-minutes: 75
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          S2_API_KEY: ${{ secrets.S2_API_KEY }}
+          SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+          LLM_EXTRA_BODY: ${{ vars.LLM_EXTRA_BODY }}
+          AUTO_PUBLISH_RULES: ${{ vars.AUTO_PUBLISH_RULES }}
+          OPENALEX_EMAIL: ${{ vars.OPENALEX_EMAIL }}
+          UNPAYWALL_EMAIL: ${{ vars.UNPAYWALL_EMAIL }}
         run: python -m ndif_citations run ${{ inputs.skip_github && '--skip-github' || '' }} --summary-json "$RUNNER_TEMP/run-summary.json"
 
       - name: Digest
@@ -97,6 +97,9 @@ jobs:
 
       - name: Digest issue
         if: ${{ !inputs.dry_run && steps.digest.outputs.has_changes == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURATORS: ${{ vars.CURATORS }}
         run: |
           for n in $(gh issue list --label digest --state open --json number --jq '.[].number'); do
             gh issue close "$n" --comment "Superseded by the latest digest." >/dev/null
