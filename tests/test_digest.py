@@ -58,3 +58,18 @@ def test_newly_unparseable_paper_counts_as_llm_fallback():
     # already unparseable last week -> not new
     _, changed2 = build_digest(cat(held), cat(held), [], [])
     assert changed2 is False
+
+
+def test_plain_collapses_newlines():
+    assert plain("x\n# Heading\n@team") == "x # Heading @\u200bteam"
+
+
+def test_unsafe_urls_are_dropped_and_safe_ones_keep_hint():
+    for bad in ("https://x.org/a`b", "https://x.org/a\n# Injected", "https://x.org/<!--", "javascript:alert(1)"):
+        p = make_paper(title="T", arxiv_id="1", bucket=Bucket.VERIFIED, url=bad)
+        p.pdf_url = None
+        md, _ = build_digest(cat(), cat(p), [], [])
+        assert "`/discard " not in md and "Injected" not in md and "`b" not in md
+    ok = make_paper(title="T", arxiv_id="2", bucket=Bucket.VERIFIED, url="https://arxiv.org/abs/2")
+    md, _ = build_digest(cat(), cat(ok), [], [])
+    assert "`/discard https://arxiv.org/abs/2`" in md

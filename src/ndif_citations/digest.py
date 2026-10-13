@@ -1,12 +1,15 @@
 """Weekly digest — what one catalog run changed (spec §5.3). Pure functions."""
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
+
+_SAFE_URL = re.compile(r'^https?://[^\s<>`"\[\]]+$')
 
 
 def plain(text: str) -> str:
     """Neutralize @-mentions and HTML comments (which would hide the rest of the body) in untrusted Markdown."""
-    return (text or "").replace("@", "@\u200b").replace("<!--", "<\u200b!--")
+    return " ".join((text or "").split()).replace("@", "@\u200b").replace("<!--", "<\u200b!--")
 
 
 def fence(text: str, limit: int = 400) -> str:
@@ -25,7 +28,11 @@ def _flatten(full: dict | None) -> dict[str, dict]:
 
 
 def _link(p: dict) -> str:
-    return p.get("url") or p.get("pdf_url") or ""
+    """First of url/pdf_url that is a plain http(s) URL (verbatim, so /discard matches the stored URL), else ""."""
+    for u in (p.get("url"), p.get("pdf_url")):
+        if u and _SAFE_URL.match(u):
+            return u
+    return ""
 
 
 def _no_llm_answer(p: dict) -> bool:
@@ -57,7 +64,8 @@ def build_digest(before: dict | None, after: dict, before_repos: list | None, af
             lines.append(f"- **{plain(p['title'])}** — {p.get('category')} · {_link(p)}")
             if windows:
                 lines.append(fence(windows[0], 300))
-            lines.append(f"  `/discard {_link(p)}` · `/verify {_link(p)} uses_ndif|uses_nnsight|referencing`")
+            if _link(p):
+                lines.append(f"  `/discard {_link(p)}` · `/verify {_link(p)} uses_ndif|uses_nnsight|referencing`")
     if discarded:
         lines.append(f"\n**Auto-discarded ({len(discarded)})** — the full PDF never mentions NDIF/NNsight.")
         lines += [f"- {plain(p['title'])} · {_link(p)}" for p in discarded]
