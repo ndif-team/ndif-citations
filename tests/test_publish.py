@@ -42,3 +42,61 @@ def test_preview_outside_git_treats_everything_as_added(tmp_path):
     (out / "research-papers.json").write_text(json.dumps([{"title": "A", "url": "u1"}]))
     (out / "github-repos.json").write_text("[]")
     assert len(publish.preview(out, tmp_path)["papers"]["added"]) == 1
+
+
+def _git(repo, *args):
+    return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True).stdout
+
+
+def _clone(bare, path):
+    subprocess.run(["git", "clone", str(bare), str(path)], check=True, capture_output=True)
+    for k, v in (("user.email", "t@t"), ("user.name", "t")):
+        _git(path, "config", k, v)
+    return path / "output"
+
+
+@pytest.fixture()
+def pushed(tmp_path):
+    """bare remote + a clone whose seed commit (paper A, two images) is on origin/main."""
+    bare = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", "-b", "main", str(bare)], check=True, capture_output=True)
+    seed = tmp_path / "seed"
+    out = _repo(seed, [{"title": "A", "url": "u1"}])
+    (out / "images" / "Old Fig.png").write_bytes(b"old")
+    (out / "images" / "Gone.png").write_bytes(b"gone")
+    _git(seed, "add", "-A")
+    _git(seed, "commit", "-m", "images")
+    _git(seed, "push", str(bare), "main")
+    return bare
+
+
+def test_preview_includes_committed_but_unpushed_changes(pushed, tmp_path):
+    out = _clone(pushed, tmp_path / "c")
+    (out / "research-papers.json").write_text(json.dumps([{"title": "A", "url": "u1"}, {"title": "B", "url": "u2"}]))
+    _git(out.parent, "commit", "-am", "offline curation")  # committed, never pushed
+    assert [p["title"] for p in publish.preview(out, out.parent)["papers"]["added"]] == ["B"]
+
+
+def test_preview_ignores_bot_commits_not_yet_pulled(pushed, tmp_path):
+    bot, cur = _clone(pushed, tmp_path / "bot"), _clone(pushed, tmp_path / "cur")
+    (bot / "research-papers.json").write_text(json.dumps([{"title": "A", "url": "u1"}, {"title": "Bot", "url": "u9"}]))
+    _git(bot.parent, "commit", "-am", "bot run")
+    _git(bot.parent, "push", "origin", "main")
+    _git(cur.parent, "fetch", "origin")  # origin/main moved past the curator's base
+    (cur / "research-papers.json").write_text(json.dumps([{"title": "A", "url": "u1"}, {"title": "C", "url": "u3"}]))
+    diff = publish.preview(cur, cur.parent)
+    assert [p["title"] for p in diff["papers"]["added"]] == ["C"]
+    assert diff["papers"]["removed"] == []  # the bot's paper is not something this push removes
+
+
+def test_preview_images_vs_base(pushed, tmp_path):
+    out = _clone(pushed, tmp_path / "c")
+    img = out / "images"
+    (img / "Fig one.png").write_bytes(b"new")
+    _git(out.parent, "add", "output/images/Fig one.png")
+    _git(out.parent, "commit", "-m", "offline thumbnail")         # committed, unpushed
+    (img / "Old Fig.png").write_bytes(b"re-rendered")             # tracked, modified, uncommitted
+    (img / 'New "Café" fig.png').write_bytes(b"new")             # untracked; quote + non-ASCII
+    (img / "Gone.png").unlink()                                   # deletions are not listed (site images are additive)
+    images = publish.preview(out, out.parent)["images"]
+    assert images == {"new": ["Fig one.png", 'New "Café" fig.png'], "changed": ["Old Fig.png"]}

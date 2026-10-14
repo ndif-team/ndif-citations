@@ -2,7 +2,7 @@
 
 Publishing is now: push the catalog to ndif-citations `main` (catalog_git.push_catalog);
 ndif.us pulls it daily. This module only previews the change — local slim outputs vs
-the last commit — reusing the diff helpers the Publish page already renders.
+the last pushed state — reusing the diff helpers the Publish page already renders.
 """
 from __future__ import annotations
 
@@ -62,32 +62,49 @@ def _diff_list(out_items: list[dict], target_items: list[dict], key_fn) -> dict:
     return {"added": added, "changed": changed, "removed": removed}
 
 
-def _head_json_list(repo_root: Path, rel: str) -> list[dict]:
-    r = subprocess.run(["git", "-C", str(repo_root), "show", f"HEAD:{rel}"], capture_output=True, text=True)
+def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", "-C", str(repo_root), "-c", "core.quotepath=off", *args],
+                          capture_output=True, text=True)
+
+
+def _base(repo_root: Path) -> str:
+    """What the push is measured against: where local main forked from origin/main. That counts
+    committed-but-unpushed edits, and never shows bot commits we haven't pulled as removals."""
+    r = _git(repo_root, "merge-base", "HEAD", "origin/main")
+    return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else "HEAD"
+
+
+def _base_json_list(repo_root: Path, base: str, rel: str) -> list[dict]:
+    r = _git(repo_root, "show", f"{base}:{rel}")
     if r.returncode != 0 or not r.stdout.strip():
         return []
     data = json.loads(r.stdout)
     return data if isinstance(data, list) else []
 
 
-def _changed_images(repo_root: Path) -> dict:
-    # -uall lists each new file (not "?? output/images/"); quotepath=off keeps non-ASCII names unquoted.
-    r = subprocess.run(["git", "-C", str(repo_root), "-c", "core.quotepath=off", "status", "--porcelain",
-                        "-uall", "--", "output/images"], capture_output=True, text=True)
+def _changed_images(repo_root: Path, base: str) -> dict:
+    """Images that differ from *base* (committed or not) plus untracked ones. -z: names are never quoted.
+    Deletions are left out: the website copies images additively, so a deletion publishes nothing."""
     new, changed = [], []
-    for line in r.stdout.splitlines() if r.returncode == 0 else []:
-        status, name = line[:2], Path(line[3:].strip()).name
-        (new if status.strip() in ("??", "A") else changed).append(name)
+    r = _git(repo_root, "diff", "--name-status", "--no-renames", "-z", base, "--", "output/images")
+    fields = r.stdout.split("\0") if r.returncode == 0 else []
+    for status, path in zip(fields[0::2], fields[1::2]):
+        if status != "D":
+            (new if status == "A" else changed).append(Path(path).name)
+    r = _git(repo_root, "ls-files", "-o", "--exclude-standard", "-z", "--", "output/images")
+    new += [Path(f).name for f in r.stdout.split("\0") if f] if r.returncode == 0 else []
     return {"new": sorted(new), "changed": sorted(changed)}
 
 
 def preview(out: Path, repo_root: Path) -> dict:
-    """Local slim JSON vs HEAD, in the {papers, repos, images} shape the UI renders."""
+    """Local slim JSON vs the merge-base with origin/main (else HEAD), in the {papers, repos, images}
+    shape the UI renders."""
     out, repo_root = Path(out), Path(repo_root)
+    base = _base(repo_root)
     return {
         "papers": _diff_list(_load_json_list(out / _PAPERS_JSON),
-                             _head_json_list(repo_root, f"output/{_PAPERS_JSON}"), _paper_key),
+                             _base_json_list(repo_root, base, f"output/{_PAPERS_JSON}"), _paper_key),
         "repos": _diff_list(_load_json_list(out / _REPOS_JSON),
-                            _head_json_list(repo_root, f"output/{_REPOS_JSON}"), _repo_key),
-        "images": _changed_images(repo_root),
+                            _base_json_list(repo_root, base, f"output/{_REPOS_JSON}"), _repo_key),
+        "images": _changed_images(repo_root, base),
     }
