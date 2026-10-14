@@ -136,3 +136,17 @@ def test_key_backtick_and_help_row():
     span = re.search(r" · `([^`]*)`$", first)
     assert span and "10.1/a'b" in span.group(1)
     assert "`/add https://…`" in HELP_TEXT
+
+
+def test_inline_defangs_autolinks_gh_refs_strike_and_math():
+    bad = "GH-12 gh-3 https://evil.example/x www.evil.example ~~s~~ $x$"
+    p = make_paper(bucket=Bucket.PENDING, title=bad, arxiv_id="2501.00010", url="https://e.com/p")
+    p.venue = bad
+    p.reason_detail = bad
+    _, body, _ = render_issue(p)
+    head = body[:body.rindex("\n<!-- ndif-paper")]
+    notes = [l for l in head.split("\n") if "Links:" not in l]
+    text = "\n".join(notes).split("<details><summary>Commands")[0]
+    for gone in ("https://evil", "www.evil", "GH-12", "gh-3", "~~", "$x$"):
+        assert gone not in text, gone
+    assert "[paper](<https://e.com/p>)" in head and "(https://arxiv.org/abs/2501.00010)" in head
