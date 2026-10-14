@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 from datetime import date, datetime
 from pathlib import Path
@@ -509,11 +510,14 @@ def write_outputs(papers: list[DiscoveredPaper], output_dir: Path, run: Pipeline
     missing = []
 
     images_dir = output_dir / "images"
+    # Exact names, not Path.exists(): macOS is case-insensitive, and a ref to a case-variant
+    # name would 404 on Linux and on the website.
+    on_disk = set(os.listdir(images_dir)) if images_dir.is_dir() else set()
     for p in papers:
-        expected_path = images_dir / f"{slugify(p.title)}.png"
-        if expected_path.exists():
+        name = f"{slugify(p.title)}.png"
+        if name in on_disk:
             extracted_count += 1
-            p.image = f"/images/{expected_path.name}"
+            p.image = f"/images/{name}"
         else:
             missing.append(p.title)
 

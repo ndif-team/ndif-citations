@@ -238,3 +238,16 @@ class TestLowConfidenceReportUsesBands:
         write_outputs([paper], tmp_path, run)
         # HIGH band → not in low_confidence
         assert run.low_confidence == []
+
+
+def test_thumbnail_ref_needs_the_exact_file_name(tmp_path):
+    """macOS is case-insensitive: Path.exists() would match Foo-Bar.png for slug Foo-bar and
+    write a ref that 404s on Linux / the website."""
+    (tmp_path / "images").mkdir()
+    (tmp_path / "images" / "Foo-Bar.png").write_bytes(b"png")
+    (tmp_path / "images" / "Exact-Match.png").write_bytes(b"png")
+    variant, exact = make_paper(title="Foo bar", arxiv_id="1"), make_paper(title="Exact Match", arxiv_id="2")
+    run = PipelineRun()
+    write_outputs([variant, exact], tmp_path, run)
+    assert variant.image != "/images/Foo-bar.png" and exact.image == "/images/Exact-Match.png"
+    assert run.thumbnails_extracted == 1 and run.missing_thumbnails == ["Foo bar"]
