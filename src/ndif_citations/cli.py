@@ -1092,6 +1092,30 @@ def digest(before_ref: str, summary_json: str | None, out_path: str) -> None:
     console.print(f"digest written ({'changes' if changed else 'no changes'}) → {out_path}")
 
 
+@cli.command(name="review-sync")
+@click.option("--dry-run", is_flag=True, help="Print the planned issue changes without touching GitHub")
+def review_sync_cmd(dry_run: bool) -> None:
+    """Open/update/close one review issue per pending paper (bot identity in Actions)."""
+    import os
+    from ndif_citations.output import load_existing_papers
+    from ndif_citations.review_sync import Gh, apply_sync, plan_sync
+
+    if not dry_run and os.environ.get("GITHUB_ACTIONS") != "true":
+        # Issues created under a human gh login aren't bot-authored, so later syncs would ignore them.
+        raise click.UsageError("Locally, use --dry-run; real syncs run as the bot (catalog-apply kind=sync).")
+    gh = Gh()
+    issues = gh.list_review_issues()
+    current = {i["number"]: {l["name"] for l in i.get("labels", [])} for i in issues}
+    actions = plan_sync(load_existing_papers(config.get_output_dir(None)), issues)
+    log = apply_sync(actions, gh, assignees=os.environ.get("CURATORS", ""), dry_run=dry_run,
+                     current_labels=current)
+    for line in log:
+        console.print(line, markup=False, highlight=False)
+    console.print(f"{len(actions)} action(s){' (dry run)' if dry_run else ''}")
+    if any(line.startswith("FAILED") for line in log):
+        raise SystemExit(1)
+
+
 @cli.command()
 @click.option("--port", default=8723, show_default=True, help="Port to bind on localhost")
 @click.option("--host", default="127.0.0.1", show_default=True, help="Host to bind (localhost only by default)")
