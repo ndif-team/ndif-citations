@@ -117,11 +117,13 @@ def _published(n, title_len=20):
 def test_digest_caps_each_section_for_githubs_body_limit():
     md, _ = build_digest(cat(), cat(*_published(300)), [], [])
     assert len(md) < 65_536
-    assert "**Auto-published (300)**" in md and "+250 more — see the run summary" in md
+    assert "**Auto-published (300)**" in md
+    assert "+250 more — full list in output/research-papers-full.json on main" in md
+    assert "run summary" not in md  # the step summary gets this same capped text
     assert "P49 " in md and "P50 " not in md
 
 
 def test_digest_body_is_hard_truncated():
     md, _ = build_digest(cat(), cat(*_published(300, title_len=1500)), [], [])
-    assert len(md) < 60_200 and "truncated" in md
+    assert len(md) < 60_200 and "truncated" in md and md.rstrip().endswith("output/research-papers-full.json on main.")
     assert md.count("```") % 2 == 0  # a cut inside a fence is closed before the note

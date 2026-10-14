@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 _SAFE_URL = re.compile(r'^https?://[^\s<>`"\[\]]+$')
 _CAP = 50              # items per list section
 _BODY_LIMIT = 60_000   # GitHub rejects issue bodies over 65,536 chars
+# Not "the run summary": the CLI writes this same capped text to the step summary.
+_FULL_LIST = "full list in output/research-papers-full.json on main"
 
 
 def plain(text: str) -> str:
@@ -49,7 +51,7 @@ def _link(p: dict) -> str:
 
 
 def _more(items: list) -> list[str]:
-    return [f"- +{len(items) - _CAP} more — see the run summary"] if len(items) > _CAP else []
+    return [f"- +{len(items) - _CAP} more — {_FULL_LIST}"] if len(items) > _CAP else []
 
 
 def _no_llm_answer(p: dict) -> bool:
@@ -109,5 +111,5 @@ def build_digest(before: dict | None, after: dict, before_repos: list | None, af
         body = body[:_BODY_LIMIT]
         if body.count("```") % 2:  # cut inside an excerpt fence: close it so the note renders
             body += "\n```"
-        body += "\n\n… digest truncated (GitHub's issue size limit) — see the run summary.\n"
+        body += f"\n\n… digest truncated (GitHub's issue size limit) — {_FULL_LIST}.\n"
     return body, has_changes
