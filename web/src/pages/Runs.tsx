@@ -963,13 +963,13 @@ function PublishPrompt({ record }: { record: RunRecord }) {
   return (
     <div className="rounded-md border bg-muted/30 p-4 space-y-3">
       <div>
-        <p className="text-sm font-semibold">Run complete — publish to the site?</p>
+        <p className="text-sm font-semibold">Run complete — push the catalog?</p>
         <p className="text-xs text-muted-foreground mt-0.5">
           {newRepos.length > 0
             ? `${newRepos.length} new repo${newRepos.length === 1 ? '' : 's'} this run`
             : 'No new repos this run'}
           {hasPapers ? ` · ${resultPapers.length} paper${resultPapers.length === 1 ? '' : 's'} touched` : ''}
-          {' '}— the Publish page shows the full diff against the live site before anything is applied.
+          {' '}— the Publish page previews your changes before pushing.
         </p>
       </div>
 
@@ -988,7 +988,7 @@ function PublishPrompt({ record }: { record: RunRecord }) {
 
       <div className="flex items-center gap-2">
         <Button size="sm" className="gap-1.5" onClick={() => navigate('/publish')}>
-          Review &amp; publish
+          Review &amp; push
         </Button>
         <Button size="sm" variant="outline" onClick={() => navigate(editTarget)}>
           {editLabel}

@@ -100,7 +100,7 @@ export function Dashboard() {
             className="gap-1.5"
           >
             <Upload className="h-3.5 w-3.5" />
-            Publish to site
+            Push catalog
           </Button>
         </div>
       </div>

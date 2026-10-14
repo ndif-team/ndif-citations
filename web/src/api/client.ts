@@ -1,4 +1,4 @@
-import type { StatsResponse, PaperRow, PaperDetail, RunSummary, RepoRow, RepoDetail, RepoType, RepoSortOption, Bucket, SortOption, RunRecord, RunMode, GatePayload, ReprocessResponse, SettingsResponse, SettingsPatch, VenuesResponse, PublishTargetResponse, PublishDryRunResponse, PublishResponse, DuplicateMatch } from './types'
+import type { StatsResponse, PaperRow, PaperDetail, RunSummary, RepoRow, RepoDetail, RepoType, RepoSortOption, Bucket, SortOption, RunRecord, RunMode, GatePayload, ReprocessResponse, SettingsResponse, SettingsPatch, VenuesResponse, PublishPreviewResponse, PushCatalogResponse, DuplicateMatch } from './types'
 
 const BASE = '/api'
 
@@ -245,20 +245,12 @@ export async function putVenues(venues: VenuesResponse['venues']): Promise<Venue
 // Publish
 // ---------------------------------------------------------------------------
 
-export async function fetchPublishTarget(): Promise<PublishTargetResponse> {
-  return get<PublishTargetResponse>('/publish/target')
+export async function previewPublish(): Promise<PublishPreviewResponse> {
+  return get<PublishPreviewResponse>('/publish/preview')
 }
 
-export async function putPublishTarget(path: string): Promise<{ publish_target: string }> {
-  return put<{ publish_target: string }>('/publish/target', { path })
-}
-
-export async function runPublish(args: {
-  dry_run: boolean
-  publish_papers: boolean
-  publish_repos: boolean
-}): Promise<PublishDryRunResponse | PublishResponse> {
-  return post<PublishDryRunResponse | PublishResponse>('/publish', args)
+export async function pushCatalog(): Promise<PushCatalogResponse> {
+  return post<PushCatalogResponse>('/publish', {})
 }
 
 export async function exportXlsx(): Promise<void> {

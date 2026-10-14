@@ -378,19 +378,17 @@ The **Repos** page is the code half of the catalog.
 
 ## 20. Publishing to the website
 
-**Publish** is now its own tab in the sidebar (it used to live under Settings). This is where you push the approved catalog to the website's data files.
+The weekly cloud run publishes automatically: verified papers are committed to the
+ndif-citations repo and ndif.us picks them up on its next daily build. You only use
+the **Publish** tab after curating locally:
 
-![Publish tab](images/12-publish.png)
+1. **Preview changes** — lists papers/repos/images you changed since the last push.
+2. **Push catalog** — commits and pushes your changes to GitHub. If the cloud run
+   changed the same papers meanwhile, nothing is pushed; your work is saved on a
+   `catalog-conflict-…` branch and the message tells you how to start over.
 
-The flow:
-
-1. **Pick the target** — the app auto-detects the sibling `ndif-website` folder and shows a **Valid** badge when it's usable. Use **Set target** to point elsewhere.
-2. **Choose what to publish** — the **Publish papers** and **Publish repos** checkboxes (both on by default). Uncheck one if you only want to push the other.
-3. **Always run a dry run first** — it shows exactly what *would* change (added / changed / removed papers and repos) without writing anything.
-4. Only after the dry run looks right do you click **Publish**. It asks for confirmation, then writes the selected data to the site's data files.
-5. The website then needs a **rebuild** to show the new data.
-
-> Publishing overwrites the site's data files, so treat it like hitting "deploy" — dry-run, eyeball the diff, then apply.
+The app pulls the latest catalog when it starts (only if you have no unpushed changes).
+**Export .xlsx** is still here for spreadsheets.
 
 ---
 

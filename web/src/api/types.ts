@@ -232,7 +232,6 @@ export interface SettingsResponse {
   llm_rate_limit_sleep: number
   s2_rate_limit_sleep: number
   github_rate_limit_sleep: number
-  publish_target: string | null
 }
 
 export type SettingsPatch = Partial<SettingsResponse>
@@ -257,12 +256,6 @@ export interface VenuesResponse {
 // Publish
 // ---------------------------------------------------------------------------
 
-export interface PublishTargetResponse {
-  detected: string | null
-  configured: string | null
-  valid: boolean
-}
-
 /**
  * A diff bucket from `publish.diff()` — each field is the LIST of affected
  * records (paper/repo dicts in the slim site format), not a count. Render
@@ -274,26 +267,18 @@ export interface PublishDiffBuckets {
   removed: unknown[]
 }
 
-export interface PublishDryRunResponse {
+export interface PublishPreviewResponse {
   papers: PublishDiffBuckets
   repos: PublishDiffBuckets
   /** Image filenames that are new / changed. */
   images: { new: string[]; changed: string[] }
 }
 
-export interface PublishSummary {
-  files_written: string[]
-  images_copied: number
-  images_overwritten: number
-  images_unchanged: number
-  images_missing: number
-  backups: string[]
-}
-
-export interface PublishResponse {
-  summary: PublishSummary
-  diff: unknown
-  build_hint: string
+export interface PushCatalogResponse {
+  pushed: boolean
+  commit: string | null
+  conflict_branch: string | null
+  message: string
 }
 
 export interface DuplicateMatch {
