@@ -1,6 +1,6 @@
 """REST router for publishing — ``/api/publish`` (spec §5.7).
 
-GET  /api/publish/preview   What "Push catalog" would publish (local vs last commit).
+GET  /api/publish/preview   What "Push catalog" would publish (local vs the merge-base with origin/main).
 POST /api/publish           Commit + push the catalog to ndif-citations main; ndif.us
                             pulls it on its next daily build. 409 on a conflict (the
                             curator's commit is kept on a catalog-conflict-* branch).
