@@ -7,7 +7,7 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Category(str, Enum):
@@ -94,6 +94,10 @@ class DiscoverySource(str, Enum):
 
 class DiscoveredPaper(BaseModel):
     """Internal representation with all metadata fields."""
+
+    # Keep fields this version doesn't know (e.g. a newer phase's curator_quotes): the full JSON
+    # round-trips them; the slim/website dicts are built field by field and never include them.
+    model_config = ConfigDict(extra="allow")
 
     # Core identifiers
     title: str
@@ -249,6 +253,8 @@ class DiscoveredPaper(BaseModel):
 
 class DiscoveredRepo(BaseModel):
     """Internal representation of a GitHub repository discovered via dependents."""
+
+    model_config = ConfigDict(extra="allow")  # see DiscoveredPaper
 
     # Identity
     owner: str

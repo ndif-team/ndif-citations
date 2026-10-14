@@ -310,3 +310,27 @@ def test_merge_repos_skip_does_not_blank_stats_on_failed_fetch(monkeypatch):
     merged = merge_repos(discovered=[stale], existing=[existing])
     target = next(m for m in merged if m.merge_key() == "o/r")
     assert (target.stars, target.license) == (10, "MIT"), "stale fetch must not blank stats"
+
+
+def test_unknown_catalog_fields_survive_load_and_rewrite(tmp_path):
+    """Fields this version doesn't know (a newer phase's curator_quotes, a hand-added key) must
+    not be silently dropped by the next run or the post-rebase slim regeneration."""
+    import json
+
+    from ndif_citations.catalog_git import _regenerate_slim
+    from ndif_citations.models import Bucket
+    from tests.conftest import make_paper, make_repo
+
+    out = tmp_path / "output"
+    (out / "images").mkdir(parents=True)
+    paper = {**make_paper(arxiv_id="1", bucket=Bucket.VERIFIED, has_classification=True).to_full_dict(),
+             "curator_quotes": [{"quote": "we use NDIF", "page": 3}]}
+    repo = {**make_repo().to_full_dict(), "hand_note": "keep me"}
+    full = out / "research-papers-full.json"
+    full.write_text(json.dumps({"pending": [], "verified": [paper], "discarded": []}))
+    (out / "github-repos-full.json").write_text(json.dumps([repo]))
+    _regenerate_slim(tmp_path)  # = write_outputs(load_existing_papers) + _write_repos_outputs(load_existing_repos)
+    assert json.loads(full.read_text())["verified"] == [paper]
+    assert json.loads((out / "github-repos-full.json").read_text()) == [repo]
+    assert "curator_quotes" not in json.loads((out / "research-papers.json").read_text())[0]
+    assert set(json.loads((out / "github-repos.json").read_text())[0]) == SLIM_KEYS
