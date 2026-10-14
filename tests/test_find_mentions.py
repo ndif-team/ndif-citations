@@ -105,3 +105,4 @@ def test_redact_emails():
     assert redact_emails("{a.b,c}@uni-x.de") == "[email]"
     assert redact_emails("{k: v}@decorator.call") == "{k: v}@decorator.call"
     assert redact_emails("{alice, bob}@mit.edu") == "[email]"
+    assert redact_emails("{alice|bob}@x.edu") == "[email]"  # phase-1 form (no spaces, any separator)

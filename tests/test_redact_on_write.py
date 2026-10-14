@@ -6,7 +6,7 @@ from ndif_citations.models import PipelineRun
 from ndif_citations.output import write_outputs
 from tests.conftest import make_paper
 
-EMAIL = re.compile(r"(?:\{\s*[\w.+-]+(?:\s*,\s*[\w.+-]+)*\s*\}|[\w.+-]+)@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}\b")
+EMAIL = re.compile(r"(?:\{(?:[^{}@\s]+|\s*[^{}@\s,]+(?:\s*,\s*[^{}@\s,]+)*\s*)\}|[\w.+-]+)@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}\b")
 
 
 def test_written_catalog_has_no_emails(tmp_path):
