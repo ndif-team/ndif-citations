@@ -5,6 +5,9 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
+from urllib.parse import urlparse
+
+import requests
 
 from ndif_citations.digest import _SAFE_URL
 from ndif_citations.models import Category
@@ -193,3 +196,131 @@ def run_commands(ctx: ReviewContext) -> Result:
         except UserError as e:
             res.replies.append(f"⚠️ `/{cmd.name}` — {e}")
     return res
+
+_MAX_PDF = 50 * 1024 * 1024
+_MAX_IMG = 10 * 1024 * 1024
+_IMG_RE = re.compile(r"!\[[^\]]*\]\((https?://[^)\s]+)\)|<img[^>]+src=\"(https?://[^\"]+)\"", re.I)
+_IMG_HOSTS = {"private-user-images.githubusercontent.com", "user-images.githubusercontent.com"}
+
+
+def _download(url: str, max_bytes: int) -> bytes:
+    """https-only bounded download (redirects allowed — GitHub attachments 302 to signed URLs)."""
+    if urlparse(url).scheme != "https":
+        raise UserError("Only https:// links are accepted.")
+    try:
+        resp = requests.get(url, stream=True, timeout=60, allow_redirects=True,
+                            headers={"User-Agent": "NDIFCitationTracker/1.0 (https://ndif.us)"})
+        resp.raise_for_status()
+        hops = [*getattr(resp, "history", []), resp]
+        if any(urlparse(getattr(h, "url", url)).scheme != "https" for h in hops):
+            raise UserError("That link redirects to a non-https address.")
+        chunks, total = [], 0
+        for chunk in resp.iter_content(chunk_size=65536):
+            total += len(chunk)
+            if total > max_bytes:
+                raise UserError(f"File is larger than {max_bytes // (1024 * 1024)} MB.")
+            chunks.append(chunk)
+        return b"".join(chunks)
+    except requests.RequestException:
+        raise UserError("Couldn't download that link (it may need a login or have expired).")
+
+
+def _llm_ready() -> None:
+    from ndif_citations.preflight import preflight
+    pf = preflight(skip_papers=False, skip_github=True, validate_llm=True)
+    if not pf["ok"]:
+        raise UserError("The LLM is unavailable right now, so I didn't change anything: "
+                        + "; ".join(pf["blocking"]) + " — try again later.")
+
+
+def cmd_pdf(ctx: ReviewContext, key: str, args: str, res: Result) -> str:
+    from ndif_citations.reprocess import reprocess_papers
+    from ndif_citations.server.services import papers_svc
+    url = args.strip().split()[0] if args.strip() else ""
+    if not url:
+        raise UserError("Give an open-access PDF link: `/pdf https://…`.")
+    if urlparse(url).scheme != "https":
+        raise UserError("Only https:// links are accepted.")
+    _llm_ready()
+    data = _download(url, _MAX_PDF)
+    if not data.startswith(b"%PDF-"):
+        raise UserError("That link isn't a PDF (it may be a landing page — link the PDF itself).")
+    papers_svc.attach_pdf(ctx.out, key, data)
+    papers_svc.edit_paper(ctx.out, key, {"pdf_url": url, "bucket": _paper(ctx, key).bucket.value})
+    papers_svc.backfill_evidence(ctx.out, key)
+    # Never replace an existing figure (it may be a curator's /thumbnail screenshot).
+    reprocess_papers(ctx.out, [key], ["classify"] if _paper(ctx, key).image else ["classify", "thumbnail"])
+    res.changed = True
+    return f"PDF attached, evidence re-extracted, re-classified — {_state(ctx, key)}."
+
+
+def cmd_thumbnail(ctx: ReviewContext, key: str, args: str, res: Result) -> str:
+    import io
+
+    from PIL import Image
+    from ndif_citations.pdf_cache import get_cached_pdf
+    from ndif_citations.reprocess import reprocess_papers
+    from ndif_citations.server.services import papers_svc
+    m = _IMG_RE.search(ctx.comment_body)
+    if m:
+        url = m.group(1) or m.group(2)
+        u = urlparse(url)
+        ok = u.scheme == "https" and (u.netloc in _IMG_HOSTS or
+                                      (u.netloc == "github.com" and u.path.startswith("/user-attachments/assets/")))
+        if not ok:
+            raise UserError("Paste the screenshot directly into the comment (it must be a GitHub attachment).")
+        data = _download(url, _MAX_IMG)
+        try:
+            img = Image.open(io.BytesIO(data))
+            img.load()
+        except Exception:  # noqa: BLE001 — any decode failure is the user's file
+            raise UserError("That attachment isn't an image I can read.")
+        img.thumbnail((1600, 1600))
+        if img.mode in ("RGBA", "LA", "P"):
+            rgba = img.convert("RGBA")
+            flat = Image.new("RGB", rgba.size, "white")
+            flat.paste(rgba, mask=rgba.split()[-1])
+            img = flat
+        buf = io.BytesIO()
+        img.convert("RGB").save(buf, "PNG")
+        papers_svc.save_image_bytes(ctx.out, key, buf.getvalue())
+        res.changed = True
+        return "Thumbnail set."
+    if get_cached_pdf(_paper(ctx, key), ctx.out) is None:
+        raise UserError("no PDF available to extract a figure from — use `/pdf <open-access link>` "
+                        "or paste a screenshot with `/thumbnail`.")
+    def _img_bytes():
+        img = _paper(ctx, key).image
+        f = ctx.out / img.lstrip("/") if img else None
+        return f.read_bytes() if f is not None and f.exists() else None
+
+    before = _img_bytes()
+    reprocess_papers(ctx.out, [key], ["thumbnail"])
+    res.changed = True  # reprocess rewrote the catalog (lock) either way
+    after = _img_bytes()
+    if after is None or after == before:
+        return "No new figure found in the PDF; kept the existing thumbnail."
+    return "Thumbnail re-extracted from the PDF."
+
+
+def cmd_retry(ctx: ReviewContext, key: str, args: str, res: Result) -> str:
+    from ndif_citations.pdf_cache import get_cached_pdf
+    from ndif_citations.reprocess import reprocess_papers
+    _llm_ready()
+    if get_cached_pdf(_paper(ctx, key), ctx.out) is None:
+        raise UserError("no PDF available (none found online) — use `/pdf <open-access link>`, or for a "
+                        "paywalled paper paste the key sentence with `/evidence` and then `/verify`.")
+    reprocess_papers(ctx.out, [key], ["classify"] if _paper(ctx, key).image else ["classify", "thumbnail"])
+    res.changed = True
+    return f"Re-classified — {_state(ctx, key)}."
+
+
+def cmd_summarize(ctx: ReviewContext, key: str, args: str, res: Result) -> str:
+    from ndif_citations.reprocess import reprocess_papers
+    _llm_ready()
+    reprocess_papers(ctx.out, [key], ["summary"])
+    res.changed = True
+    return "Summary regenerated."
+
+
+HANDLERS.update({"pdf": cmd_pdf, "thumbnail": cmd_thumbnail, "retry": cmd_retry, "summarize": cmd_summarize})
