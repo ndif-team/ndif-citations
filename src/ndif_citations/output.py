@@ -541,6 +541,8 @@ def write_outputs(papers: list[DiscoveredPaper], output_dir: Path, run: Pipeline
             p.affiliations = redact_emails(p.affiliations)
         if p.ndif_context_windows:
             p.ndif_context_windows = [redact_emails(w) for w in p.ndif_context_windows]
+        if p.curator_quotes:
+            p.curator_quotes = [redact_emails(q) for q in p.curator_quotes]
 
     # 1. Website JSON — verified papers only (matches ResearchPaper TS interface)
     verified_papers = [p for p in papers if p.bucket == Bucket.VERIFIED]

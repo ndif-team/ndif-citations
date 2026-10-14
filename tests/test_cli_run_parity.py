@@ -41,6 +41,8 @@ def _normalize_full(data: dict) -> dict:
         for p in data.get(bucket, []):
             if "date_discovered" in p:
                 p["date_discovered"] = ""
+            if p.get("curator_quotes") == []:
+                del p["curator_quotes"]  # field added after the golden was captured
     return data
 
 

@@ -323,6 +323,45 @@ def backfill_evidence(out: Path, paper_id: str) -> dict:
     return d
 
 
+_MAX_QUOTE = 2000
+
+
+def add_curator_quote(out: Path, paper_id: str, quote: str) -> dict:
+    """Append a reviewer-pasted evidence quote (spec §6.3 /evidence)."""
+    from ndif_citations.utils import redact_emails
+    quote = " ".join((quote or "").split())
+    if not quote:
+        raise ValueError("empty quote")
+    if len(quote) > _MAX_QUOTE:
+        raise ValueError(f"quote longer than {_MAX_QUOTE} characters")
+    papers = load_existing_papers(out)
+    paper = next((p for p in papers if p.merge_key() == paper_id), None)
+    if paper is None:
+        raise KeyError(paper_id)
+    paper.curator_quotes = [*paper.curator_quotes, redact_emails(quote)]
+    write_outputs(papers, out, PipelineRun())
+    return _detail_dict(paper)
+
+
+def save_image_bytes(out: Path, paper_id: str, data: bytes) -> dict:
+    """Save PNG *data* as the paper's thumbnail (shared by upload_image and /thumbnail)."""
+    if data[:8] != _PNG_MAGIC:
+        raise ValueError("image is not a PNG")
+    papers = load_existing_papers(out)
+    paper = next((p for p in papers if p.merge_key() == paper_id), None)
+    if paper is None:
+        raise KeyError(paper_id)
+    filename = f"{slugify(paper.title)}.png"
+    images_dir = out / "images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+    (images_dir / filename).write_bytes(data)
+    paper.image = f"/images/{filename}"
+    paper.has_thumbnail = True
+    paper.manual_override = True
+    write_outputs(papers, out, PipelineRun())
+    return _detail_dict(paper)
+
+
 def upload_image(out: Path, paper_id: str, file: "UploadFile") -> dict:
     """Save an uploaded PNG as a paper's thumbnail and persist.
 
@@ -348,29 +387,9 @@ def upload_image(out: Path, paper_id: str, file: "UploadFile") -> dict:
     ValueError:
         If the upload is not a PNG (by content-type or magic bytes).
     """
-    papers = load_existing_papers(out)
-    paper: DiscoveredPaper | None = None
-    for p in papers:
-        if p.merge_key() == paper_id:
-            paper = p
-            break
-    if paper is None:
-        raise KeyError(paper_id)
-
     data = file.file.read()
-    # Require PNG magic bytes regardless of declared content-type — content-type
-    # alone is attacker-controlled and not a reliable signal.
-    if data[:8] != _PNG_MAGIC:
+    # PNG magic is enforced in save_image_bytes regardless of declared content-type.
+    try:
+        return save_image_bytes(out, paper_id, data)
+    except ValueError:
         raise ValueError("uploaded file is not a PNG")
-
-    filename = f"{slugify(paper.title)}.png"
-    images_dir = out / "images"
-    images_dir.mkdir(parents=True, exist_ok=True)
-    (images_dir / filename).write_bytes(data)
-
-    paper.image = f"/images/{filename}"
-    paper.has_thumbnail = True
-    paper.manual_override = True
-
-    write_outputs(papers, out, PipelineRun())
-    return _detail_dict(paper)

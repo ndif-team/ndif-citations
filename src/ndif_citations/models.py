@@ -163,6 +163,9 @@ class DiscoveredPaper(BaseModel):
 
     # NDIF evidence the classifier used (persisted at classify time for the UI).
     ndif_context_windows: list[str] = Field(default_factory=list)
+    # Reviewer-pasted evidence for paywalled papers (/evidence). Display only: never
+    # read by the pipeline or the auto-publish rule, never overwritten by reprocessing.
+    curator_quotes: list[str] = Field(default_factory=list)
     context_source: str = "none"  # "pdf" | "abstract" | "none"
 
     # Change detection
