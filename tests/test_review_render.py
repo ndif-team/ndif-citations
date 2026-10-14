@@ -60,7 +60,7 @@ def test_render_locked_paper_hides_forced_band_and_shows_note():
     p.reason_detail = "re-classified: uses_nnsight → uses_ndif by @bot"
     _, body, _ = render_issue(p)
     assert "curator-locked" in body and "confidence certain" not in body
-    assert f"**Note:** re-classified: uses_nnsight → uses_ndif by @{ZW}bot" in body
+    assert f"**Note:** re-classified: uses\\_nnsight → uses\\_ndif by @{ZW}bot" in body
 
 
 def test_render_links_never_carry_raw_untrusted_destinations():
@@ -83,10 +83,56 @@ def test_safe_urls_render_as_angle_destinations():
     assert "[paper](<https://e.com/a(1)>)" in body and "[PDF](<https://e.com/p.pdf>)" in body
 
 
-def test_title_truncation_has_no_trailing_space_and_key_backticks_and_help_row():
-    p = make_paper(bucket=Bucket.PENDING, title="a" * 230 + " b" + "c" * 20)
-    title, body, _ = render_issue(p)
-    assert title == title.rstrip() and len(title) <= 240
-    p2 = make_paper(bucket=Bucket.PENDING, arxiv_id="2501.00003")
-    assert re.search(r"· `[^`]+`\n", render_issue(p2)[1])
+def test_backslash_url_is_dropped():
+    p = make_paper(bucket=Bucket.PENDING, url="https://e.com/a" + chr(92))
+    assert "[paper]" not in render_issue(p)[1]
+
+
+def _outside_fences(body):
+    return "\n".join(part for i, part in enumerate(body.split("```")) if i % 2 == 0)
+
+
+def test_whole_body_has_no_live_mention_outside_fences():
+    p = make_paper(bucket=Bucket.PENDING, title="hi @a", url="https://e.com/@x", arxiv_id="1@x.2")
+    p.venue = "@v"
+    p.reason_detail = "by @bot"
+    _, body, _ = render_issue(p)
+    out = _outside_fences(body[:body.rindex("\n<!-- ndif-paper")])
+    for i, c in enumerate(out):
+        if c == "@" and "https://e.com/@x" not in out[max(0, i - 14):i + 4]:
+            assert out[i + 1] == ZW
+
+
+EVIL = ('<details><summary>ok</summary> [click](https://evil.example/x) ![i](https://evil.example/a.png) '
+        '<a href="https://evil.example">a</a> <img src=x> `tick` #12 owner/repo#3')
+
+
+def test_inline_text_cannot_inject_html_links_or_refs():
+    p = make_paper(bucket=Bucket.PENDING, title=EVIL, arxiv_id="2501.00009")
+    p.venue = EVIL
+    p.reason_detail = EVIL
+    p.context_source = EVIL
+    _, body, _ = render_issue(p)
+    head = body[:body.rindex("\n<!-- ndif-paper")]
+    pre_details = head.split("<details><summary>Commands")[0]
+    for bad in (r"(?<!\\)<details", r"(?<!\\)\[click\]", r"(?<!\\)<a href", r"(?<!\\)<img", r"(?<!\\)!\["):
+        assert not re.search(bad, pre_details), bad
+    assert "#12" not in head and "repo#3" not in head
+    assert parse_marker(body)["key"] == p.merge_key()
+    # the key's code span survives backticks in title/venue
+    assert f"`{p.merge_key()}`" in pre_details
+
+
+def test_title_truncation_has_no_trailing_space():
+    p = make_paper(bucket=Bucket.PENDING, title="a" * 231 + " b")
+    title, _, _ = render_issue(p)
+    assert len(title) <= 240 and not title.endswith(" ")
+
+
+def test_key_backtick_and_help_row():
+    p = make_paper(bucket=Bucket.PENDING, doi="10.1/a`b", arxiv_id=None)
+    body = render_issue(p)[1]
+    first = body.split("\n")[0]
+    span = re.search(r" · `([^`]*)`$", first)
+    assert span and "10.1/a'b" in span.group(1)
     assert "`/add https://…`" in HELP_TEXT

@@ -36,7 +36,7 @@ In digest/report issues, put the paper's URL (or `arxiv:<id>` / `doi:<doi>`) rig
 def marker_for(paper: DiscoveredPaper) -> str:
     data = {"key": paper.merge_key(), "url": paper.url or "", "arxiv": paper.arxiv_id or "",
             "doi": paper.doi or "", "title": paper.title}
-    # "--" can't appear inside an HTML comment; the JSON escape - decodes back to "-".
+    # "--" can't appear inside an HTML comment; the JSON escape \u002d decodes back to "-".
     blob = json.dumps(data, ensure_ascii=False).replace("--", "\\u002d\\u002d")
     return f"<!-- ndif-paper: {blob} -->"
 
@@ -66,8 +66,16 @@ def why_label(paper: DiscoveredPaper) -> str:
     return "why:check-label"
 
 
+_MD = re.compile(r"([\\`*_\[\]<>])")
+
+
+def inline(text: str) -> str:
+    """Untrusted text for an issue/comment BODY: plain() plus Markdown escaping (no live HTML, links, images, emphasis, code spans or #N references)."""
+    return _MD.sub(r"\\\1", plain(text)).replace("#", "#" + "\u200b")
+
+
 def _href(u: str | None) -> str | None:
-    return f"<{u}>" if u and _SAFE_URL.fullmatch(u) else None
+    return f"<{u}>" if u and "\\" not in u and _SAFE_URL.fullmatch(u) else None
 
 
 def render_issue(paper: DiscoveredPaper) -> tuple[str, str, list[str]]:
@@ -77,14 +85,14 @@ def render_issue(paper: DiscoveredPaper) -> tuple[str, str, list[str]]:
     conf = "curator-locked" if paper.manual_override else f"confidence {paper.category_confidence_band.value}"
     key = plain(paper.merge_key()).replace("`", "'")
     lines = [
-        f"**{plain(paper.title)}** · {plain(paper.venue or '')} {paper.year or ''} · `{key}`",
+        f"**{inline(paper.title)}** · {inline(paper.venue or '')} {paper.year or ''} · `{key}`",
         "",
         f"**Why you're seeing this:** {WHY_TEXT[label]}.",
         f"**Model says:** {paper.category.value} · {conf} · "
-        f"evidence from {paper.context_source} ({len(paper.ndif_context_windows or [])} excerpt(s))",
+        f"evidence from {inline(paper.context_source)} ({len(paper.ndif_context_windows or [])} excerpt(s))",
     ]
     if paper.reason_detail:  # e.g. "re-classified: uses_ndif → referencing"
-        lines.append(f"**Note:** {plain(paper.reason_detail)}")
+        lines.append(f"**Note:** {inline(paper.reason_detail)}")
     for w in (paper.ndif_context_windows or [])[:3]:
         lines += ["", fence(w, 500)]
     if paper.curator_quotes:
