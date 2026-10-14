@@ -1,0 +1,195 @@
+"""Slash commands in review / digest / report / intake issues (spec §6.3)."""
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Callable
+
+from ndif_citations.digest import _SAFE_URL
+from ndif_citations.models import Category
+from ndif_citations.output import load_existing_papers
+from ndif_citations.review_render import BOT_LOGINS, HELP_TEXT, parse_marker
+from ndif_citations.review_sync import resolve_paper
+from ndif_citations.utils import extract_arxiv_id_from_url
+
+CATEGORIES = {"uses_ndif", "uses_nnsight", "referencing"}
+EDIT_FIELDS = {"title": "title", "authors": "authors", "affiliations": "affiliations", "venue": "venue",
+               "year": "year", "description": "description", "summary": "description",
+               "url": "url", "project_url": "project_url", "github": "project_url"}
+_DOI_URL = re.compile(r"doi\.org/(10\.\S+)", re.I)
+_TARGETED = {"digest", "report", "intake"}  # issues whose commands must name the paper explicitly
+
+
+@dataclass
+class Command:
+    name: str
+    args: str
+
+
+@dataclass
+class ReviewContext:
+    out: Path
+    issue_number: int
+    issue_body: str
+    issue_author: str
+    issue_labels: set[str]
+    comment_body: str
+    comment_author: str
+
+
+@dataclass
+class Result:
+    replies: list[str] = field(default_factory=list)
+    changed: bool = False
+    close: bool = False
+
+    @property
+    def reply(self) -> str:
+        return "\n\n".join(self.replies)
+
+
+class UserError(Exception):
+    """A problem the commenter can fix — replied, not treated as a failure."""
+
+
+def parse_commands(text: str, limit: int = 10) -> list[Command]:
+    cmds: list[Command] = []
+    for line in (text or "").splitlines():
+        s = line.strip()
+        if s.startswith("/") and len(s) > 1 and not s.startswith("//"):
+            name, _, rest = s[1:].partition(" ")
+            cmds.append(Command(name.lower(), rest.strip()))
+    return cmds[:limit]
+
+
+def _ident_from_token(token: str) -> dict | None:
+    t = token.strip()
+    if t.lower().startswith("arxiv:"):
+        return {"arxiv": t[6:]}
+    if t.lower().startswith("doi:"):
+        return {"doi": t[4:]}
+    if t.startswith(("http://", "https://")):
+        m = _DOI_URL.search(t)
+        return {"url": t, "arxiv": extract_arxiv_id_from_url(t) or "", "doi": m.group(1) if m else ""}
+    return None
+
+
+def _bot_review_issue(ctx: ReviewContext) -> bool:
+    """A bot-opened per-paper review issue: its marker is trusted."""
+    return "review" in ctx.issue_labels and ctx.issue_author in BOT_LOGINS and not ctx.issue_labels & _TARGETED
+
+
+def _target(ctx: ReviewContext, args: str) -> tuple[str, str]:
+    """(paper merge_key, remaining args). Raises UserError when no trusted target exists."""
+    papers = load_existing_papers(ctx.out)
+    if ctx.issue_labels & _TARGETED:
+        token, _, rest = args.partition(" ")
+        ident = _ident_from_token(token)
+        if ident is None:
+            raise UserError("Put the paper's URL (or `arxiv:<id>` / `doi:<doi>`) right after the command.")
+        paper = resolve_paper(papers, ident)
+        if paper is None:
+            raise UserError(f"No paper in the catalog matches `{token}`.")
+        return paper.merge_key(), rest.strip()
+    if _bot_review_issue(ctx):
+        paper = resolve_paper(papers, parse_marker(ctx.issue_body))
+        if paper is None:
+            raise UserError("I can't find this issue's paper in the catalog anymore.")
+        return paper.merge_key(), args
+    raise UserError("Commands work in bot-opened review issues, or with an explicit paper URL in digest/report issues.")
+
+
+def _paper(ctx: ReviewContext, key: str):
+    return next(p for p in load_existing_papers(ctx.out) if p.merge_key() == key)
+
+
+def _state(ctx: ReviewContext, key: str) -> str:
+    p = _paper(ctx, key)
+    conf = "curator-locked" if p.manual_override else f"confidence {p.category_confidence_band.value}"
+    return f"now **{p.bucket.value}** · {p.category.value} ({conf})"
+
+
+def cmd_verify(ctx: ReviewContext, key: str, args: str, res: Result) -> str:
+    from ndif_citations.server.services import papers_svc
+    cat = args.strip().lower() or None
+    if cat and cat not in CATEGORIES:
+        raise UserError(f"Unknown category `{cat}` — use one of: {', '.join(sorted(CATEGORIES))}.")
+    paper = _paper(ctx, key)
+    if cat is None and paper.category == Category.UNCLASSIFIED:
+        raise UserError("This paper needs a category: `/verify uses_nnsight`, `/verify uses_ndif`, or `/verify referencing`.")
+    if cat:
+        papers_svc.edit_paper(ctx.out, key, {"category": cat, "bucket": paper.bucket.value})
+    papers_svc.set_bucket(ctx.out, key, "verified", None, f"verified via #{ctx.issue_number} by @{ctx.comment_author}")
+    res.changed = True
+    res.close |= _bot_review_issue(ctx)  # the paper is resolved; digest/report issues stay open
+    return f"Verified — {_state(ctx, key)}. ndif.us updates within a day."
+
+
+def cmd_discard(ctx: ReviewContext, key: str, args: str, res: Result) -> str:
+    from ndif_citations.server.services import papers_svc
+    detail = args.strip() or f"discarded via #{ctx.issue_number} by @{ctx.comment_author}"
+    papers_svc.set_bucket(ctx.out, key, "discarded", "manual_discard", detail)
+    res.changed = True
+    res.close |= _bot_review_issue(ctx)
+    return "Discarded."
+
+
+def cmd_edit(ctx: ReviewContext, key: str, args: str, res: Result) -> str:
+    from ndif_citations.server.services import papers_svc
+    name, sep, value = args.partition(":")
+    field_name = EDIT_FIELDS.get(name.strip().lower())
+    if not sep or field_name is None:
+        raise UserError(f"I can't edit `{name.strip()}` — use one of: {', '.join(sorted(EDIT_FIELDS))} "
+                        "(as `/edit field: value`).")
+    value = value.strip()
+    if not value:
+        raise UserError(f"Give {field_name} a value (as `/edit {name.strip()}: value`).")
+    if field_name in ("url", "project_url") and not _SAFE_URL.fullmatch(value):
+        raise UserError(f"Couldn't set {field_name}: use an http(s) link.")
+    try:
+        # No explicit bucket: edit_paper's _bucket_after_edit never publishes, keeps verified/discarded,
+        # and refreshes a pending reason (e.g. /edit year clears stub_metadata → why: label updates).
+        papers_svc.edit_paper(ctx.out, key, {field_name: value})
+    except ValueError:
+        raise UserError(f"Couldn't set {field_name}: check the value's format (e.g. `/edit year: 2025`).")
+    res.changed = True
+    return f"Updated {field_name}."
+
+
+def cmd_evidence(ctx: ReviewContext, key: str, args: str, res: Result) -> str:
+    from ndif_citations.server.services import papers_svc
+    try:
+        papers_svc.add_curator_quote(ctx.out, key, args.strip().strip('"“”'))
+    except ValueError:  # empty / over 2,000 chars; never echo the exception text
+        raise UserError("Paste the sentence right after `/evidence` (up to 2,000 characters).")
+    res.changed = True
+    return "Quote saved as evidence. If it shows the paper used NDIF/NNsight, follow up with `/verify <category>`."
+
+
+Handler = Callable[[ReviewContext, str, str, Result], str]
+HANDLERS: dict[str, Handler] = {
+    "verify": cmd_verify, "discard": cmd_discard, "edit": cmd_edit, "evidence": cmd_evidence,
+}
+
+
+def run_commands(ctx: ReviewContext) -> Result:
+    res = Result()
+    cmds = parse_commands(ctx.comment_body)
+    if not cmds:
+        res.replies.append(HELP_TEXT)
+        return res
+    for cmd in cmds:
+        if cmd.name == "help":
+            res.replies.append(HELP_TEXT)
+            continue
+        handler = HANDLERS.get(cmd.name)
+        if handler is None:
+            res.replies.append(f"⚠️ Unknown command `/{cmd.name}`.\n\n{HELP_TEXT}")
+            continue
+        try:
+            key, rest = _target(ctx, cmd.args) if cmd.name != "add" else ("", cmd.args)
+            res.replies.append(f"✅ `/{cmd.name}` — {handler(ctx, key, rest, res)}")
+        except UserError as e:
+            res.replies.append(f"⚠️ `/{cmd.name}` — {e}")
+    return res

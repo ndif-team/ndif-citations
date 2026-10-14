@@ -1116,6 +1116,40 @@ def review_sync_cmd(dry_run: bool) -> None:
         raise SystemExit(1)
 
 
+@cli.command(name="review-apply")
+@click.option("--kind", type=click.Choice(["command", "intake"]), required=True)
+@click.option("--issue-json", required=True, help="gh api issues/<n> output")
+@click.option("--comment-json", required=True, help="gh api issues/comments/<id> output ({} for intake)")
+@click.option("--out", "out_path", required=True, help="Write {reply, changed, close} JSON here")
+def review_apply_cmd(kind: str, issue_json: str, comment_json: str, out_path: str) -> None:
+    """Apply review commands / intake for one issue event (data fetched by ID, never from inputs)."""
+    import json
+    import os
+    from ndif_citations.review_commands import ReviewContext, run_commands
+
+    issue = json.loads(Path(issue_json).read_text())
+    comment = json.loads(Path(comment_json).read_text() or "{}")
+    ctx = ReviewContext(
+        out=config.get_output_dir(None),
+        issue_number=int(issue["number"]),
+        issue_body=issue.get("body") or "",
+        issue_author=(issue.get("user") or {}).get("login", ""),
+        issue_labels={l["name"] for l in issue.get("labels", [])},
+        comment_body=comment.get("body") or "",
+        comment_author=(comment.get("user") or {}).get("login", ""),
+    )
+    if kind == "intake":
+        from ndif_citations.review_intake import intake_from_issue
+        res = intake_from_issue(ctx)
+    else:
+        res = run_commands(ctx)
+    Path(out_path).write_text(json.dumps({"reply": res.reply, "changed": res.changed, "close": res.close}))
+    if os.environ.get("GITHUB_OUTPUT"):
+        with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+            fh.write(f"changed={'true' if res.changed else 'false'}\n")
+    console.print(res.reply, markup=False, highlight=False)
+
+
 @cli.command()
 @click.option("--port", default=8723, show_default=True, help="Port to bind on localhost")
 @click.option("--host", default="127.0.0.1", show_default=True, help="Host to bind (localhost only by default)")
