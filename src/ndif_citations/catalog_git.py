@@ -32,6 +32,7 @@ class CatalogPushError(RuntimeError):
 
 def _git(repo: Path, *args: str, check: bool = True, env_extra: dict | None = None) -> subprocess.CompletedProcess:
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", **(env_extra or {})}
+    env.setdefault("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")  # an ssh remote fails instead of hanging the app
     return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=check, env=env)
 
 

@@ -328,3 +328,17 @@ def test_stray_untracked_image_does_not_block_pull(remote_and_clones):
     catalog_git.push_catalog(a, "bot")
     assert catalog_git.pull_if_clean(b) == "catalog up to date"
     assert git(b, "rev-parse", "HEAD") == git(bare, "rev-parse", "main")
+
+
+@pytest.mark.parametrize("preset", [None, "ssh -i /k/deploy"])
+def test_git_never_prompts_for_ssh_or_credentials(monkeypatch, tmp_path, preset):
+    """An ssh remote with no agent/key must fail fast, not hang the app on a passphrase prompt."""
+    if preset is None:
+        monkeypatch.delenv("GIT_SSH_COMMAND", raising=False)
+    else:
+        monkeypatch.setenv("GIT_SSH_COMMAND", preset)
+    seen = {}
+    monkeypatch.setattr(catalog_git.subprocess, "run", lambda *a, **kw: seen.update(kw["env"]))
+    catalog_git._git(tmp_path, "status")
+    assert seen["GIT_TERMINAL_PROMPT"] == "0"
+    assert seen["GIT_SSH_COMMAND"] == (preset or "ssh -o BatchMode=yes")  # a user's own setting wins
