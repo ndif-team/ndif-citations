@@ -22,7 +22,8 @@ logger = logging.getLogger(__name__)
 PAPERS_FULL = "output/research-papers-full.json"
 REPOS_FULL = "output/github-repos-full.json"
 SLIM_PATHS = ("output/research-papers.json", "output/github-repos.json")
-CATALOG_PATHS = (PAPERS_FULL, REPOS_FULL, *SLIM_PATHS, "output/images")
+IMAGES = "output/images"
+CATALOG_PATHS = (PAPERS_FULL, REPOS_FULL, *SLIM_PATHS, IMAGES)
 
 
 class CatalogPushError(RuntimeError):
@@ -113,6 +114,23 @@ def _regenerate_slim(repo: Path) -> None:
     _write_repos_outputs(load_existing_repos(out), out)
 
 
+def _stage_catalog(repo: Path) -> None:
+    """Stage the 4 JSONs, tracked image edits/deletions, and new images the catalog references.
+    A stray untracked thumbnail is never committed."""
+    _git(repo, "add", "--", PAPERS_FULL, REPOS_FULL, *SLIM_PATHS)
+    if _git(repo, "ls-files", "--", IMAGES).stdout.strip():  # `add -u` errors when nothing is tracked there
+        _git(repo, "add", "-u", "--", IMAGES)
+    papers = json.loads((repo / PAPERS_FULL).read_text())
+    items = [i for b in ("pending", "verified", "discarded") for i in papers.get(b) or []]
+    items += json.loads((repo / REPOS_FULL).read_text())
+    on_disk = set(os.listdir(repo / IMAGES)) if (repo / IMAGES).is_dir() else set()  # exact names
+    refs = sorted({n for n in (Path(i["image"]).name for i in items if isinstance(i, dict)
+                               and isinstance(i.get("image"), str) and i["image"])
+                   if n in on_disk and (repo / IMAGES / n).is_file()})
+    if refs:  # literal pathspecs: thumbnail names can hold [ ] * ?
+        _git(repo, "add", "--", *(f"{IMAGES}/{n}" for n in refs), env_extra={"GIT_LITERAL_PATHSPECS": "1"})
+
+
 def _git_or_fail(repo: Path, *args: str, what: str) -> subprocess.CompletedProcess:
     """Run git; turn any failure into a CatalogPushError the caller can show."""
     r = _git(repo, *args, check=False)
@@ -163,7 +181,7 @@ def _rebase_onto(repo: Path, remote: str, branch: str) -> bool:
             _git(repo, "reset", "--keep", pre)  # back to our pre-rebase commit; --keep never drops edits
             return False
         _regenerate_slim(repo)
-        _git(repo, "add", "--", *CATALOG_PATHS)
+        _stage_catalog(repo)
         if _git(repo, "diff", "--cached", "--quiet", check=False).returncode != 0:
             _git(repo, "commit", "--amend", "--no-edit")
         return True
@@ -222,7 +240,7 @@ def push_catalog(repo: Path, message: str, *, push_conflict_branch: bool = False
             ok = False
         if not ok:
             raise CatalogPushError(f"{rel} is missing or not a valid JSON {kind.__name__}; nothing was committed")
-    _git(repo, "add", "--", *CATALOG_PATHS)
+    _stage_catalog(repo)
     if _git(repo, "diff", "--cached", "--quiet", check=False).returncode != 0:
         _git_or_fail(repo, "commit", "-m", message, what="git commit")
     if _git(repo, "fetch", remote, branch, check=False).returncode != 0:
@@ -262,7 +280,10 @@ def pull_if_clean(repo: Path) -> str:
     repo = Path(repo)
     if _git(repo, "rev-parse", "--is-inside-work-tree", check=False).returncode != 0:
         return "not a git checkout — skipping catalog pull"
-    if _git(repo, "status", "--porcelain", "--", *CATALOG_PATHS, check=False).stdout.strip():
+    # Untracked files don't count: a stray thumbnail must not block every pull (and --ff-only
+    # itself refuses to overwrite an untracked file).
+    if _git(repo, "status", "--porcelain", "--untracked-files=no", "--", *CATALOG_PATHS,
+            check=False).stdout.strip():
         return "local catalog has unpushed changes — not pulling (use Push catalog)"
     r = _git(repo, "pull", "--ff-only", check=False)
     return "catalog up to date" if r.returncode == 0 else "catalog pull failed (offline or diverged) — continuing"

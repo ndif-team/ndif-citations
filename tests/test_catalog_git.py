@@ -35,6 +35,12 @@ def read_keys(repo: Path) -> dict[str, list[str]]:
     return {b: sorted(i["arxiv_id"] for i in data[b]) for b in data}
 
 
+def remote_images(bare) -> set[str]:
+    out = subprocess.run(["git", "-C", str(bare), "ls-tree", "-r", "-z", "--name-only", "main", "--", "output/images"],
+                         check=True, capture_output=True, text=True).stdout
+    return {f for f in out.split("\0") if f}
+
+
 def _buckets_with(data: dict, arxiv_id: str) -> list[str]:
     return [b for b in data if any(i["arxiv_id"] == arxiv_id for i in data[b])]
 
@@ -146,8 +152,11 @@ def test_thumbnail_conflict_with_space_and_non_ascii_name_auto_resolves(remote_a
     """Real thumbnail names have spaces and non-ASCII chars (git quotes those by default)."""
     bare, a, b, seed = remote_and_clones
     img = "output/images/Trigonometry for Café Models.png"
+    seed[0].image = "/images/Trigonometry for Café Models.png"  # only referenced images are staged
+    write_catalog(a, seed)
     (a / img).write_bytes(b"\x89PNG\x00seed")
     catalog_git.push_catalog(a, "add thumbnail")
+    assert "output/images/Trigonometry for Café Models.png" in remote_images(bare)
     git(b, "pull", "--ff-only")
     (a / img).write_bytes(b"\x89PNG\x00bot")
     catalog_git.push_catalog(a, "bot re-renders thumbnail")
@@ -278,3 +287,40 @@ def test_shrink_guard_allows_enrichment_that_rekeys_papers(remote_and_clones):
         p.arxiv_id = f"2403.{i:05d}"
     write_catalog(a, seed + titled)
     assert catalog_git.push_catalog(a, "enrich: arXiv ids")["pushed"] is True
+
+
+def test_push_stages_only_referenced_images(remote_and_clones):
+    bare, a, _, seed = remote_and_clones
+    name = "言語 Fig [1].png"  # non-ASCII + space + glob chars: must be staged literally
+    seed[0].image = f"/images/{name}"
+    write_catalog(a, seed)
+    (a / "output" / "images" / name).write_bytes(b"\x89PNG\x00ref")
+    (a / "output" / "images" / "言語 Fig 1.png").write_bytes(b"\x89PNG\x00glob-twin")  # a glob [1] would match this
+    (a / "output" / "images" / "Stray.png").write_bytes(b"\x89PNG\x00stray")  # not referenced by any entry
+    assert catalog_git.push_catalog(a, "thumbnail")["pushed"] is True
+    assert remote_images(bare) == {f"output/images/{name}"}
+    assert (a / "output" / "images" / "Stray.png").exists()  # left alone, just never committed
+
+
+def test_deleted_tracked_image_is_pushed_as_a_deletion(remote_and_clones):
+    bare, a, _, seed = remote_and_clones
+    seed[0].image = "/images/Old.png"
+    write_catalog(a, seed)
+    (a / "output" / "images" / "Old.png").write_bytes(b"\x89PNG\x00old")
+    catalog_git.push_catalog(a, "thumbnail")
+    assert remote_images(bare) == {"output/images/Old.png"}
+    (a / "output" / "images" / "Old.png").unlink()
+    seed[0].image = None
+    write_catalog(a, seed)
+    assert catalog_git.push_catalog(a, "drop thumbnail")["pushed"] is True
+    assert remote_images(bare) == set()
+
+
+def test_stray_untracked_image_does_not_block_pull(remote_and_clones):
+    bare, a, b, seed = remote_and_clones
+    (b / "output" / "images").mkdir(parents=True, exist_ok=True)
+    (b / "output" / "images" / "Stray.png").write_bytes(b"\x89PNG\x00stray")
+    _edit_venue(a, seed, "2401.00001", "ICML 2026")
+    catalog_git.push_catalog(a, "bot")
+    assert catalog_git.pull_if_clean(b) == "catalog up to date"
+    assert git(b, "rev-parse", "HEAD") == git(bare, "rev-parse", "main")
