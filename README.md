@@ -382,3 +382,63 @@ bun run dev                              # Vite dev server, proxies /api → :87
 ## License
 
 Internal tool for [NDIF](https://ndif.us) — an NSF-funded project at Northeastern University.
+
+## Operations runbook
+
+**What runs where**
+- `catalog-run.yml` (ndif-citations, Mondays 05:17 UTC, or **Run workflow** with `dry_run`/`skip_github`):
+  discover → classify → auto-publish high-confidence papers → commit `output/` → digest issue.
+- `build-public.yml` (ndif-website, daily 07:41 UTC): copies `output/research-papers.json`,
+  `output/github-repos.json` and referenced images into the site, builds, deploys; opens a
+  `catalog-stale` issue there if the catalog pipeline hasn't succeeded for more than 8 days.
+
+**Secrets / variables (ndif-citations → Settings → Secrets and variables → Actions)**
+Secrets: `LLM_API_KEY`, `S2_API_KEY`, `SERPAPI_API_KEY`. Variables (optional): `LLM_BASE_URL`,
+`LLM_MODEL`, `LLM_EXTRA_BODY`, `AUTO_PUBLISH_RULES`, `OPENALEX_EMAIL`, `UNPAYWALL_EMAIL`,
+`CURATORS` (comma-separated GitHub logins to assign digests to).
+
+**Switch to OpenRouter:** set variables `LLM_BASE_URL=https://openrouter.ai/api/v1`,
+`LLM_MODEL=<model id>`, `LLM_EXTRA_BODY={}` and the `LLM_API_KEY` secret to the OpenRouter key.
+
+**A `run-failure` issue appeared**
+| Log says | Do |
+|---|---|
+| `LLM check failed (HTTP 410/404)` | the model was retired — set variable `LLM_MODEL` to a live model |
+| `LLM check failed (... empty reply ...)` | reasoning model — set `LLM_EXTRA_BODY` (NVIDIA: `{"chat_template_kwargs":{"enable_thinking":false}}`) |
+| `HTTP 401` / `403` | rotate the matching secret |
+| `consecutive LLM failures` | provider outage — re-run later or switch provider |
+| `catalog changes conflict` | a `catalog-conflict-*` branch holds the bot's commit; compare it with `main`, re-run the workflow |
+| digest says "Age-out skipped" | the dependents scrape was partial; nothing was removed — re-run, or ignore if it recurs once |
+
+**Stop auto-publishing:** set variable `AUTO_PUBLISH_RULES=0` (every paper then waits for review).
+
+**ndif-website opened "Catalog sync blocked":** the new catalog lost more than 10% of its entries (or
+didn't parse), so the site kept its data. If the drop is real (e.g. a mass discard), set the
+ndif-website variable `CATALOG_SYNC_FORCE=1`, run its build workflow, then delete the variable.
+
+**A failed catalog run's results:** on a merge conflict, the run's catalog is on the pushed `catalog-conflict-*` branch (local `output/` was already reset, so the artifact holds the remote catalog). For failures before the push, the `catalog-<run id>` artifact (14 days) holds the results.
+
+**Undo a publish:** revert the `data:` commit (`git revert <sha>`), push, then run the
+ndif-website **Build site into public/** workflow.
+
+**Regenerate `constraints-ci.txt`** after changing dependencies:
+`.venv/bin/pip freeze --exclude-editable | grep -v -E '^(-e |.* @ file:)' > constraints-ci.txt`.
+
+**First pull after this change (every existing checkout, once):** `output/` used to be git-ignored and is now
+tracked, so the first `git pull` silently replaces your local catalog with the committed one. Before pulling:
+`cp -a output output.bak-$(date +%Y%m%d)`. After pulling, `git status -- output` and `git clean -n -- output/images`
+show files that are only local (old thumbnails); delete them once you're sure, or compare them with the backup.
+
+**"Push catalog" said "catalog changes conflict with origin/main" (local app):** every unpushed catalog commit was moved to the
+`catalog-conflict-…` branch named in the message, and your local catalog now matches GitHub. Re-apply those edits
+in the app and push again, or ask a maintainer to merge the branch (`git diff main catalog-conflict-… -- output/`).
+
+**"Push catalog" refused ("would lose N of M entries" or "is missing or not a valid JSON"):** nothing was pushed. Inspect with
+`git diff origin/main --stat -- output/`. A gutted file usually means an interrupted write — restore it with
+`git checkout -- output/<file>`; if the loss is intended, push it yourself with git.
+
+**Push catalog says "commit or stash your other changes first":** a tracked non-catalog file changed (e.g. venue
+edits write `data/known_venues.json`). Commit it through a pull request, then push the catalog.
+
+**Bumping torch:** the pin lives in two places — `constraints-ci.txt` and the CPU-index install line in
+`.github/workflows/catalog-run.yml`. Change both together.
