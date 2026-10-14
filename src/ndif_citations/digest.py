@@ -12,6 +12,17 @@ def plain(text: str) -> str:
     return " ".join((text or "").split()).replace("@", "@\u200b").replace("<!--", "<\u200b!--")
 
 
+_MD_ESCAPE = re.compile(r"([\\`*_\[\]<>~$&])")
+
+
+def inline(text: str) -> str:
+    """plain() for untrusted text inside an issue BODY (Markdown + HTML render there): no emphasis,
+    links, images, tags, #refs, autolinks, GH- refs or HTML entities (&#64; = @) take effect."""
+    s = _MD_ESCAPE.sub(r"\\\1", plain(text)).replace("#", "#\u200b")
+    s = s.replace("://", ":\u200b//").replace("www.", "www\u200b.")
+    return re.sub(r"(?i)gh-(?=\d)", "GH\u200b-", s)
+
+
 def fence(text: str, limit: int = 400) -> str:
     """Untrusted excerpt → a code fence (no Markdown/HTML/#refs/mentions render inside)."""
     body = " ".join((text or "").replace("`", "'").split())[:limit]
@@ -61,17 +72,18 @@ def build_digest(before: dict | None, after: dict, before_repos: list | None, af
                      "comment the `/discard` line shown under it.")
         for p in published:
             windows = p.get("ndif_context_windows") or []
-            lines.append(f"- **{plain(p['title'])}** — {p.get('category')} · {_link(p)}")
+            lines.append(f"- **{inline(p['title'])}** — {inline(str(p.get('category')))} · {_link(p)}")
             if windows:
                 lines.append(fence(windows[0], 300))
             if _link(p):
                 lines.append(f"  `/discard {_link(p)}` · `/verify {_link(p)} uses_ndif|uses_nnsight|referencing`")
     if discarded:
         lines.append(f"\n**Auto-discarded ({len(discarded)})** — the full PDF never mentions NDIF/NNsight.")
-        lines += [f"- {plain(p['title'])} · {_link(p)}" for p in discarded]
+        lines += [f"- {inline(p['title'])} · {_link(p)}" for p in discarded]
     if pending:
         lines.append(f"\n**Needs review ({len(pending)})**")
-        lines += [f"- {plain(p['title'])} — {p.get('reason') or 'needs_review'} · {_link(p)}" for p in pending]
+        lines += [f"- {inline(p['title'])} — {inline(p.get('reason') or 'needs_review')} · {_link(p)}"
+                  for p in pending]
     if fallbacks:
         lines.append(f"\n**LLM fallbacks:** {len(fallbacks)} paper(s) got no usable LLM answer (keyword rules "
                      "after an LLM error, or an unparseable reply) — they are held for review.")

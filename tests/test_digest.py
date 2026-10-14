@@ -1,5 +1,5 @@
 """Digest = what this run changed (spec §5.3)."""
-from ndif_citations.digest import build_digest, fence, plain
+from ndif_citations.digest import build_digest, fence, inline, plain
 from ndif_citations.models import Bucket, Category, PaperReason
 from tests.conftest import make_paper
 
@@ -73,3 +73,32 @@ def test_unsafe_urls_are_dropped_and_safe_ones_keep_hint():
     ok = make_paper(title="T", arxiv_id="2", bucket=Bucket.VERIFIED, url="https://arxiv.org/abs/2")
     md, _ = build_digest(cat(), cat(ok), [], [])
     assert "`/discard https://arxiv.org/abs/2`" in md
+
+
+def test_inline_renders_untrusted_markdown_inert():
+    assert "<details>" not in inline("<details><summary>x</summary>")
+    link = inline("[x](https://evil)")
+    assert "\\[x\\]" in link and "https://" not in link
+    assert "#12" not in inline("see #12") and "#3" not in inline("owner/repo#3")
+    assert "://" not in inline("https://evil.example") and "www." not in inline("www.evil.example")
+    assert "GH-12" not in inline("GH-12") and "gh-12" not in inline("gh-12").lower()
+    assert inline("~~x~~ $y$") == "\\~\\~x\\~\\~ \\$y\\$"
+    assert "![" not in inline("![x](https://e/i.png)")
+    mix = inline("<details><summary>ok</summary> [click](https://evil.example) *b* _i_ `c` @team")
+    assert all(f"\\{c}" in mix for c in "<>[]*_`") and "@\u200bteam" in mix and "\u200b" in inline("#1")
+
+
+def test_inline_keeps_html_entities_literal():
+    out = inline("&#64;x &#35;1 &commat;team")
+    assert "&#64;" not in out and "&#35;" not in out
+    assert out.count("\\&") == 3 and out.count("&") == 3  # every & escaped: no entity decodes to @ or #
+
+
+def test_digest_body_uses_inline_for_titles_and_reasons():
+    pub = make_paper(title="[click](https://evil.example) <details>", arxiv_id="1", bucket=Bucket.VERIFIED,
+                     url="https://arxiv.org/abs/1")
+    held = make_paper(title="see #12 ~~x~~", arxiv_id="3", bucket=Bucket.PENDING)
+    held.reason = PaperReason.NEEDS_REVIEW
+    md, _ = build_digest(cat(), cat(pub, held), [], [])
+    assert "<details>" not in md and "](https://evil" not in md and "#12" not in md and "~~x" not in md
+    assert "needs\\_review" in md and "/discard https://arxiv.org/abs/1" in md  # safe URLs untouched
