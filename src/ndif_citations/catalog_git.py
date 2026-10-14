@@ -48,6 +48,22 @@ def _paper_keys(full: dict | None) -> list[str]:
     return keys
 
 
+def _paper_key_titles(full: dict | None) -> list[tuple[str, str]]:
+    """(merge_key, normalized title) for every paper — titles normalized as in _paper_ids."""
+    from ndif_citations.models import DiscoveredPaper
+    return [(DiscoveredPaper.model_validate(item).merge_key(), " ".join((item.get("title") or "").lower().split()))
+            for bucket in ("pending", "verified", "discarded") for item in (full or {}).get(bucket, [])]
+
+
+def _paper_ids(full: dict | None) -> set[str]:
+    """Merge keys plus normalized titles: enrichment moves a paper's key from title to
+    arXiv/DOI, and that must not look like a lost paper."""
+    out = set(_paper_keys(full))
+    for bucket in ("pending", "verified", "discarded"):
+        out |= {"t:" + " ".join((p.get("title") or "").lower().split()) for p in (full or {}).get(bucket, [])}
+    return out
+
+
 def _repo_keys(items: list | None) -> list[str]:
     return [f"{r['owner']}/{r['repo']}" for r in (items or [])]
 
@@ -173,12 +189,18 @@ def _save_conflict_branch(repo: Path, remote: str, branch: str, push: bool) -> s
 
 def _refuse_shrink(repo: Path, upstream: str) -> None:
     """The repo is the source of truth: never push a catalog that lost a big slice of its entries."""
-    for path, keys in ((PAPERS_FULL, _paper_keys), (REPOS_FULL, _repo_keys)):
-        before = set(keys(_show_json(repo, upstream, path)))
-        lost = before - set(keys(_show_json(repo, "HEAD", path)))
-        if len(lost) > max(5, len(before) // 10):
-            raise CatalogPushError(f"refusing to push: {path} would lose {len(lost)} of {len(before)} "
-                                   f"entries (e.g. {sorted(lost)[:3]}); if that's intended, push it yourself with git")
+    before_full, head_full = _show_json(repo, upstream, PAPERS_FULL), _show_json(repo, "HEAD", PAPERS_FULL)
+    head_ids = _paper_ids(head_full)
+    lost_papers = [k for k, t in _paper_key_titles(before_full)
+                   if k not in head_ids and "t:" + t not in head_ids]
+    before_repos = set(_repo_keys(_show_json(repo, upstream, REPOS_FULL)))
+    lost_repos = sorted(before_repos - set(_repo_keys(_show_json(repo, "HEAD", REPOS_FULL))))
+    for path, lost, total in ((PAPERS_FULL, lost_papers, len(_paper_keys(before_full))),
+                              (REPOS_FULL, lost_repos, len(before_repos))):
+        if len(lost) > max(5, total // 10):
+            raise CatalogPushError(
+                f"refusing to push: {path} would lose {len(lost)} of {total} entries (e.g. {sorted(lost)[:3]}). "
+                f"Inspect with `git diff {upstream} --stat -- output/`; if the loss is intended, push it yourself with git.")
 
 
 def push_catalog(repo: Path, message: str, *, push_conflict_branch: bool = False,

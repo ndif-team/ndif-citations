@@ -266,3 +266,15 @@ def test_shrink_guard_allows_a_single_deletion(remote_and_clones):
     papers = _grow_to_twelve(a, seed)
     write_catalog(a, papers[1:])
     assert catalog_git.push_catalog(a, "drop one")["pushed"] is True
+
+
+def test_shrink_guard_allows_enrichment_that_rekeys_papers(remote_and_clones):
+    """Enrichment moves a paper's merge key from its title to an arXiv id: not a lost paper."""
+    _, a, _, seed = remote_and_clones
+    titled = [make_paper(title=f"Untitled  Work {i}", arxiv_id=None, bucket=Bucket.PENDING) for i in range(30)]
+    write_catalog(a, seed + titled)
+    assert catalog_git.push_catalog(a, "30 title-keyed papers")["pushed"] is True
+    for i, p in enumerate(titled):
+        p.arxiv_id = f"2403.{i:05d}"
+    write_catalog(a, seed + titled)
+    assert catalog_git.push_catalog(a, "enrich: arXiv ids")["pushed"] is True
