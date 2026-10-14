@@ -102,3 +102,26 @@ def test_digest_body_uses_inline_for_titles_and_reasons():
     md, _ = build_digest(cat(), cat(pub, held), [], [])
     assert "<details>" not in md and "](https://evil" not in md and "#12" not in md and "~~x" not in md
     assert "needs\\_review" in md and "/discard https://arxiv.org/abs/1" in md  # safe URLs untouched
+
+
+def _published(n, title_len=20):
+    out = []
+    for i in range(n):
+        p = make_paper(title=f"P{i} " + "x" * title_len, arxiv_id=str(i), bucket=Bucket.VERIFIED,
+                       url=f"https://arxiv.org/abs/{i}")
+        p.ndif_context_windows = ["we use nnsight " * 30]
+        out.append(p)
+    return out
+
+
+def test_digest_caps_each_section_for_githubs_body_limit():
+    md, _ = build_digest(cat(), cat(*_published(300)), [], [])
+    assert len(md) < 65_536
+    assert "**Auto-published (300)**" in md and "+250 more — see the run summary" in md
+    assert "P49 " in md and "P50 " not in md
+
+
+def test_digest_body_is_hard_truncated():
+    md, _ = build_digest(cat(), cat(*_published(300, title_len=1500)), [], [])
+    assert len(md) < 60_200 and "truncated" in md
+    assert md.count("```") % 2 == 0  # a cut inside a fence is closed before the note

@@ -5,6 +5,8 @@ import re
 from datetime import datetime, timezone
 
 _SAFE_URL = re.compile(r'^https?://[^\s<>`"\[\]]+$')
+_CAP = 50              # items per list section
+_BODY_LIMIT = 60_000   # GitHub rejects issue bodies over 65,536 chars
 
 
 def plain(text: str) -> str:
@@ -46,6 +48,10 @@ def _link(p: dict) -> str:
     return ""
 
 
+def _more(items: list) -> list[str]:
+    return [f"- +{len(items) - _CAP} more — see the run summary"] if len(items) > _CAP else []
+
+
 def _no_llm_answer(p: dict) -> bool:
     return p.get("classification_signal") == "keyword_fallback" or p.get("unclassified_reason") == "llm_unparseable"
 
@@ -70,20 +76,21 @@ def build_digest(before: dict | None, after: dict, before_repos: list | None, af
     if published:
         lines.append(f"\n**Auto-published ({len(published)})** — glance at these; to remove one, "
                      "comment the `/discard` line shown under it.")
-        for p in published:
+        for p in published[:_CAP]:
             windows = p.get("ndif_context_windows") or []
             lines.append(f"- **{inline(p['title'])}** — {inline(str(p.get('category')))} · {_link(p)}")
             if windows:
                 lines.append(fence(windows[0], 300))
             if _link(p):
                 lines.append(f"  `/discard {_link(p)}` · `/verify {_link(p)} uses_ndif|uses_nnsight|referencing`")
+        lines += _more(published)
     if discarded:
         lines.append(f"\n**Auto-discarded ({len(discarded)})** — the full PDF never mentions NDIF/NNsight.")
-        lines += [f"- {inline(p['title'])} · {_link(p)}" for p in discarded]
+        lines += [f"- {inline(p['title'])} · {_link(p)}" for p in discarded[:_CAP]] + _more(discarded)
     if pending:
         lines.append(f"\n**Needs review ({len(pending)})**")
         lines += [f"- {inline(p['title'])} — {inline(p.get('reason') or 'needs_review')} · {_link(p)}"
-                  for p in pending]
+                  for p in pending[:_CAP]] + _more(pending)
     if fallbacks:
         lines.append(f"\n**LLM fallbacks:** {len(fallbacks)} paper(s) got no usable LLM answer (keyword rules "
                      "after an LLM error, or an unparseable reply) — they are held for review.")
@@ -97,4 +104,10 @@ def build_digest(before: dict | None, after: dict, before_repos: list | None, af
                  f"{counts['discarded']} discarded · {len(ar)} repos")
     has_changes = bool(published or discarded or pending or fallbacks or repos_added
                        or repos_removed or age_out_skipped)
-    return "\n".join(lines) + "\n", has_changes
+    body = "\n".join(lines) + "\n"
+    if len(body) > _BODY_LIMIT:
+        body = body[:_BODY_LIMIT]
+        if body.count("```") % 2:  # cut inside an excerpt fence: close it so the note renders
+            body += "\n```"
+        body += "\n\n… digest truncated (GitHub's issue size limit) — see the run summary.\n"
+    return body, has_changes
