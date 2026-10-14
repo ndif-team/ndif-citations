@@ -9,7 +9,7 @@ import {
 import { useActiveRun } from '@/api/hooks'
 import { previewPublish, pushCatalog, exportXlsx } from '@/api/client'
 import { toast } from 'sonner'
-import { SectionLabel, toastApiError, extractApiError } from '@/lib/apiError'
+import { SectionLabel, toastApiError, extractApiError, apiErrorDetail } from '@/lib/apiError'
 import type { PublishPreviewResponse, PushCatalogResponse } from '@/api/types'
 
 type DiffRecord = Record<string, unknown> & { _changed_fields?: string[] }
@@ -121,11 +121,14 @@ export function Publish() {
     try {
       const res = await pushCatalog()
       setPushResult(res)
+      setPreview(null)  // the diff it showed is now stale
       toast.success(res.pushed ? `Pushed ${res.commit}` : 'Nothing to push')
     } catch (err) {
       const { status, message } = extractApiError(err)
-      if (status === 409) setConflict(message)
-      else toastApiError(err)
+      if (status === 409) {
+        // A conflict resets local main to origin/main: any earlier preview or result is stale.
+        setPreview(null); setPushResult(null); setConflict(apiErrorDetail(message))
+      } else toastApiError(err)
     } finally { setPushBusy(false) }
   }
 

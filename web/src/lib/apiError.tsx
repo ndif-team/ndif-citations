@@ -14,6 +14,15 @@ export function extractApiError(err: unknown): { status?: number; message: strin
   return { status: e.status, message: e.message ?? String(err) }
 }
 
+/** FastAPI's string `detail` from an "API error 409: {...}" message; the raw message otherwise. */
+export function apiErrorDetail(message: string): string {
+  try {
+    const detail = (JSON.parse(message.replace(/^API error \d+: /, '')) as { detail?: unknown }).detail
+    if (typeof detail === 'string') return detail
+  } catch { /* not JSON */ }
+  return message
+}
+
 export function toastApiError(err: unknown, fallback?: string) {
   const { status, message } = extractApiError(err)
   const prefix = statusClass(status ?? 0)
