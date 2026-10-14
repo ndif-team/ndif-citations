@@ -425,7 +425,7 @@ ndif-website **Build site into public/** workflow.
 `.venv/bin/pip freeze --exclude-editable | grep -v -E '^(-e |.* @ file:)' > constraints-ci.txt`.
 
 **First pull after this change (every existing checkout, once):** `output/` used to be git-ignored and is now
-tracked, so the first `git pull` silently replaces your local catalog with the committed one. Before pulling:
+tracked, so the first `git pull` silently replaces your local catalog with the committed one. Before pulling **or starting the app** (`serve` pulls automatically when you have no local catalog changes):
 `cp -a output output.bak-$(date +%Y%m%d)`. After pulling, `git status -- output` and `git clean -n -- output/images`
 show files that are only local (old thumbnails); delete them once you're sure, or compare them with the backup.
 
@@ -433,9 +433,13 @@ show files that are only local (old thumbnails); delete them once you're sure, o
 `catalog-conflict-…` branch named in the message, and your local catalog now matches GitHub. Re-apply those edits
 in the app and push again, or ask a maintainer to merge the branch (`git diff main catalog-conflict-… -- output/`).
 
-**"Push catalog" refused ("would lose N of M entries" or "is missing or not a valid JSON"):** nothing was pushed. Inspect with
-`git diff origin/main --stat -- output/`. A gutted file usually means an interrupted write — restore it with
-`git checkout -- output/<file>`; if the loss is intended, push it yourself with git.
+**"Push catalog" refused ("would lose N of M entries" or "is missing or not a valid JSON"):** nothing reached
+GitHub. Inspect with `git diff origin/main --stat -- output/`. If the loss is intended, push it yourself with git.
+If it isn't (a gutted file usually means an interrupted write), restore that file from GitHub and push again:
+`cp output/<file> output/<file>.mine` (keeps your version), then
+`git show origin/main:output/<file> > output/<file>`, re-apply any edits you still need from the `.mine` copy, and
+press **Push catalog** again. For the "would lose" case the refused commit stays in your local history; the next
+push adds the restored file on top of it, so nothing is lost.
 
 **Push catalog says "commit or stash your other changes first":** a tracked non-catalog file changed (e.g. venue
 edits write `data/known_venues.json`). Commit it through a pull request, then push the catalog.
