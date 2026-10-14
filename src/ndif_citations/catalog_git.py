@@ -15,6 +15,7 @@ import logging
 import os
 import subprocess
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -30,9 +31,19 @@ class CatalogPushError(RuntimeError):
     """The catalog could not be pushed safely (message says why / where it was saved)."""
 
 
+@lru_cache(maxsize=None)
+def _ssh_command_configured(repo: str) -> bool:
+    """core.sshCommand set for this repo (or globally)? Looked up once per repo per process."""
+    r = subprocess.run(["git", "-C", repo, "config", "--get", "core.sshCommand"], capture_output=True, text=True)
+    return bool(r.stdout.strip())
+
+
 def _git(repo: Path, *args: str, check: bool = True, env_extra: dict | None = None) -> subprocess.CompletedProcess:
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", **(env_extra or {})}
-    env.setdefault("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")  # an ssh remote fails instead of hanging the app
+    # An ssh remote must fail instead of hanging the app on a prompt, but GIT_SSH_COMMAND would
+    # override the user's own GIT_SSH / core.sshCommand, so only default it when neither is set.
+    if not ({"GIT_SSH_COMMAND", "GIT_SSH"} & env.keys()) and not _ssh_command_configured(str(repo)):
+        env["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes"
     return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=check, env=env)
 
 

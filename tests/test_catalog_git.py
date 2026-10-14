@@ -330,15 +330,34 @@ def test_stray_untracked_image_does_not_block_pull(remote_and_clones):
     assert git(b, "rev-parse", "HEAD") == git(bare, "rev-parse", "main")
 
 
-@pytest.mark.parametrize("preset", [None, "ssh -i /k/deploy"])
-def test_git_never_prompts_for_ssh_or_credentials(monkeypatch, tmp_path, preset):
-    """An ssh remote with no agent/key must fail fast, not hang the app on a passphrase prompt."""
-    if preset is None:
-        monkeypatch.delenv("GIT_SSH_COMMAND", raising=False)
-    else:
-        monkeypatch.setenv("GIT_SSH_COMMAND", preset)
-    seen = {}
-    monkeypatch.setattr(catalog_git.subprocess, "run", lambda *a, **kw: seen.update(kw["env"]))
+@pytest.mark.parametrize("setup, expected", [
+    ({}, "ssh -o BatchMode=yes"),                                   # nothing configured → never prompt
+    ({"env:GIT_SSH_COMMAND": "ssh -i /k/deploy"}, "ssh -i /k/deploy"),
+    ({"env:GIT_SSH": "/usr/local/bin/my-ssh"}, None),               # GIT_SSH_COMMAND would override it
+    ({"config:core.sshCommand": "ssh -i /k/deploy"}, None),         # ditto for the repo's git config
+], ids=["default", "own-command", "git-ssh", "core-sshcommand"])
+def test_git_never_prompts_but_respects_the_users_ssh_setup(monkeypatch, tmp_path, setup, expected):
+    """An ssh remote with no agent/key must fail fast, not hang the app on a passphrase prompt,
+    without overriding however the user already runs ssh."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    for var in ("GIT_SSH_COMMAND", "GIT_SSH"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")  # the dev's ~/.gitconfig must not leak in
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    for k, v in setup.items():
+        kind, name = k.split(":")
+        if kind == "env":
+            monkeypatch.setenv(name, v)
+        else:
+            git(tmp_path, "config", name, v)
+    catalog_git._ssh_command_configured.cache_clear()
+    real, envs = subprocess.run, []
+    monkeypatch.setattr(catalog_git.subprocess, "run", lambda *a, **kw: envs.append(kw.get("env")) or real(*a, **kw))
     catalog_git._git(tmp_path, "status")
-    assert seen["GIT_TERMINAL_PROMPT"] == "0"
-    assert seen["GIT_SSH_COMMAND"] == (preset or "ssh -o BatchMode=yes")  # a user's own setting wins
+    catalog_git._git(tmp_path, "status")
+    env = envs[-1]
+    assert env["GIT_TERMINAL_PROMPT"] == "0"
+    assert env.get("GIT_SSH_COMMAND") == expected
+    # the core.sshCommand lookup (the only call without env=) ran at most once: per-repo cache
+    lookups = envs.count(None)
+    assert lookups == (0 if any(k.startswith("env:") for k in setup) else 1) and len(envs) - lookups == 2
