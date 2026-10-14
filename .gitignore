@@ -12,7 +12,12 @@ output/backups/
 output/runs/
 
 # Output (generated at runtime)
-output/
+output/*
+!output/research-papers-full.json
+!output/research-papers.json
+!output/github-repos-full.json
+!output/github-repos.json
+!output/images/
 debug_output/
 
 # Python
