@@ -1242,8 +1242,9 @@ def extract_bibtex_arxiv_ids(readme_text: str) -> list[str]:
     return result
 
 
-# Grouped addresses may have spaces inside the braces: "{alice, bob}@mit.edu".
-_EMAIL_RE = re.compile(r"(?:\{[^{}@]{1,200}\}|[\w.+-]+)@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}\b")
+# Grouped addresses: a comma list of local parts, spaces allowed ("{alice, bob}@mit.edu"),
+# but not code ("{k: v}@decorator.call").
+_EMAIL_RE = re.compile(r"(?:\{\s*[\w.+-]+(?:\s*,\s*[\w.+-]+)*\s*\}|[\w.+-]+)@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}\b")
 
 
 def redact_emails(text: str) -> str:
