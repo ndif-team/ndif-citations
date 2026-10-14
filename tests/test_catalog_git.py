@@ -119,11 +119,15 @@ def test_same_paper_two_buckets_leaves_conflict_branch(remote_and_clones, caplog
     catalog_git.push_catalog(a, "bot publishes 2")
     bot_sha = git(bare, "rev-parse", "main")
     _move(b, seed_b, "2401.00002", Bucket.DISCARDED)
-    with pytest.raises(catalog_git.CatalogPushError, match="catalog-conflict-"):
+    with pytest.raises(catalog_git.CatalogPushError, match="catalog-conflict-") as exc:
         catalog_git.push_catalog(b, "curator discards 2")
     assert "new duplicate keys" in caplog.text
     conflict = [br.strip() for br in git(b, "branch").splitlines() if br.strip().startswith("catalog-conflict-")]
     assert len(conflict) == 1
+    msg = str(exc.value)  # ALL unpushed commits moved, not just the conflicting edit
+    assert f"ALL your unpushed catalog commits were moved to branch {conflict[0]!r}" in msg
+    assert "local main now matches origin/main" in msg and "re-apply all of those edits" in msg
+    assert "ask a maintainer to merge the branch" in msg
     assert git(b, "rev-parse", "HEAD") == git(b, "rev-parse", "origin/main")  # local main reset to remote
     # nothing was pushed: the remote still holds exactly the bot's commit and catalog
     assert git(bare, "rev-parse", "main") == bot_sha

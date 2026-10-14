@@ -265,8 +265,9 @@ def push_catalog(repo: Path, message: str, *, push_conflict_branch: bool = False
         if not _rebase_onto(repo, remote, branch):
             name = _save_conflict_branch(repo, remote, branch, push_conflict_branch)
             raise CatalogPushError(
-                f"catalog changes conflict with {remote}/{branch}; your commit is saved on branch {name!r} "
-                f"and the catalog now shows the latest {remote}/{branch} — redo the conflicting edits"
+                f"catalog changes conflict with {remote}/{branch}. ALL your unpushed catalog commits were moved "
+                f"to branch {name!r} and local {branch} now matches {remote}/{branch}, so the catalog no longer "
+                f"shows any of those edits — re-apply all of those edits (or ask a maintainer to merge the branch)."
             )
         if _ahead(repo, f"{remote}/{branch}") == 0:
             return {"pushed": False, "commit": None, "conflict_branch": None,
