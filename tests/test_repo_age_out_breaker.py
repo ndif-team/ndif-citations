@@ -48,3 +48,21 @@ def test_age_out_is_relative_to_previous_run_not_today():
     # Previous run was 120 days ago: b is 5d older (kept), c is 40d older (aged out).
     merged = merge_repos([], [a, b, c])
     assert {r.repo for r in merged} == {"a", "b"}
+
+
+def _ago(days):
+    return (date.today() - timedelta(days=days)).isoformat()
+
+
+def test_future_dated_last_seen_does_not_age_out_the_others():
+    a, b, c = (make_repo(owner="o", repo=n) for n in "abc")
+    a.last_seen, b.last_seen, c.last_seen = _ago(5), _ago(6), _ago(-100)  # c: clock skew / bad edit
+    merged = merge_repos([], [a, b, c])
+    assert {"a", "b"} <= {r.repo for r in merged}  # reference is capped at today, not 100 days ahead
+
+
+def test_one_malformed_last_seen_does_not_reset_the_reference_to_today():
+    a, b, c = (make_repo(owner="o", repo=n) for n in "abc")
+    a.last_seen, b.last_seen, c.last_seen = _ago(120), _ago(125), "not-a-date"
+    merged = merge_repos([], [a, b, c])
+    assert {r.repo for r in merged} == {"a", "b"}  # previous run = 120d ago; c (bad data) ages out

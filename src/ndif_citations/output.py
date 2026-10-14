@@ -253,11 +253,13 @@ def merge_repos(
     # Age relative to the previous run, not the wall clock: after a long gap between runs
     # (the catalog sat 4 months before the Phase 1 rollout), one missed scrape must not drop a
     # repo that is still in use (callummcdougall/ARENA_3.0 was lost that way).
-    seen = [r.last_seen for r in existing if r.last_seen]
-    try:
-        ref_date = date.fromisoformat(max(seen)) if seen else today_date
-    except ValueError:
-        ref_date = today_date
+    seen = []
+    for r in existing:
+        try:
+            seen.append(date.fromisoformat(r.last_seen))
+        except (TypeError, ValueError):
+            pass  # one malformed value must not reset the whole catalog to "today"
+    ref_date = min(max(seen), today_date) if seen else today_date  # a future date can't age others out
     stale: list[DiscoveredRepo] = []
     for existing_repo in existing:
         key = existing_repo.merge_key()
