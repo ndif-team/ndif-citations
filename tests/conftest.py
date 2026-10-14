@@ -18,6 +18,13 @@ def no_sleep(monkeypatch):
     monkeypatch.setattr("ndif_citations.utils.time.sleep", lambda s: None)
 
 
+@pytest.fixture(autouse=True)
+def _auto_publish_rules_on(monkeypatch):
+    """Config reads AUTO_PUBLISH_RULES at import; keep tests independent of the dev's env/.env."""
+    from ndif_citations import config
+    monkeypatch.setattr(config, "AUTO_PUBLISH_RULES", True)
+
+
 @pytest.fixture()
 def fixture_state(tmp_path: Path) -> Path:
     """Copy the mini fixture files into a fresh tmp_path/output tree.
@@ -126,3 +133,26 @@ def make_repo(
     if content_hash:
         r.content_hash = content_hash
     return r
+
+
+@pytest.fixture(autouse=True)
+def _fresh_llm_breaker():
+    """The LLM circuit-breaker counter is module-global; start and end every test at zero."""
+    from ndif_citations import process
+    process._reset_llm_failures()
+    yield
+    process._reset_llm_failures()
+
+
+@pytest.fixture(autouse=True)
+def _no_live_key_checks(request, monkeypatch):
+    """Preflight now live-checks the LLM and GitHub token; keep every test offline.
+
+    test_key_validation.py exercises the real functions (with mocked requests), so it's exempt.
+    Tests that need a failing check override this with their own monkeypatch.
+    """
+    if request.module.__name__.endswith("test_key_validation"):
+        return
+    ok = lambda *a, **k: {"ok": True, "detail": "stubbed"}  # noqa: E731
+    monkeypatch.setattr("ndif_citations.key_validation.test_llm", ok)
+    monkeypatch.setattr("ndif_citations.key_validation.test_github", ok)

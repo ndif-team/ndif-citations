@@ -27,13 +27,13 @@ class TestClassifyBandPath:
 
     def test_no_pdf_no_keywords_in_abstract_is_none(self, tmp_path):
         paper = make_paper(abstract="Totally unrelated abstract about cats.")
-        cat, conf, band = classify_category(paper, tmp_path, pdf_path=None)
+        cat, conf, band = classify_category(paper, tmp_path, pdf_path=tmp_path / "missing.pdf")
         assert cat == Category.UNCLASSIFIED
         assert band == Confidence.NONE
 
     def test_no_pdf_no_abstract_is_none(self, tmp_path):
         paper = make_paper(abstract=None)
-        cat, conf, band = classify_category(paper, tmp_path, pdf_path=None)
+        cat, conf, band = classify_category(paper, tmp_path, pdf_path=tmp_path / "missing.pdf")
         assert cat == Category.UNCLASSIFIED
         assert band == Confidence.NONE
 

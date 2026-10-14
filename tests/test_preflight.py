@@ -68,3 +68,21 @@ def test_validate_default_off_is_presence_only(monkeypatch):
                         lambda t: (_ for _ in ()).throw(AssertionError("should not validate")))
     r = preflight.preflight(skip_papers=True, skip_github=False)
     assert r["ok"] is True
+
+
+def test_validate_llm_blocks_when_check_fails(monkeypatch):
+    monkeypatch.setenv("LLM_API_KEY", "x")
+    monkeypatch.setattr("ndif_citations.key_validation.test_llm",
+                        lambda *a, **k: {"ok": False, "detail": "HTTP 410"})
+    r = preflight.preflight(skip_papers=False, skip_github=True, validate_llm=True)
+    assert r["ok"] is False
+    assert any(b.startswith("LLM check failed (HTTP 410)") for b in r["blocking"])
+
+
+def test_validate_llm_off_by_default(monkeypatch):
+    monkeypatch.setenv("LLM_API_KEY", "x")
+    calls = []
+    monkeypatch.setattr("ndif_citations.key_validation.test_llm",
+                        lambda *a, **k: calls.append(1) or {"ok": False, "detail": "x"})
+    assert preflight.preflight(skip_papers=False, skip_github=True)["ok"] is True
+    assert calls == []

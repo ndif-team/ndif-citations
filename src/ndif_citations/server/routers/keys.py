@@ -58,7 +58,8 @@ def delete_key(key: str, _guard: None = Depends(deps.require_no_active_run)) -> 
 def test_key(body: TestReq) -> dict:
     p = body.provider
     if p == "llm":
-        return key_validation.test_llm(config.LLM_BASE_URL, os.environ.get("LLM_API_KEY", ""), config.LLM_MODEL)
+        return key_validation.test_llm(config.LLM_BASE_URL, os.environ.get("LLM_API_KEY", ""),
+                                       config.LLM_MODEL, config.LLM_EXTRA_BODY)
     if p == "github":
         return key_validation.test_github(os.environ.get("GITHUB_TOKEN", ""))
     if p == "s2":

@@ -8,7 +8,9 @@ import shutil
 from datetime import date, datetime
 from pathlib import Path
 
-from ndif_citations.models import Bucket, Category, DiscoveredPaper, DiscoveredRepo, PaperReason, PipelineRun
+from ndif_citations.models import (
+    Bucket, Category, Confidence, DiscoveredPaper, DiscoveredRepo, PaperReason, PipelineRun,
+)
 from ndif_citations.utils import is_duplicate
 
 logger = logging.getLogger(__name__)
@@ -22,6 +24,16 @@ def _today() -> date:
 # ---------------------------------------------------------------------------
 # Load existing data
 # ---------------------------------------------------------------------------
+
+def _derive_processing_flags(paper: DiscoveredPaper) -> None:
+    """Recompute has_* from the data on load — stored flags drift (2026-10 audit:
+    111 papers had an image but has_thumbnail=False), which sent ~140 papers to
+    FILL_GAPS on every run."""
+    paper.has_summary = bool(paper.description)
+    paper.has_thumbnail = bool(paper.image)
+    paper.has_affiliations = bool(paper.affiliations)
+    paper.has_classification = paper.category != Category.UNCLASSIFIED
+
 
 def load_existing_papers(output_dir: Path) -> list[DiscoveredPaper]:
     """Load existing papers from the full JSON file.
@@ -55,6 +67,7 @@ def load_existing_papers(output_dir: Path) -> list[DiscoveredPaper]:
             for item in data[bucket_key]:
                 try:
                     paper = DiscoveredPaper.model_validate(item)
+                    _derive_processing_flags(paper)
                     papers.append(paper)
                 except Exception as e:
                     logger.warning(f"Failed to parse existing paper: {e}")
@@ -157,7 +170,9 @@ def merge_papers(existing: list[DiscoveredPaper],
                 updated_count += 1
 
             # Auto-recovery / auto-demotion: re-evaluate bucket unless manual_override
-            if not existing_paper.manual_override:
+            # Discards stick: _decide_bucket can't see why a paper was discarded
+            # (e.g. zero PDF hits), so re-deciding would resurrect it every run.
+            if not existing_paper.manual_override and existing_paper.bucket != Bucket.DISCARDED:
                 from ndif_citations.process import _decide_bucket
                 new_bucket, new_reason = _decide_bucket(existing_paper)
                 old_bucket = existing_paper.bucket
@@ -315,6 +330,36 @@ def _update_existing(existing: DiscoveredPaper, new: DiscoveredPaper) -> bool:
     # Never overwrite manually edited fields
     if existing.manual_override:
         return False
+
+    # Fill gaps from this run's processing (FILL_GAPS/REPROCESS results used to be
+    # discarded here). Only empty fields are filled; curated values are never replaced.
+    if new.description and not existing.description:
+        existing.description = new.description
+        existing.has_summary = True
+        changed = True
+    # (Images need no adoption: write_outputs re-links image for every existing PNG.)
+    # A zero-hit auto-discard of the re-processed copy applies to the pending original.
+    if (new.bucket == Bucket.DISCARDED and new.reason == PaperReason.ZERO_PDF_HITS
+            and existing.bucket == Bucket.PENDING):
+        existing.bucket = Bucket.DISCARDED
+        existing.reason = new.reason
+        existing.reason_detail = new.reason_detail
+        changed = True
+    # Adopt a classification only if classification actually RAN this run: a paper whose
+    # processing stopped early still carries the model default (REFERENCING, band NONE).
+    classified_now = bool(new.classification_signal) and new.category_confidence_band != Confidence.NONE
+    if (existing.category == Category.UNCLASSIFIED and new.category != Category.UNCLASSIFIED
+            and classified_now):
+        for field in ("category", "category_confidence", "category_confidence_band",
+                      "classification_signal", "unclassified_reason",
+                      "ndif_context_windows", "context_source"):
+            setattr(existing, field, getattr(new, field))
+        existing.has_classification = True
+        changed = True
+    elif not existing.ndif_context_windows and new.ndif_context_windows:
+        existing.ndif_context_windows = new.ndif_context_windows
+        existing.context_source = new.context_source
+        changed = True
 
     # Update API-sourced fields if they've improved
     if new.authors and len(new.authors) > len(existing.authors):

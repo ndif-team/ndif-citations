@@ -49,3 +49,23 @@ def test_post_runs_blocked_without_required_key(client, monkeypatch):
     r = client.post("/api/runs", json={"mode": "incremental", "skip_papers": False, "skip_github": True})
     assert r.status_code == 422
     assert "LLM_API_KEY" in r.text
+
+
+def test_post_runs_blocks_when_llm_check_fails(monkeypatch, fixture_state):
+    from fastapi.testclient import TestClient
+    from ndif_citations.server import deps
+    from ndif_citations.server.app import create_app
+    monkeypatch.setenv("LLM_API_KEY", "x")
+    monkeypatch.setenv("GITHUB_TOKEN", "t")
+    monkeypatch.setattr("ndif_citations.key_validation.test_llm",
+                        lambda *a, **k: {"ok": False, "detail": "HTTP 410"})
+    class _NoRun:  # never launch a real (networked) run
+        def start(self, *a, **k):
+            raise AssertionError("run must not start")
+
+    app = create_app()
+    app.dependency_overrides[deps.get_output_dir] = lambda: fixture_state
+    app.dependency_overrides[deps.get_runner] = lambda: _NoRun()
+    resp = TestClient(app).post("/api/runs", json={"mode": "incremental", "skip_github": True})
+    assert resp.status_code == 422
+    assert any("LLM check failed" in b for b in resp.json()["detail"]["blocking"])

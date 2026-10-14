@@ -56,6 +56,7 @@ def test_cli_run_matches_golden(monkeypatch, tmp_path):
     report.) Both reach the identical fakes; only the patch target differs because
     the orchestrator binds the names eagerly.
     """
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
     install_pipeline_fakes(monkeypatch, orchestrator)
     # The golden was captured under legacy auto-verify; keep it enabled so this
     # parity check stays about CLI==orchestrator, not the bucket policy.

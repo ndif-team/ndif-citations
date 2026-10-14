@@ -18,6 +18,7 @@ from ndif_citations.utils import (
     download_pdf,
     extract_ndif_context,
     extract_text_from_pdf,
+    find_mentions,
     rate_limit_sleep,
     slugify,
 )
@@ -41,6 +42,48 @@ def _get_llm_client():
         base_url=config.LLM_BASE_URL,
         api_key=config.LLM_API_KEY,
     )
+
+
+class LLMUnavailableError(RuntimeError):
+    """LLM_FAILURE_LIMIT consecutive LLM call failures — abort the run, write nothing."""
+
+
+LLM_FAILURE_LIMIT = 3
+_consecutive_llm_failures = 0
+
+
+def _reset_llm_failures() -> None:
+    global _consecutive_llm_failures
+    _consecutive_llm_failures = 0
+
+
+def _record_llm_failure(context: str, err: Exception) -> None:
+    """Count a failed LLM call; raise LLMUnavailableError once the limit is reached.
+
+    Called from inside an ``except`` block, so the raise is NOT swallowed by it.
+    """
+    global _consecutive_llm_failures
+    _consecutive_llm_failures += 1
+    if _consecutive_llm_failures >= LLM_FAILURE_LIMIT:
+        raise LLMUnavailableError(
+            f"{_consecutive_llm_failures} consecutive LLM failures (last: {context}: {err}) — "
+            f"model {config.LLM_MODEL} at {config.LLM_BASE_URL}"
+        ) from err
+
+
+def _llm_text(client, messages: list[dict], *, temperature: float, max_tokens: int) -> str:
+    """One chat completion with the configured model + extra body. Empty reply raises."""
+    response = client.chat.completions.create(
+        model=config.LLM_MODEL,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        extra_body=config.LLM_EXTRA_BODY or None,
+    )
+    content = response.choices[0].message.content
+    if not content or not content.strip():
+        raise ValueError("empty LLM reply (reasoning model? check llm_extra_body)")
+    return content.strip()
 
 
 # ---------------------------------------------------------------------------
@@ -123,21 +166,22 @@ def generate_summary(paper: DiscoveredPaper) -> str:
         return _fallback_summary(paper.abstract)
 
     try:
-        response = client.chat.completions.create(
-            model=config.LLM_MODEL,
-            messages=[
+        summary = _llm_text(
+            client,
+            [
                 {"role": "system", "content": SUMMARY_SYSTEM_PROMPT},
                 {"role": "user", "content": f"Summarize this abstract:\n\n{paper.abstract}"},
             ],
             temperature=0.3,
             max_tokens=200,
         )
-        summary = response.choices[0].message.content.strip()
+        _reset_llm_failures()
         rate_limit_sleep(config.LLM_RATE_LIMIT_SLEEP, "LLM summary")
         return summary
 
     except Exception as e:
         logger.warning(f"LLM summary failed for '{paper.title}': {e}")
+        _record_llm_failure(f"summary '{paper.title[:40]}'", e)
         return _fallback_summary(paper.abstract)
 
 
@@ -348,19 +392,27 @@ def compute_context(
         from ndif_citations.pdf_cache import get_cached_pdf as _get_cached_pdf
         pdf_path = _get_cached_pdf(paper, out)
 
+    have_pdf = bool(pdf_path and pdf_path.exists())
+
+    # Never downgrade evidence: with no PDF available now (e.g. a cloud run without
+    # the local PDF cache), reuse the full-text windows extracted earlier.
+    if not have_pdf and paper.context_source == "pdf":
+        windows = list(paper.ndif_context_windows or [])
+        signal = paper.classification_signal or ""
+        return windows, "pdf", (None if windows else (signal if signal.startswith("pre_filter:") else None))
+
     context = ""
     context_source = "none"
 
-    if pdf_path and pdf_path.exists():
+    if have_pdf:
         context = extract_ndif_context(pdf_path, window=config.CONTEXT_WINDOW)
         logger.debug(f"PDF text extracted for '{paper.title}': context length={len(context)}")
 
-    # If no PDF context, try using abstract
-    if not context or "No direct mentions" in context:
+    no_pdf_context = (not context or context.startswith("No direct mentions")
+                      or context.startswith("No text could be extracted"))
+    if no_pdf_context:
         if paper.abstract:
-            abstract_lower = paper.abstract.lower()
-            has_mention = any(kw.lower() in abstract_lower for kw in config.NDIF_KEYWORDS)
-            if has_mention:
+            if find_mentions(paper.abstract):
                 context = paper.abstract
                 context_source = "abstract"
                 logger.debug(f"Using abstract as context for '{paper.title}'")
@@ -473,13 +525,8 @@ def classify_category(
                 f"{context if context and 'No direct mentions' not in context else 'No direct mentions found in available text.'}"
             )},
         ]
-        response = client.chat.completions.create(
-            model=config.LLM_MODEL,
-            messages=messages,
-            temperature=0.1,
-            max_tokens=20,
-        )
-        raw = response.choices[0].message.content.strip().lower()
+        raw = _llm_text(client, messages, temperature=0.1, max_tokens=20).lower()
+        _reset_llm_failures()
         logger.debug(f"LLM raw reply for '{paper.title}': {raw!r}")
         rate_limit_sleep(config.LLM_RATE_LIMIT_SLEEP, "LLM classify")
 
@@ -513,6 +560,7 @@ def classify_category(
         return cat, _BAND_TO_FLOAT[band], band
 
     except Exception as e:
+        _record_llm_failure(f"classify '{paper.title[:40]}'", e)
         logger.warning(f"LLM classification failed for '{paper.title}': {e}")
         cat = _fallback_classification(context)
         paper.classification_signal = "keyword_fallback"
@@ -743,6 +791,27 @@ def extract_thumbnail(paper: DiscoveredPaper, output_dir: Path,
 # Bucket decision helpers (US-D2, US-D3)
 # ---------------------------------------------------------------------------
 
+def _passes_auto_publish_rule(paper: DiscoveredPaper) -> bool:
+    """High-confidence auto-publish gate (spec §4.7). USES_NDIF always needs a human.
+
+    Requires full-PDF evidence and a HIGH/CERTAIN band; then REFERENCING passes (its
+    worst case is under-claiming), and USES_NNSIGHT passes only when the LLM said so
+    AND the evidence contains an explicit usage phrase.
+    """
+    if not config.AUTO_PUBLISH_RULES:
+        return False
+    if paper.context_source != "pdf":
+        return False
+    if paper.category_confidence_band not in (Confidence.HIGH, Confidence.CERTAIN):
+        return False
+    if paper.category == Category.REFERENCING:
+        return True
+    if paper.category == Category.USES_NNSIGHT and paper.classification_signal == "llm":
+        text = " ".join(" ".join(paper.ndif_context_windows or []).lower().split())
+        return any(phrase in text for phrase in config.AUTO_PUBLISH_PHRASES)
+    return False
+
+
 def _decide_bucket(paper: DiscoveredPaper) -> tuple[Bucket, Optional[PaperReason]]:
     """Return (bucket, reason) for a paper based on ordered demotion rules.
 
@@ -752,7 +821,8 @@ def _decide_bucket(paper: DiscoveredPaper) -> tuple[Bucket, Optional[PaperReason
     3. medium_confidence — band == MEDIUM
     4. low_confidence    — band == LOW
 
-    Papers with band CERTAIN or HIGH pass through to VERIFIED.
+    Papers with band CERTAIN or HIGH pass through to VERIFIED when AUTO_VERIFY is on, or
+    (pipeline papers) when the auto-publish rule passes.
     """
     has_any_identifier = bool(
         paper.arxiv_id or paper.doi or paper.s2_paper_id
@@ -777,13 +847,33 @@ def _decide_bucket(paper: DiscoveredPaper) -> tuple[Bucket, Optional[PaperReason
         return Bucket.PENDING, PaperReason.LOW_CONFIDENCE
 
     # HIGH/CERTAIN. Auto-verify only when explicitly enabled; otherwise hold in
-    # pending for a curator to verify (nothing gets verified without a human).
+    # pending for a curator to verify (only the auto-publish rule can verify a
+    # pipeline paper; USES_NDIF always waits for a human).
     # Curator-set papers (manual_override) keep their verified decision — the
     # hold is only for pipeline-classified papers.
     if not config.AUTO_VERIFY and not paper.manual_override:
+        if _passes_auto_publish_rule(paper):
+            return Bucket.VERIFIED, None
         return Bucket.PENDING, PaperReason.NEEDS_REVIEW
 
     return Bucket.VERIFIED, None
+
+
+def _bucket_after_edit(paper: DiscoveredPaper) -> tuple[Bucket, Optional[PaperReason]]:
+    """(bucket, reason) after a curator's metadata edit (spec §4.5, §4.7): an edit never publishes.
+
+    Verified/discarded decisions stand, except that a verified paper edited to UNCLASSIFIED
+    goes back to pending (the site never shows "unclassified"). A pending paper stays
+    pending; only its reason is refreshed (e.g. stub_metadata clears once the year is fixed).
+    Never trust a lock-time band here: models.model_post_init forces CERTAIN on every
+    locked paper at load.
+    """
+    if paper.bucket == Bucket.VERIFIED and paper.category == Category.UNCLASSIFIED:
+        return _decide_bucket(paper)  # always PENDING for UNCLASSIFIED
+    if paper.bucket != Bucket.PENDING:
+        return paper.bucket, paper.reason
+    bucket, reason = _decide_bucket(paper)
+    return Bucket.PENDING, (reason if bucket == Bucket.PENDING else PaperReason.NEEDS_REVIEW)
 
 
 def _check_discard_zero_pdf_hits(paper: DiscoveredPaper, pdf_path: Optional[Path]) -> bool:
@@ -803,10 +893,8 @@ def _check_discard_zero_pdf_hits(paper: DiscoveredPaper, pdf_path: Optional[Path
     if len(text) < 1000:
         return False
 
-    text_lower = text.lower()
-    for kw in config.NDIF_KEYWORDS:
-        if kw.lower() in text_lower:
-            return False
+    if find_mentions(text):
+        return False
 
     # All keywords checked, zero matches in a substantial PDF
     kw_list = ", ".join(config.NDIF_KEYWORDS[:5]) + ("..." if len(config.NDIF_KEYWORDS) > 5 else "")
@@ -838,6 +926,7 @@ def process_papers(
     """
     from ndif_citations.pdf_cache import get_cached_pdf
 
+    _reset_llm_failures()
     logger.info(f"Processing {len(decisions)} papers (skip_llm={skip_llm})...")
 
     # Ensure cache directories exist
@@ -921,6 +1010,15 @@ def process_papers(
             paper.url = existing.url or paper.url
             paper.pdf_url = existing.pdf_url or paper.pdf_url
             paper.manual_override = True
+
+        # Never downgrade evidence (spec §4.2): decision.paper is the freshly discovered
+        # copy (context_source "none"), so hand it the stored PDF evidence. With no PDF
+        # this run, compute_context then reuses it instead of falling back to the abstract.
+        ex = decision.existing_paper
+        if ex is not None and paper.context_source == "none" and ex.context_source == "pdf":
+            paper.context_source = "pdf"
+            paper.ndif_context_windows = list(ex.ndif_context_windows or [])
+            paper.classification_signal = ex.classification_signal
 
         # Get PDF path if needed for classification, thumbnail, or affiliations
         pdf_path = None

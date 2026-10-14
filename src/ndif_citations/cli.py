@@ -119,6 +119,15 @@ def run(output_dir: str | None, fresh: bool, skip_github: bool, skip_papers: boo
         console.print("[bold red]Error:[/bold red] --skip-github and --skip-papers cannot both be set (nothing to do)")
         raise SystemExit(1)
 
+    from ndif_citations.preflight import preflight
+    pf = preflight(skip_papers=skip_papers, skip_github=skip_github, validate=True, validate_llm=True)
+    for w in pf["warnings"]:
+        console.print(f"[yellow]Warning:[/yellow] {w}")
+    if not pf["ok"]:
+        for b in pf["blocking"]:
+            console.print(f"[bold red]Blocked:[/bold red] {b}")
+        raise SystemExit(1)
+
     from ndif_citations import events, orchestrator
     from ndif_citations.output import print_report
 
@@ -433,7 +442,7 @@ def reclassify(ids: str | None, output_dir: str | None, dry_run: bool) -> None:
     Useful to apply new pre-filter fixes to already-classified papers.
     Papers with manual_override=True are skipped.
     """
-    from ndif_citations.models import Category
+    from ndif_citations.models import Bucket, Category, PaperReason
     from ndif_citations.output import load_existing_papers, write_outputs
     from ndif_citations.pdf_cache import get_cached_pdf
     from ndif_citations.process import classify_category
@@ -513,6 +522,11 @@ def reclassify(ids: str | None, output_dir: str | None, dry_run: bool) -> None:
                 paper.category_confidence = new_conf
                 paper.category_confidence_band = new_band
                 paper.has_classification = new_cat != Category.UNCLASSIFIED
+                if paper.bucket == Bucket.VERIFIED and new_cat.value != old_cat:
+                    # A published category (above all uses_ndif) never changes without a human.
+                    paper.bucket, paper.reason = Bucket.PENDING, PaperReason.NEEDS_REVIEW
+                    paper.reason_detail = f"re-classified: {old_cat} → {new_cat.value}"
+                    paper.manual_override = True  # lock, like reprocess: the next merge must not re-publish it
 
     # Print diff
     if changes:
@@ -914,7 +928,7 @@ def edit(paper_id: str, output_dir: str | None,
     from ndif_citations.edit_schema import EDITABLE_FIELDS, get_field
     from ndif_citations.models import Category, PipelineRun
     from ndif_citations.output import load_existing_papers, write_outputs
-    from ndif_citations.process import _decide_bucket
+    from ndif_citations.process import _bucket_after_edit
 
     out = config.get_output_dir(output_dir)
     papers = load_existing_papers(out)
@@ -1005,12 +1019,9 @@ def edit(paper_id: str, output_dir: str | None,
     paper.has_affiliations = bool(paper.affiliations)
     paper.manual_override = True
 
-    # Re-run _decide_bucket if user didn't explicitly set bucket
+    # Bucket safety (spec §4.5): an edit never publishes. An explicit bucket edit wins.
     if not any(name == "bucket" for name, _, _ in changes):
-        new_bucket, new_reason = _decide_bucket(paper)
-        if new_bucket != paper.bucket:
-            paper.bucket = new_bucket
-            paper.reason = new_reason
+        paper.bucket, paper.reason = _bucket_after_edit(paper)
 
     # Print diff
     console.print("\n[bold]Summary of changes:[/bold]")

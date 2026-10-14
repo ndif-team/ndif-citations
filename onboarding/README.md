@@ -79,7 +79,7 @@ The app talks to a few outside services. You'll paste these keys into the app on
 
 | Key | What it's for | Required? | Where to get it |
 |---|---|---|---|
-| **LLM API Key** | Classifies + summarizes papers (the AI part) | **Required** to process papers | An OpenAI-compatible provider. This project defaults to **NVIDIA NIM** (`integrate.api.nvidia.com`, model `meta/llama-3.1-70b-instruct`) — get a key at [build.nvidia.com](https://build.nvidia.com). Any OpenAI-compatible endpoint works; set the Base URL + Model in **Settings → Pipeline settings**. |
+| **LLM API Key** | Classifies + summarizes papers (the AI part) | **Required** to process papers | An OpenAI-compatible provider. This project defaults to **NVIDIA NIM** (`integrate.api.nvidia.com`, model `nvidia/nemotron-3-super-120b-a12b`) — get a key at [build.nvidia.com](https://build.nvidia.com). Any OpenAI-compatible endpoint works; set the Base URL + Model in **Settings → Pipeline settings**. |
 | **GitHub Token** | Discovers + reads repos that depend on NNsight | **Required** to discover repos | A GitHub Personal Access Token: [github.com/settings/tokens](https://github.com/settings/tokens) → *Generate new token*. Public-repo read access is enough. (Anonymous GitHub is ~60 requests/hour — far too few.) |
 | **S2 API Key** | Higher-rate Semantic Scholar discovery | Optional (just raises limits) | [semanticscholar.org/product/api](https://www.semanticscholar.org/product/api) |
 | **SerpAPI Key** | Google Scholar discovery | Optional | [serpapi.com](https://serpapi.com) |
@@ -236,7 +236,7 @@ When you open a paper you'll see a few labels. Here's how to read them.
 
 | Bucket | Meaning |
 |---|---|
-| **Verified** | Reviewed and good. **Only Verified papers publish to the website**, and **only you** put a paper here — the pipeline never auto-verifies. |
+| **Verified** | Reviewed and good. **Only Verified papers publish to the website.** The pipeline auto-verifies just two kinds of paper, both with full-PDF evidence: ones the model calls *referencing*, and *uses_nnsight* ones whose text explicitly says it used NNsight (e.g. "we use nnsight"). Anything claiming NDIF use (the public "NDIF-supported" badge) always waits for you. Set `AUTO_PUBLISH_RULES=0` to turn auto-verify off. |
 | **Pending** | Needs your attention — every freshly-processed paper, plus anything low-confidence or missing data. Your work queue. |
 | **Discarded** | Not relevant. Kept for the record, never published. |
 

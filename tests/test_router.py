@@ -9,6 +9,7 @@ from ndif_citations.router import (
     route_papers,
     route_repos,
 )
+from ndif_citations.models import Bucket, Category
 from tests.conftest import make_paper, make_repo
 
 
@@ -181,6 +182,30 @@ class TestRoutePapers:
 
 # ---------------------------------------------------------------------------
 # route_repos
+    # -- discards stick (spec §4.5) ------------------------------------------
+    @staticmethod
+    def _rediscover_with_gaps(**existing_kw):
+        existing = make_paper(arxiv_id="2407.00009", description="", **existing_kw)
+        p = make_paper(arxiv_id="2407.00009")
+        p.content_hash = existing.content_hash
+        return route_papers([p], [existing])[0]
+
+    def test_locked_discarded_unclassified_is_protected(self):
+        d = self._rediscover_with_gaps(
+            bucket=Bucket.DISCARDED, category=Category.UNCLASSIFIED, manual_override=True)
+        assert d.bucket == ProcessingBucket.PROTECTED
+        assert not any(d.processing_needed.values())
+
+    def test_unlocked_discarded_is_skip(self):
+        d = self._rediscover_with_gaps(bucket=Bucket.DISCARDED, category=Category.UNCLASSIFIED)
+        assert d.bucket == ProcessingBucket.SKIP
+        assert not any(d.processing_needed.values())
+
+    def test_unlocked_pending_with_gaps_still_fills_gaps(self):
+        d = self._rediscover_with_gaps(bucket=Bucket.PENDING, category=Category.UNCLASSIFIED)
+        assert d.bucket == ProcessingBucket.FILL_GAPS
+
+
 # ---------------------------------------------------------------------------
 
 class TestRouteRepos:

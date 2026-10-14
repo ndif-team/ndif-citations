@@ -25,6 +25,7 @@ _TRACKED_ATTRS = [
     "NDIF_README_KEYWORDS_SUBSTR",
     "NDIF_README_NEGATIVE_PATTERNS",
     "LLM_MODEL",
+    "LLM_EXTRA_BODY",
     "LLM_BASE_URL",
     "SHARED_PAPER_THRESHOLD",
     "LLM_API_KEY",
@@ -346,7 +347,7 @@ def test_defaults_sync_with_config_course_name_patterns():
 
 def test_defaults_sync_with_config_llm_model():
     """DEFAULTS llm_model must equal the config hardcoded LLM_MODEL default."""
-    assert settings_store.DEFAULTS["llm_model"] == "meta/llama-3.1-70b-instruct"
+    assert settings_store.DEFAULTS["llm_model"] == config.DEFAULT_LLM_MODEL
 
 
 def test_defaults_sync_with_config_llm_base_url():

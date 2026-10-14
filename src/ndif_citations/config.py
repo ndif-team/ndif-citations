@@ -34,12 +34,24 @@ SEED_OPENREVIEW_ID = "MxbEiFRf39"  # ICLR 2025
 # the stub_metadata bucket where a human can review them.
 MIN_PAPER_YEAR = 2024
 
-# When False, the pipeline never moves a paper to `verified` on its own —
-# even a HIGH/CERTAIN classification lands in `pending` (reason=needs_review)
-# for a curator to verify explicitly (from the run Results panel or Papers
-# page). When True, HIGH/CERTAIN classifications auto-verify (legacy behavior).
+# When False, a HIGH/CERTAIN classification lands in `pending` (reason=needs_review)
+# for a curator to verify (from the run Results panel or Papers page), except that
+# the auto-publish rule (process._passes_auto_publish_rule, kill switch
+# AUTO_PUBLISH_RULES) can verify a pipeline paper; USES_NDIF always waits for a
+# human. When True, HIGH/CERTAIN classifications auto-verify (legacy behavior).
 # Existing curator-set verified papers are never demoted by this policy.
 AUTO_VERIFY = False
+
+# Phrases that, inside FULL-PDF evidence, mark genuine NNsight USE (spec §4.7).
+# Measured 2026-10-10 on the 102 human-labeled papers: 54 matches, 0 wrong,
+# covering 48/69 uses_nnsight. Deliberately excluded because they appear in
+# related-work prose: "nnsight (fiotto", "rely on nnsight", "ndif.us".
+AUTO_PUBLISH_PHRASES: list[str] = [
+    "import nnsight", "nnsight.trace", "from nnsight", "nnsight backend", "nnsight library",
+    "using nnsight", "using the nnsight", "use nnsight", "used nnsight", "use the nnsight",
+    "used the nnsight", "via nnsight", "through nnsight", "implemented with nnsight",
+    "implemented using nnsight", "employ nnsight", "built on nnsight",
+]
 
 # Exactly match these full lowercase titles to drop them from discovery (the origin papers themselves)
 EXCLUDED_PAPER_TITLES = {
@@ -100,10 +112,40 @@ UNPAYWALL_RATE_LIMIT_SLEEP = 0.1  # ~10 req/sec (100K/day limit)
 # ---------------------------------------------------------------------------
 # LLM (OpenAI-compatible)
 # ---------------------------------------------------------------------------
-LLM_BASE_URL: str = os.environ.get("LLM_BASE_URL", "https://integrate.api.nvidia.com/v1")
+def _env_or(name: str, default: str) -> str:
+    """Env var value, treating unset AND empty (Actions passes unset vars as "") as default."""
+    return os.environ.get(name) or default
+
+
+def _parse_extra_body(raw: str | None) -> dict:
+    """LLM_EXTRA_BODY: unset/empty → NVIDIA thinking-off default; "{}" → no extra body."""
+    if not raw:
+        return {"chat_template_kwargs": {"enable_thinking": False}}
+    value = json.loads(raw)
+    if not isinstance(value, dict):
+        raise ValueError(f"LLM_EXTRA_BODY must be a JSON object, got {type(value).__name__}")
+    return value
+
+
+def _parse_bool_env(raw: str | None, default: bool) -> bool:
+    if raw is None or raw.strip() == "":
+        return default
+    return raw.strip().lower() not in ("0", "false", "no", "off")
+
+
+DEFAULT_LLM_BASE_URL = "https://integrate.api.nvidia.com/v1"
+DEFAULT_LLM_MODEL = "nvidia/nemotron-3-super-120b-a12b"  # free; reasoning model → needs extra body below
+
+LLM_BASE_URL: str = _env_or("LLM_BASE_URL", DEFAULT_LLM_BASE_URL)
 LLM_API_KEY: str | None = os.environ.get("LLM_API_KEY") or None
-LLM_MODEL: str = os.environ.get("LLM_MODEL", "meta/llama-3.1-70b-instruct")
+LLM_MODEL: str = _env_or("LLM_MODEL", DEFAULT_LLM_MODEL)
+# Provider-specific request fields merged into every chat completion. The NVIDIA
+# default turns reasoning off so the answer lands in message.content. OpenRouter: {}.
+LLM_EXTRA_BODY: dict = _parse_extra_body(os.environ.get("LLM_EXTRA_BODY"))
 LLM_RATE_LIMIT_SLEEP = 12.0  # NVIDIA Build free tier is ~5 req/min
+
+# Kill switch for the auto-publish rule (process._passes_auto_publish_rule).
+AUTO_PUBLISH_RULES: bool = _parse_bool_env(os.environ.get("AUTO_PUBLISH_RULES"), True)
 
 # ---------------------------------------------------------------------------
 # GitHub scraping + API
@@ -247,6 +289,7 @@ _SETTINGS_KEY_MAP: dict[str, tuple[str, object]] = {
     "ndif_readme_negative_patterns":("NDIF_README_NEGATIVE_PATTERNS", list),
     "llm_model":                  ("LLM_MODEL",                  str),
     "llm_base_url":               ("LLM_BASE_URL",               str),
+    "llm_extra_body":             ("LLM_EXTRA_BODY",             dict),
     "llm_rate_limit_sleep":       ("LLM_RATE_LIMIT_SLEEP",       float),
     "s2_rate_limit_sleep":        ("S2_RATE_LIMIT_SLEEP",        float),
     "github_rate_limit_sleep":    ("GITHUB_RATE_LIMIT_SLEEP",    float),

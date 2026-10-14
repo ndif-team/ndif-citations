@@ -3,7 +3,10 @@
 Provides multi-source PDF resolution:
 1. Existing PDF URL from paper metadata
 2. ArXiv direct PDF construction
-3. Unpaywall API lookup for open access
+3. OpenReview / ACL Anthology derived PDF URLs
+4. Unpaywall API lookup for open access
+5. CrossRef link array
+6. arXiv title search
 
 Caches PDFs locally with standardized naming:
 - arxiv-{arxiv_id}.pdf for arXiv papers
@@ -14,6 +17,7 @@ Caches PDFs locally with standardized naming:
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -59,13 +63,35 @@ def _test_pdf_url(url: str, timeout: int = 10) -> bool:
         return False
 
 
+_OPENREVIEW_RE = re.compile(r"openreview\.net/(?:forum|pdf)\?id=([\w-]+)")
+_ACL_RE = re.compile(r"aclanthology\.org/([\w.-]+?)(?:\.pdf)?/?$")
+
+
+def _derived_pdf_urls(paper: DiscoveredPaper) -> list[str]:
+    """PDF URLs derivable from OpenReview / ACL Anthology landing URLs (no network)."""
+    urls: list[str] = []
+    for u in (paper.url, paper.pdf_url):
+        if not u:
+            continue
+        m = _OPENREVIEW_RE.search(u)
+        if m:
+            urls.append(f"https://openreview.net/pdf?id={m.group(1)}")
+        m = _ACL_RE.search(u)
+        if m:
+            urls.append(f"https://aclanthology.org/{m.group(1)}.pdf")
+    return list(dict.fromkeys(urls))
+
+
 def resolve_pdf_url(paper: DiscoveredPaper) -> Optional[str]:
     """Try multiple sources to get a working PDF URL.
 
     Tries in order:
     1. Existing paper.pdf_url if valid
     2. ArXiv direct construction (if arxiv_id)
-    3. Unpaywall API lookup (if DOI)
+    3. OpenReview / ACL Anthology derived URLs
+    4. Unpaywall API lookup (if DOI)
+    5. CrossRef link array (if DOI)
+    6. arXiv title search
 
     Returns None if no PDF URL can be resolved.
     """
@@ -84,7 +110,13 @@ def resolve_pdf_url(paper: DiscoveredPaper) -> Optional[str]:
             return arxiv_pdf_url
         logger.debug(f"ArXiv PDF not accessible: {arxiv_pdf_url}")
 
-    # 3. Unpaywall API lookup
+    # 3. OpenReview / ACL Anthology: the PDF URL is derivable from the landing URL.
+    for derived in _derived_pdf_urls(paper):
+        if _test_pdf_url(derived):
+            logger.debug(f"Using derived PDF URL for '{paper.title[:50]}...'")
+            return derived
+
+    # 3b. Unpaywall API lookup
     if paper.doi:
         logger.debug(f"Trying Unpaywall for DOI: {paper.doi}")
         unpaywall_data = query_unpaywall(paper.doi)
@@ -121,6 +153,13 @@ def resolve_pdf_url(paper: DiscoveredPaper) -> Optional[str]:
                 return pdf_link
         except Exception:
             pass
+
+    # 7. arXiv title search — last because it is a network query with a 3s politeness sleep.
+    from ndif_citations.utils import find_arxiv_pdf_by_title
+    by_title = find_arxiv_pdf_by_title(paper.title)
+    if by_title and _test_pdf_url(by_title):
+        logger.debug(f"Found arXiv copy by title for '{paper.title[:50]}'")
+        return by_title
 
     logger.warning(
         f"No open-access PDF found for '{paper.title[:60]}' "

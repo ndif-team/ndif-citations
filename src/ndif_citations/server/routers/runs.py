@@ -68,7 +68,7 @@ def start_run(
     Returns 422 if *mode* is not ``"fresh"`` or ``"incremental"`` (Pydantic
     validation via ``Literal``).
     """
-    pf = run_preflight(skip_papers=body.skip_papers, skip_github=body.skip_github)
+    pf = run_preflight(skip_papers=body.skip_papers, skip_github=body.skip_github, validate_llm=True)
     if not pf["ok"]:
         raise HTTPException(
             status_code=422,

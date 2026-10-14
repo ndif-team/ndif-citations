@@ -107,7 +107,7 @@ def test_test_connection_serpapi(client, monkeypatch):
 
 def test_test_connection_llm_passes_configured_model(client, monkeypatch):
     captured = {}
-    def _fake(base_url, api_key, model):
+    def _fake(base_url, api_key, model, extra_body=None):
         captured["model"] = model
         return {"ok": True, "detail": "HTTP 200"}
     monkeypatch.setattr("ndif_citations.key_validation.test_llm", _fake)

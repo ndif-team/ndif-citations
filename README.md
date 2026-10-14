@@ -87,7 +87,7 @@ Every classified paper carries a `category_confidence_band` (categorical) alongs
 | `LOW` | 0.30 | Keyword fallback (LLM unavailable / errored) | PENDING (`LOW_CONFIDENCE`) |
 | `NONE` | 0.00 | UNCLASSIFIED (no evidence / LLM unparseable) | PENDING (`UNCLASSIFIED_*`) |
 
-¹ **The pipeline never auto-verifies** (`config.AUTO_VERIFY = False`, the default): even HIGH/CERTAIN classifications land in **pending** (`needs_review`) for a curator to verify from the run **Results** panel — high/certain rows are flagged *suggested* for one-click bulk-verify. Curator-set (`manual_override`) papers keep their bucket and are never demoted by this policy. Set `AUTO_VERIFY = True` in `config.py` to restore HIGH/CERTAIN → auto-`verified`.
+¹ **HIGH/CERTAIN classifications do not auto-verify** (`config.AUTO_VERIFY = False`, the default): they land in **pending** (`needs_review`) for a curator to verify from the run **Results** panel — high/certain rows are flagged *suggested* for one-click bulk-verify. The one exception is the auto-publish rule: the pipeline auto-verifies only papers the model calls *referencing*, and *uses_nnsight* papers whose full-PDF text explicitly says they used NNsight. Anything claiming NDIF use always waits for a curator. Set `AUTO_PUBLISH_RULES=0` to turn that auto-verify off. Curator-set (`manual_override`) papers keep their bucket and are never demoted by this policy. Setting `AUTO_VERIFY = True` in `config.py` restores HIGH/CERTAIN → auto-`verified`.
 
 `manual_override=True` papers route to `FILL_GAPS` if any `has_*` flag is False, so the pipeline backfills empty description / thumbnail / affiliations on the next run without overwriting curated values.
 
@@ -278,7 +278,7 @@ The LLM integration is provider-agnostic via the `openai` Python library:
 ```bash
 # NVIDIA Build (default, free tier)
 LLM_BASE_URL=https://integrate.api.nvidia.com/v1
-LLM_MODEL=meta/llama-3.1-70b-instruct
+LLM_MODEL=nvidia/nemotron-3-super-120b-a12b
 
 # OpenAI
 LLM_BASE_URL=https://api.openai.com/v1
@@ -290,6 +290,8 @@ LLM_MODEL=llama3.1
 ```
 
 </details>
+
+`LLM_EXTRA_BODY` carries provider-specific request fields (default turns NVIDIA reasoning off); to switch to OpenRouter set `LLM_BASE_URL=https://openrouter.ai/api/v1`, `LLM_API_KEY`, `LLM_MODEL`, and `LLM_EXTRA_BODY={}`. `AUTO_PUBLISH_RULES=0` sends every paper to human review.
 
 ## Configuration
 

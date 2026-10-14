@@ -16,36 +16,56 @@ def _result(ok: bool, detail: str) -> dict:
     return {"ok": ok, "detail": detail}
 
 
-def test_llm(base_url: str, api_key: str, model: str = "") -> dict:
-    # A 1-token chat completion, NOT GET /models: some OpenAI-compatible providers
-    # (e.g. NVIDIA integrate) serve /models without enforcing auth, so a garbage key
-    # would read "ok". A completion actually exercises the credential (bad key -> 401).
+def test_llm(base_url: str, api_key: str, model: str = "", extra_body: dict | None = None) -> dict:
+    # A tiny chat completion, NOT GET /models: some OpenAI-compatible providers
+    # (e.g. NVIDIA integrate) serve /models without enforcing auth. We also require a
+    # non-empty reply: a reasoning model with its budget spent "thinking" returns
+    # content=None, which the pipeline cannot use.
     if not (base_url and api_key):
         return _result(False, "base_url and api_key required")
     parsed = urlparse(base_url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         return _result(False, "base_url must be a http(s) URL")
+    payload = {"model": model or "gpt-3.5-turbo",
+               "messages": [{"role": "user", "content": "Reply with the word ok."}],
+               "max_tokens": 5}
+    if extra_body:
+        payload.update(extra_body)
     try:
         r = requests.post(
             f"{base_url.rstrip('/')}/chat/completions",
             headers={"Authorization": f"Bearer {api_key}"},
-            json={"model": model or "gpt-3.5-turbo",
-                  "messages": [{"role": "user", "content": "ping"}],
-                  "max_tokens": 1},
-            timeout=_TIMEOUT,
+            json=payload,
+            timeout=30,
         )
-        return _result(r.status_code < 400, f"HTTP {r.status_code}")
+        if r.status_code >= 400:
+            return _result(False, f"HTTP {r.status_code}")
+        try:
+            content = r.json()["choices"][0]["message"].get("content")
+        except Exception:                        # noqa: BLE001
+            content = None
+        if not (content and content.strip()):
+            return _result(False, f"HTTP {r.status_code} but empty reply — reasoning model? set llm_extra_body")
+        return _result(True, f"HTTP {r.status_code}")
     except Exception as e:                       # noqa: BLE001
         return _result(False, f"{type(e).__name__}")
 
 
 def test_github(token: str) -> dict:
+    # /rate_limit works for PATs AND Actions installation tokens (GET /user 403s for
+    # the latter) and does not count against the limit.
     if not token:
         return _result(False, "token required")
     try:
-        r = requests.get("https://api.github.com/user",
+        r = requests.get("https://api.github.com/rate_limit",
                          headers={"Authorization": f"Bearer {token}"}, timeout=_TIMEOUT)
-        return _result(r.status_code < 400, f"HTTP {r.status_code}")
+        if r.status_code >= 400:
+            return _result(False, f"HTTP {r.status_code}")
+        try:
+            remaining = r.json()["resources"]["core"]["remaining"]
+            return _result(True, f"HTTP {r.status_code} · {remaining} API calls left this hour")
+        except Exception:                        # noqa: BLE001
+            return _result(True, f"HTTP {r.status_code}")
     except Exception as e:                       # noqa: BLE001
         return _result(False, f"{type(e).__name__}")
 
