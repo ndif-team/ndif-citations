@@ -394,4 +394,6 @@ class TestNdifAccessAcknowledgmentRouting:
     def test_both_prompts_carry_the_acknowledgment_guide(self):
         from ndif_citations.process import INFRASTRUCTURE_PROMPT, UNIFIED_PROMPT
         for prompt in (UNIFIED_PROMPT, INFRASTRUCTURE_PROMPT):
-            assert "Acknowledgments thanking NDIF for remote inference access" in prompt
+            assert "acknowledgments thanking NDIF for remote inference access" in prompt
+            # a negative clause flipped eDIF (2508.10553) to uses_nnsight
+            assert "does not count" not in prompt

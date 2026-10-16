@@ -302,8 +302,7 @@ Reply with ONLY one of these exact strings:
 - "unclassified" — insufficient evidence to determine relationship
 
 Evidence guide:
-- "hosted on NDIF", "NDIF cluster", "ndif.us" in methodology → "uses_ndif"
-- Acknowledgments thanking NDIF for remote inference access, hosted models, or its pilot program → "uses_ndif" (NDIF named only as a funder, grant, platform, or compute credit does not count)
+- "hosted on NDIF", "NDIF cluster", "ndif.us" in methodology, or acknowledgments thanking NDIF for remote inference access, hosted models, or its pilot program → "uses_ndif"
 - "import nnsight", "nnsight.trace", code snippets using nnsight API → "uses_nnsight"
 - Related work mentions, surveys listing NDIF → "referencing"
 - No direct mentions found in text → "unclassified"
@@ -329,7 +328,7 @@ Reply with ONLY one of these exact strings:
 - "unclassified" — insufficient evidence to determine relationship
 
 Evidence guide:
-- Acknowledgments thanking NDIF for remote inference access, hosted models, or its pilot program → "uses_ndif" (NDIF named only as a funder, grant, platform, or compute credit does not count)
+- "hosted on NDIF", "NDIF cluster", "ndif.us" in methodology, or acknowledgments thanking NDIF for remote inference access, hosted models, or its pilot program → "uses_ndif"
 
 Reply with ONLY the category string, nothing else."""
 
