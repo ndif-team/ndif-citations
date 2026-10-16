@@ -38,9 +38,9 @@ jobs:
       - name: Triage
         run: |
           set -euo pipefail
-          allowed() {  # $1 = login whose repo permission is checked
-            perm=$(gh api "repos/$GH_REPO/collaborators/$1/permission" --jq .permission 2>/dev/null || echo none)
-            [ "$perm" = admin ] || [ "$perm" = write ]
+          allowed() {  # $1 = login; returns 0 = write, 1 = no write, 2 = API error (not a denial)
+            perm=$(gh api "repos/$GH_REPO/collaborators/$1/permission" --jq .permission) || return 2
+            [ "$perm" = admin ] || [ "$perm" = write ] || return 1
           }
           react() { gh api -X POST "repos/$GH_REPO/issues/comments/$COMMENT_ID/reactions" -f "content=$1" >/dev/null; }
           if [ "$EVENT" = issue_comment ]; then
@@ -49,23 +49,30 @@ jobs:
             grep -qiE '^[[:space:]]*/[a-z]' <<< "$COMMENT_BODY" || exit 0
             # Only bot-managed issues take commands: a stray "/path" line elsewhere must not queue a run.
             case ",$LABELS," in *,review,*|*,digest,*|*,report,*|*,intake,*) ;; *) exit 0 ;; esac
-            if allowed "$ACTOR"; then
-              react eyes
-              gh workflow run catalog-apply.yml -f kind=command -f issue_number="$ISSUE_NUMBER" -f comment_id="$COMMENT_ID" \
-                || { react confused; exit 1; }
-            else
-              react -1
-            fi
+            allowed "$ACTOR" && rc=0 || rc=$?
+            case $rc in
+              0)
+                # Dispatch first: a failed 👀 must never lose the command.
+                gh workflow run catalog-apply.yml -f kind=command -f issue_number="$ISSUE_NUMBER" -f comment_id="$COMMENT_ID" \
+                  || { react confused; exit 1; }
+                react eyes || true ;;
+              1) react -1 ;;
+              *) react confused; exit 1 ;;  # permission lookup failed: retryable, not a denial
+            esac
             exit 0
           fi
           case ",$LABELS," in
             *,report,*)
               gh issue comment "$ISSUE_NUMBER" --body "Thanks — a maintainer will review this report." ;;
             *,intake,*)
-              if allowed "$ISSUE_AUTHOR"; then
+              confused_issue() { gh api -X POST "repos/$GH_REPO/issues/$ISSUE_NUMBER/reactions" -f content=confused >/dev/null; }
+              allowed "$ISSUE_AUTHOR" && rc=0 || rc=$?
+              if [ "$rc" = 0 ]; then
                 gh workflow run catalog-apply.yml -f kind=intake -f issue_number="$ISSUE_NUMBER" -f comment_id=0 \
-                  || { gh api -X POST "repos/$GH_REPO/issues/$ISSUE_NUMBER/reactions" -f content=confused >/dev/null; exit 1; }
-              else
+                  || { confused_issue; exit 1; }
+              elif [ "$rc" = 1 ]; then
                 gh issue comment "$ISSUE_NUMBER" --body 'Thanks — a maintainer will review it; they can run `/add <url>` to add it.'
+              else
+                confused_issue; exit 1  # permission lookup failed: retryable, not a denial
               fi ;;
           esac
