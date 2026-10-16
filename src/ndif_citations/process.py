@@ -235,10 +235,10 @@ _IMPL_CONFIRM_RE = re.compile(
 
 # An NDIF acknowledgment that names hands-on access (remote inference, hosted models,
 # the pilot program) is usage evidence, not a thank-you. Same sentence only ("et al."
-# may sit in between); "platform"/"compute" credits stay thank-yous (2505.17441), and
-# the bibliography title "NNsight and NDIF: Democratizing access" never counts.
+# may sit in between); "platform"/"compute"/plain "access" credits stay thank-yous
+# (2505.17441), and the NDIF name itself never counts.
 _ACK_NDIF = r'(?:\bndif\b|national\s+deep\s+inference(?:\s+fabric)?)'
-_ACK_ACCESS = r'\b(?:remote|hosted|pilot|(?<!democratizing\s)access)\b'
+_ACK_ACCESS = r'\b(?:remote\s+(?:inference|execution|access)|hosted|pilot\s+program)\b'
 _ACK_SENT = r'(?:[^.]|et\s+al\.)'
 _ACK_USAGE_RE = re.compile(
     rf'{_ACK_NDIF}{_ACK_SENT}{{0,200}}?{_ACK_ACCESS}|{_ACK_ACCESS}{_ACK_SENT}{{0,120}}?{_ACK_NDIF}',

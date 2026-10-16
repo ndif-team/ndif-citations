@@ -222,6 +222,9 @@ class TestNdifAccessAcknowledgment:
         # name only: the NDIF name ("...Inference Fabric") and the NNsight paper's title never count
         "We thank the National Deep Inference Fabric (NDIF) for helpful discussions.",
         "We thank the authors of NNsight and NDIF: Democratizing access to foundation model internals.",
+        # generic access / compute credits
+        "We thank NDIF for providing access to compute resources.",
+        "We thank the NDIF team for remote assistance and NDIF pilot funding.",
     ])
     def test_non_usage_ack_still_filtered(self, text):
         assert _is_ack_only_thank_you(text) is True
