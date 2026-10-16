@@ -91,7 +91,61 @@ def test_discarded_match_is_duplicate(tmp_path, monkeypatch):
     monkeypatch.setattr(manual_add, "run_manual_add_seed",
                         lambda out, seeds, **k: SimpleNamespace(merged_papers=[existing]))
     r = review_intake.run_intake(tmp_path, "https://arxiv.org/abs/2501.00002")
-    assert r.status == "duplicate" and r.bucket == "discarded"
+    assert r.status == "existing" and r.bucket == "discarded"
+    res = Result()
+    review_intake._reply(r, res)
+    assert res.changed and res.close and "Already in the catalog as **discarded**" in res.reply  # the add rewrote it
+
+
+def _zero_hit_add(tmp_path, monkeypatch):
+    """The pipeline auto-discards a brand-new paper whose PDF has no NDIF/NNsight hit."""
+    from ndif_citations.models import PaperReason
+    _write(tmp_path)
+    seed = make_paper(title="Silent Paper", arxiv_id="2504.00009", bucket=Bucket.PENDING)
+    monkeypatch.setattr(manual_add, "resolve_seed_from_url", lambda url: seed)
+
+    def fake_add(out, seeds, **k):
+        p = make_paper(title="Silent Paper", arxiv_id="2504.00009", bucket=Bucket.DISCARDED,
+                       reason=PaperReason.ZERO_PDF_HITS)
+        _write(out, [p])
+        return SimpleNamespace(merged_papers=[p])
+    monkeypatch.setattr(manual_add, "run_manual_add_seed", fake_add)
+
+
+def test_zero_hit_new_add_goes_to_review(tmp_path, monkeypatch):
+    from ndif_citations.output import load_existing_papers
+    _zero_hit_add(tmp_path, monkeypatch)
+    r = review_intake.run_intake(tmp_path, "https://arxiv.org/abs/2504.00009")
+    assert r.status == "pending" and r.bucket == "pending"
+    [p] = load_existing_papers(tmp_path)
+    assert p.bucket == Bucket.PENDING and p.reason.value == "needs_review"
+    assert p.reason_detail == "added via intake: no NDIF/NNsight mention found in the PDF"
+    res = Result()
+    review_intake._reply(r, res)
+    assert res.changed and res.close and "for review" in res.reply and "Already" not in res.reply
+
+
+def test_add_command_zero_hit_is_success(tmp_path, monkeypatch):
+    _zero_hit_add(tmp_path, monkeypatch)
+    monkeypatch.setenv("LLM_API_KEY", "x")
+    ctx = ReviewContext(tmp_path, 3, "", "alice", {"intake"}, "/add https://arxiv.org/abs/2504.00009", "bob")
+    out = run_commands(ctx)
+    assert out.changed and out.close and out.reply.startswith("✅ `/add`")
+
+
+def test_unresolved_after_add_still_pushes(tmp_path, monkeypatch):
+    _write(tmp_path)
+    seed = make_paper(title="Ghost", arxiv_id="2504.00010", bucket=Bucket.PENDING)
+    monkeypatch.setattr(manual_add, "resolve_seed_from_url", lambda url: seed)
+    monkeypatch.setattr(manual_add, "run_manual_add_seed", lambda out, seeds, **k: SimpleNamespace(merged_papers=[]))
+    r = review_intake.run_intake(tmp_path, "https://arxiv.org/abs/2504.00010")
+    assert r.status == "added"
+    res = Result()
+    review_intake._reply(r, res)
+    assert res.changed and res.close and "a maintainer should check the catalog entry" in res.reply
+    monkeypatch.setenv("LLM_API_KEY", "x")
+    out = run_commands(ReviewContext(tmp_path, 3, "", "alice", {"intake"}, "/add https://arxiv.org/abs/2504.00010", "bob"))
+    assert out.changed and out.reply.startswith("✅ `/add`")
 
 
 def test_reply_neutralizes_untrusted_text():

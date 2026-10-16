@@ -370,11 +370,12 @@ def cmd_add(ctx: ReviewContext, key: str, args: str, res: Result) -> str:
         raise UserError("Write the URL explicitly: `/add https://…` (the issue text isn't trusted).")
     _llm_ready()
     sub = Result()
-    _reply(run_intake(ctx.out, url), sub)
+    r = run_intake(ctx.out, url)
+    _reply(r, sub)
+    if r.status == "unresolved":  # nothing was written → reply as ⚠️, not ✅
+        raise UserError(sub.reply.removeprefix("⚠️ "))
     res.changed |= sub.changed
     res.close |= sub.close
-    if not (sub.changed or sub.close):  # unresolved → reply as ⚠️, not ✅
-        raise UserError(sub.reply.removeprefix("⚠️ "))
     return sub.reply.removeprefix("✅ ")
 
 
