@@ -288,3 +288,47 @@ def test_thumbnail_pixel_cap(pending, monkeypatch):
     monkeypatch.setattr(requests, "get", lambda url, **k: _Stream(b.getvalue()))
     r = run_commands(_ctx(out, p, _ATT))
     assert "isn't an image I can read" in r.reply and not r.changed
+
+
+def _stub_zero_hit_reprocess(monkeypatch):
+    """Real reprocess_papers; only the LLM classify and the zero-hit check are stubbed."""
+    from ndif_citations import process
+    from ndif_citations.models import Confidence, PaperReason
+
+    def _classify(paper, out, pdf_path=None):
+        paper.classification_signal, paper.context_source = "llm", "pdf"
+        return Category.USES_NNSIGHT, 0.85, Confidence.HIGH
+
+    def _zero_hit(paper, pdf_path):
+        paper.bucket, paper.reason, paper.reason_detail = Bucket.DISCARDED, PaperReason.ZERO_PDF_HITS, "0 hits"
+        return True
+
+    monkeypatch.setattr(process, "classify_category", _classify)
+    monkeypatch.setattr(process, "_check_discard_zero_pdf_hits", _zero_hit)
+
+
+def _assert_in_review_with_category(out, p):
+    from ndif_citations.models import PaperReason
+    got = next(x for x in load_existing_papers(out) if x.merge_key() == p.merge_key())
+    assert got.bucket == Bucket.PENDING and got.reason == PaperReason.NEEDS_REVIEW
+    assert got.category == Category.USES_NNSIGHT
+
+
+def test_pdf_zero_hit_pdf_goes_to_review_keeping_category(pending, monkeypatch):
+    out, p = pending
+    monkeypatch.setattr(requests, "get", lambda url, **k: _Stream(b"%PDF-1.7 fake body"))
+    _stub_zero_hit_reprocess(monkeypatch)
+    r = run_commands(_ctx(out, p, "/pdf https://example.org/a.pdf"))
+    assert r.changed
+    _assert_in_review_with_category(out, p)
+
+
+def test_retry_zero_hit_goes_to_review_keeping_category(pending, monkeypatch, tmp_path_factory):
+    out, p = pending
+    f = tmp_path_factory.mktemp("cache") / "cached.pdf"
+    f.write_bytes(b"%PDF-1.4 tiny")
+    monkeypatch.setattr("ndif_citations.pdf_cache.get_cached_pdf", lambda paper, o: f)
+    _stub_zero_hit_reprocess(monkeypatch)
+    r = run_commands(_ctx(out, p, "/retry"))
+    assert r.changed
+    _assert_in_review_with_category(out, p)
