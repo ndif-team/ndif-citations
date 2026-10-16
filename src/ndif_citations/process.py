@@ -233,6 +233,19 @@ _IMPL_CONFIRM_RE = re.compile(
 )
 
 
+# An NDIF acknowledgment that names hands-on access (remote inference, hosted models,
+# the pilot program) is usage evidence, not a thank-you. Same sentence only ("et al."
+# may sit in between); "platform"/"compute" credits stay thank-yous (2505.17441), and
+# the bibliography title "NNsight and NDIF: Democratizing access" never counts.
+_ACK_NDIF = r'(?:\bndif\b|national\s+deep\s+inference(?:\s+fabric)?)'
+_ACK_ACCESS = r'\b(?:remote|hosted|pilot|(?<!democratizing\s)access)\b'
+_ACK_SENT = r'(?:[^.]|et\s+al\.)'
+_ACK_USAGE_RE = re.compile(
+    rf'{_ACK_NDIF}{_ACK_SENT}{{0,200}}?{_ACK_ACCESS}|{_ACK_ACCESS}{_ACK_SENT}{{0,120}}?{_ACK_NDIF}',
+    re.IGNORECASE,
+)
+
+
 def _has_negative_evidence(window: str) -> bool:
     """Return True if the context window explicitly states nnsight/NDIF was removed or not used."""
     return bool(_NEGATIVE_RE.search(window))
@@ -245,7 +258,8 @@ def _context_is_comparison_table(window: str) -> bool:
 
 def _is_ack_only_thank_you(window: str) -> bool:
     """Return True if window is an acknowledgment thank-you without implementation confirmation."""
-    return bool(_ACK_THANK_RE.search(window)) and not bool(_IMPL_CONFIRM_RE.search(window))
+    return (bool(_ACK_THANK_RE.search(window)) and not _IMPL_CONFIRM_RE.search(window)
+            and not _ACK_USAGE_RE.search(window.replace("\n", " ")))
 
 
 def _apply_prefilters(windows: list[str], paper) -> tuple[list[str], Optional[str]]:
@@ -289,6 +303,7 @@ Reply with ONLY one of these exact strings:
 
 Evidence guide:
 - "hosted on NDIF", "NDIF cluster", "ndif.us" in methodology → "uses_ndif"
+- Acknowledgments thanking NDIF for remote inference access, hosted models, or its pilot program → "uses_ndif" (NDIF named only as a funder, grant, platform, or compute credit does not count)
 - "import nnsight", "nnsight.trace", code snippets using nnsight API → "uses_nnsight"
 - Related work mentions, surveys listing NDIF → "referencing"
 - No direct mentions found in text → "unclassified"
@@ -312,6 +327,9 @@ Reply with ONLY one of these exact strings:
 - "uses_ndif" — verifiable evidence the paper uses NDIF infrastructure (e.g., hosted models on NDIF cluster, experiments run on ndif.us)
 - "referencing" — mentions or cites NDIF in related work, but no verifiable active use
 - "unclassified" — insufficient evidence to determine relationship
+
+Evidence guide:
+- Acknowledgments thanking NDIF for remote inference access, hosted models, or its pilot program → "uses_ndif" (NDIF named only as a funder, grant, platform, or compute credit does not count)
 
 Reply with ONLY the category string, nothing else."""
 

@@ -374,3 +374,24 @@ class TestAcksOnlyPreFilter:
         assert cat == Category.USES_NNSIGHT
         assert paper.classification_signal == "llm"  # LLM path was taken (post-pre-filter)
         assert len(mock.record_calls()) == 1
+
+
+class TestNdifAccessAcknowledgmentRouting:
+    def test_ndif_only_access_ack_reaches_infrastructure_prompt(self, monkeypatch, tmp_path):
+        from ndif_citations.process import INFRASTRUCTURE_PROMPT
+        from tests.test_utils_classify import LANGFIR_V2_ACK
+        mock = MockLLMClient()
+        mock.expect("uses_ndif")
+        _inject_mock(monkeypatch, mock)
+        pdf = _setup_pdf_context(monkeypatch, tmp_path, LANGFIR_V2_ACK)
+        paper = make_paper()
+        cat, _conf, _band = classify_category(paper, FAKE_OUTPUT, pdf_path=pdf)
+        assert cat == Category.USES_NDIF
+        assert paper.classification_signal == "llm"
+        (messages,) = mock.record_calls()
+        assert messages[0]["content"].startswith(INFRASTRUCTURE_PROMPT)
+
+    def test_both_prompts_carry_the_acknowledgment_guide(self):
+        from ndif_citations.process import INFRASTRUCTURE_PROMPT, UNIFIED_PROMPT
+        for prompt in (UNIFIED_PROMPT, INFRASTRUCTURE_PROMPT):
+            assert "Acknowledgments thanking NDIF for remote inference access" in prompt

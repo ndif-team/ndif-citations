@@ -192,3 +192,36 @@ class TestIsAckOnlyThankYou:
     ])
     def test_pattern_b_cross_sentence_guard(self, text):
         assert _is_ack_only_thank_you(text) is True
+
+
+# An NDIF acknowledgment naming hands-on access is usage evidence: it reaches the LLM.
+# LangFIR (2604.03532) v2 states NDIF use only here; its v1 had no NDIF statement at all.
+LANGFIR_V2_ACK = (
+    "We also thank the National Deep Inference Fabric (NDIF) (Fiotto-\nKaufman et al., 2025) "
+    "for providing remote inference access through its pilot program."
+)
+
+
+class TestNdifAccessAcknowledgment:
+    @pytest.mark.parametrize("text", [
+        LANGFIR_V2_ACK,
+        "We thank NDIF (Fiotto-Kaufman et al., 2025) for access to their hosted models to run our experiments.",
+        "We greatly thank the National Deep Inference Fabric (NDIF) pilot program, who provided us with access to models.",
+    ])
+    def test_access_ack_is_not_filtered(self, text):
+        assert _is_ack_only_thank_you(text) is False
+
+    @pytest.mark.parametrize("text", [
+        # funding only
+        "This work was supported by the National Deep Inference Fabric (NDIF) for Large AI "
+        "Systems (#NSF 2408455).",
+        "Gabriele Sarti is supported by the National Deep Inference Fabric (NDIF) project (U.S. NSF "
+        "Award IIS-2408455). We also thank the Center for Information Technology for providing access to the cluster.",
+        # technical support
+        "The authors thank members of the NDIF team for their technical support.",
+        # name only: the NDIF name ("...Inference Fabric") and the NNsight paper's title never count
+        "We thank the National Deep Inference Fabric (NDIF) for helpful discussions.",
+        "We thank the authors of NNsight and NDIF: Democratizing access to foundation model internals.",
+    ])
+    def test_non_usage_ack_still_filtered(self, text):
+        assert _is_ack_only_thank_you(text) is True
