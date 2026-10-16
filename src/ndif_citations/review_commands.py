@@ -359,3 +359,23 @@ def cmd_summarize(ctx: ReviewContext, key: str, args: str, res: Result) -> str:
 
 
 HANDLERS.update({"pdf": cmd_pdf, "thumbnail": cmd_thumbnail, "retry": cmd_retry, "summarize": cmd_summarize})
+
+
+def cmd_add(ctx: ReviewContext, key: str, args: str, res: Result) -> str:
+    from ndif_citations.review_intake import _reply, run_intake
+    if "intake" not in ctx.issue_labels:
+        raise UserError("`/add` works in intake issues.")
+    url = args.strip().split()[0] if args.strip() else ""
+    if not url.startswith(("http://", "https://")):
+        raise UserError("Write the URL explicitly: `/add https://…` (the issue text isn't trusted).")
+    _llm_ready()
+    sub = Result()
+    _reply(run_intake(ctx.out, url), sub)
+    res.changed |= sub.changed
+    res.close |= sub.close
+    if not (sub.changed or sub.close):  # unresolved → reply as ⚠️, not ✅
+        raise UserError(sub.reply.removeprefix("⚠️ "))
+    return sub.reply.removeprefix("✅ ")
+
+
+HANDLERS["add"] = cmd_add

@@ -10,6 +10,7 @@ Entry point: ``add_paper_by_url(out, url, *, cancel_check=None) -> dict``
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -89,6 +90,70 @@ def find_duplicate(out: Path, *, title: str, arxiv_id: str | None = None, doi: s
     return None
 
 
+_DOI_RE = re.compile(r"(10\.\d{4,9}/\S+)")
+
+
+def s2_id_for_url(url: str) -> str:
+    """Semantic Scholar paper id for a URL: DOI: > ARXIV: > URL: (S2 resolves arXiv/ACL/ACM/bioRxiv URLs)."""
+    from ndif_citations.utils import extract_arxiv_id_from_url
+    m = _DOI_RE.search(url) if "doi.org/" in url or url.startswith("10.") else None
+    if m:
+        return f"DOI:{m.group(1).rstrip('/')}"
+    arxiv = extract_arxiv_id_from_url(url)
+    if arxiv:
+        return f"ARXIV:{arxiv}"
+    return f"URL:{url}"
+
+
+def fetch_s2_metadata(s2_id: str):
+    """S2 paper object for *s2_id*, or None on any failure."""
+    try:
+        from ndif_citations import config  # manual_add has no module-level config import
+        from semanticscholar import SemanticScholar
+        sch = SemanticScholar(api_key=config.S2_API_KEY) if config.S2_API_KEY else SemanticScholar()
+        return sch.get_paper(s2_id, fields=config.S2_FIELDS)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("S2 lookup failed for %s: %s", s2_id, exc)
+        return None
+
+
+def apply_s2_metadata(paper, s2_paper) -> None:
+    """Copy title/authors/abstract/venue/date/ids/OA-PDF from an S2 paper onto *paper*."""
+    paper.title = getattr(s2_paper, "title", None) or paper.title
+    authors_list = getattr(s2_paper, "authors", []) or []
+    paper.authors = ", ".join(
+        a.get("name", "") if isinstance(a, dict) else getattr(a, "name", str(a)) for a in authors_list
+    )
+    paper.abstract = getattr(s2_paper, "abstract", None)
+    paper.venue = getattr(s2_paper, "venue", "") or ""
+    pub_date_str = getattr(s2_paper, "publicationDate", None)
+    if pub_date_str:
+        from datetime import date
+        try:
+            paper.publication_date = date.fromisoformat(pub_date_str) if isinstance(pub_date_str, str) else pub_date_str
+            paper.year = paper.publication_date.year
+        except (ValueError, AttributeError):
+            pass
+    external_ids = getattr(s2_paper, "externalIds", {}) or {}
+    paper.doi = external_ids.get("DOI") or paper.doi
+    paper.arxiv_id = paper.arxiv_id or external_ids.get("ArXiv")
+    paper.s2_paper_id = getattr(s2_paper, "paperId", None)
+    open_access = getattr(s2_paper, "openAccessPdf", None)
+    if open_access:
+        paper.pdf_url = open_access.get("url") if isinstance(open_access, dict) else getattr(open_access, "url", None)
+
+
+def resolve_seed_from_url(url: str):
+    """A MANUAL_ADD seed with real metadata for *url*, or None if S2 can't resolve it."""
+    from ndif_citations.models import DiscoveredPaper, DiscoverySource
+    s2 = fetch_s2_metadata(s2_id_for_url(url))
+    if s2 is None or not getattr(s2, "title", None):
+        return None
+    paper = DiscoveredPaper(title=s2.title, url=url, source=DiscoverySource.MANUAL_ADD)
+    apply_s2_metadata(paper, s2)
+    return paper
+
+
 def add_paper_by_url(
     out: Path,
     url: str,
@@ -124,7 +189,6 @@ def add_paper_by_url(
                 "new_papers": int,           # run_stats.new_papers
             }
     """
-    from ndif_citations import config
     from ndif_citations.extract import enrich_papers
     from ndif_citations.models import DiscoveredPaper, DiscoverySource
     from ndif_citations.output import load_existing_papers, merge_papers, write_outputs
@@ -143,48 +207,9 @@ def add_paper_by_url(
 
     # Try to look up metadata via S2; network failure degrades gracefully.
     if arxiv_id:
-        try:
-            from semanticscholar import SemanticScholar
-
-            sch = (
-                SemanticScholar(api_key=config.S2_API_KEY)
-                if config.S2_API_KEY
-                else SemanticScholar()
-            )
-            s2_paper = sch.get_paper(f"ARXIV:{arxiv_id}", fields=config.S2_FIELDS)
-            if s2_paper:
-                paper.title = getattr(s2_paper, "title", paper.title)
-                authors_list = getattr(s2_paper, "authors", []) or []
-                paper.authors = ", ".join(
-                    a.get("name", "") if isinstance(a, dict) else getattr(a, "name", str(a))
-                    for a in authors_list
-                )
-                paper.abstract = getattr(s2_paper, "abstract", None)
-                paper.venue = getattr(s2_paper, "venue", "") or ""
-                pub_date_str = getattr(s2_paper, "publicationDate", None)
-                if pub_date_str:
-                    from datetime import date
-
-                    try:
-                        if isinstance(pub_date_str, str):
-                            paper.publication_date = date.fromisoformat(pub_date_str)
-                        else:
-                            paper.publication_date = pub_date_str
-                        paper.year = paper.publication_date.year
-                    except (ValueError, AttributeError):
-                        pass
-                external_ids = getattr(s2_paper, "externalIds", {}) or {}
-                paper.doi = external_ids.get("DOI")
-                paper.s2_paper_id = getattr(s2_paper, "paperId", None)
-                open_access = getattr(s2_paper, "openAccessPdf", None)
-                if open_access:
-                    paper.pdf_url = (
-                        open_access.get("url")
-                        if isinstance(open_access, dict)
-                        else getattr(open_access, "url", None)
-                    )
-        except Exception as exc:
-            logger.warning("S2 lookup failed for %s: %s", url, exc)
+        s2_paper = fetch_s2_metadata(f"ARXIV:{arxiv_id}")
+        if s2_paper:
+            apply_s2_metadata(paper, s2_paper)
 
     # Enrich → Route → Process → Merge → Write
     papers = enrich_papers([paper])
