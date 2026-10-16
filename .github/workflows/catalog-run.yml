@@ -111,7 +111,7 @@ jobs:
           [ -n "$CURATORS" ] && args+=(--assignee "$CURATORS")
           gh issue create "${args[@]}"
 
-      # After "Digest issue". Phase 2 moved secrets off the job level, so gh needs step env.
+      # Phase 2 moved secrets off the job level, so gh needs step env.
       - name: Sync review issues
         if: ${{ !inputs.dry_run }}
         env:
