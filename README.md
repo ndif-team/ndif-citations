@@ -446,3 +446,35 @@ edits write `data/known_venues.json`). Commit it through a pull request, then pu
 
 **Bumping torch:** the pin lives in two places — `constraints-ci.txt` and the CPU-index install line in
 `.github/workflows/catalog-run.yml`. Change both together.
+
+### Reviewing papers on GitHub
+
+Every paper the pipeline won't publish on its own gets an issue labeled `review` (plus a
+`why:` label saying why). Maintainers (repo write access) reply with commands; the bot
+reacts 👀, applies them in order, replies, and closes the issue once the paper is resolved.
+
+| Command | What it does |
+|---|---|
+| `/verify` · `/verify uses_nnsight` | publish (optionally fixing the label) |
+| `/discard reason…` | remove |
+| `/pdf https://…` | attach an **open-access** PDF → re-extract → re-classify |
+| `/evidence the key sentence` | **paywalled** paper: paste the sentence that shows use, then `/verify <category>` |
+| `/thumbnail` + pasted screenshot | set the figure shown on ndif.us |
+| `/edit field: value` | title, authors, affiliations, venue, year, summary, url, github |
+| `/retry` · `/summarize` · `/help` | re-run PDF lookup + classification · new summary · help |
+
+In **digest** or **report** issues, name the paper right after the command:
+`/discard https://arxiv.org/abs/2501.01234 not related`.
+
+**Never attach a paywalled PDF to an issue** — issues are public. Paste a quote instead.
+
+**Suggest a paper:** New issue → "Add a paper" (maintainers' suggestions are added
+automatically; others wait for a maintainer to comment `/add <url>`).
+**Report a listed paper:** the "Report" link on every paper on ndif.us.
+**Re-sync issues by hand:** Actions → Catalog apply → Run workflow → kind `sync`.
+
+**Labels must exist first.** GitHub drops an issue form's labels that aren't in the repo, so
+the forms and triage only work once the `review`/`intake`/`report`/`why:*` labels exist (the
+weekly run's "Ensure labels" step creates them; for a fresh repo run that loop by hand).
+**A human-authored `review` issue with a pasted bot marker blocks every sync** (a safety
+abort) until it is relabelled or edited.
