@@ -36,11 +36,18 @@ def _derive_processing_flags(paper: DiscoveredPaper) -> None:
     paper.has_classification = paper.category != Category.UNCLASSIFIED
 
 
+def _strict_load() -> bool:
+    """On CI every loader feeds a writer that rewrites the whole list, so a dropped
+    entry would be committed as a deletion. Locally (serve) keep warn-and-drop."""
+    return os.environ.get("GITHUB_ACTIONS") == "true"
+
+
 def load_existing_papers(output_dir: Path) -> list[DiscoveredPaper]:
     """Load existing papers from the full JSON file.
 
     Expects the 3-bucket structure: {"pending": [...], "verified": [...], "discarded": [...]}.
-    Raises ValueError if the file uses the old flat-list format.
+    Raises ValueError if the file uses the old flat-list format. On CI (GITHUB_ACTIONS=true)
+    any entry or file that fails to load raises instead of being dropped.
     """
     full_json = output_dir / "research-papers-full.json"
     if not full_json.exists():
@@ -64,6 +71,7 @@ def load_existing_papers(output_dir: Path) -> list[DiscoveredPaper]:
             )
 
         papers: list[DiscoveredPaper] = []
+        failed = 0
         for bucket_key in ("pending", "verified", "discarded"):
             for item in data[bucket_key]:
                 try:
@@ -71,7 +79,11 @@ def load_existing_papers(output_dir: Path) -> list[DiscoveredPaper]:
                     _derive_processing_flags(paper)
                     papers.append(paper)
                 except Exception as e:
+                    failed += 1
                     logger.warning(f"Failed to parse existing paper: {e}")
+        if failed and _strict_load():
+            raise ValueError(f"{failed} paper(s) in {full_json} failed to validate; "
+                             "refusing to continue (a rewrite would delete them)")
 
         logger.info(f"Loaded {len(papers)} existing papers from {full_json}")
         return papers
@@ -79,6 +91,8 @@ def load_existing_papers(output_dir: Path) -> list[DiscoveredPaper]:
     except ValueError:
         raise
     except Exception as e:
+        if _strict_load():
+            raise
         logger.warning(f"Failed to load existing papers: {e}")
         return []
 
@@ -94,17 +108,24 @@ def load_existing_repos(output_dir: Path) -> list[DiscoveredRepo]:
             data = json.load(f)
 
         repos = []
+        failed = 0
         for item in data:
             try:
                 repo = DiscoveredRepo.model_validate(item)
                 repos.append(repo)
             except Exception as e:
+                failed += 1
                 logger.warning(f"Failed to parse existing repo: {e}")
+        if failed and _strict_load():
+            raise ValueError(f"{failed} repo(s) in {full_json} failed to validate; "
+                             "refusing to continue (a rewrite would delete them)")
 
         logger.info(f"Loaded {len(repos)} existing repos from {full_json}")
         return repos
 
     except Exception as e:
+        if _strict_load():
+            raise
         logger.warning(f"Failed to load existing repos: {e}")
         return []
 

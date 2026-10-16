@@ -334,3 +334,42 @@ def test_unknown_catalog_fields_survive_load_and_rewrite(tmp_path):
     assert json.loads((out / "github-repos-full.json").read_text()) == [repo]
     assert "curator_quotes" not in json.loads((out / "research-papers.json").read_text())[0]
     assert set(json.loads((out / "github-repos.json").read_text())[0]) == SLIM_KEYS
+
+
+# --- Strict catalog load on CI: a dropped entry would be committed as a deletion ---
+
+def _bad_catalog(tmp_path):
+    import json
+    good = {"title": "Good Paper", "arxiv_id": "2401.00001"}
+    (tmp_path / "research-papers-full.json").write_text(
+        json.dumps({"pending": [good, {"title": ["not", "a", "string"]}], "verified": [], "discarded": []}))
+    (tmp_path / "github-repos-full.json").write_text(json.dumps([{"owner": "o", "repo": "r", "url": "https://github.com/o/r"}, {}]))
+
+
+def test_invalid_catalog_entry_raises_on_ci(tmp_path, monkeypatch):
+    from ndif_citations.output import load_existing_papers, load_existing_repos
+    _bad_catalog(tmp_path)
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    with pytest.raises(ValueError, match="1 paper"):
+        load_existing_papers(tmp_path)
+    with pytest.raises(ValueError, match="1 repo"):
+        load_existing_repos(tmp_path)
+
+
+def test_invalid_catalog_entry_warns_and_drops_locally(tmp_path):
+    from ndif_citations.output import load_existing_papers, load_existing_repos
+    _bad_catalog(tmp_path)
+    assert [p.title for p in load_existing_papers(tmp_path)] == ["Good Paper"]
+    assert [r.repo for r in load_existing_repos(tmp_path)] == ["r"]
+
+
+def test_unreadable_catalog_raises_on_ci(tmp_path, monkeypatch):
+    from ndif_citations.output import load_existing_papers, load_existing_repos
+    (tmp_path / "research-papers-full.json").write_text('{"pending": [], "verified": [], "discarded": 5}')
+    (tmp_path / "github-repos-full.json").write_text("{not json")
+    assert load_existing_papers(tmp_path) == [] and load_existing_repos(tmp_path) == []
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    with pytest.raises(TypeError):
+        load_existing_papers(tmp_path)
+    with pytest.raises(ValueError):
+        load_existing_repos(tmp_path)

@@ -159,6 +159,12 @@ def _no_live_key_checks(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _not_on_github_actions(monkeypatch):
+    """Catalog loaders turn strict when GITHUB_ACTIONS=true; keep the suite deterministic in CI."""
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+
+
+@pytest.fixture(autouse=True)
 def _no_git_pull_on_serve(monkeypatch):
     """`serve` fast-forwards the catalog from git; never in tests."""
     monkeypatch.setenv("NDIF_NO_GIT_PULL", "1")
