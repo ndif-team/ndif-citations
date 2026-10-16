@@ -41,7 +41,9 @@ jobs:
           allowed() {  # $1 = login; returns 0 = write, 1 = no write (incl. 404), 2 = other API error
             local err; err=$(mktemp)
             perm=$(gh api "repos/$GH_REPO/collaborators/$1/permission" --jq .permission 2>"$err") \
-              || { grep -q 'HTTP 404' "$err" && return 1; return 2; }  # 404 = ghost/renamed user: deny
+              || { grep -q 'HTTP 404' "$err" && { rm -f "$err"; return 1; }  # 404 = ghost/renamed user: deny
+                   cat "$err" >&2; rm -f "$err"; return 2; }  # keep the cause in the run log
+            rm -f "$err"
             [ "$perm" = admin ] || [ "$perm" = write ] || return 1
           }
           react() { gh api -X POST "repos/$GH_REPO/issues/comments/$COMMENT_ID/reactions" -f "content=$1" >/dev/null; }

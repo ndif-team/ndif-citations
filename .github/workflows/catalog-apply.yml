@@ -28,7 +28,7 @@ jobs:
     permissions:
       contents: write
       issues: write
-    # Tokens go only to the steps that call gh/git (Load, Push, Reply, Sync), never at job
+    # Tokens go only to the steps that call gh/git (Load, Push, Marker, Reply, Sync), never at job
     # level, and the checkout persists none in .git/config. Caches are restore-only, so
     # nothing this job runs is saved for catalog-run. Same-job isolation is still partial:
     # Install/Apply code could tamper with later steps via $GITHUB_PATH or the venv. Splitting
