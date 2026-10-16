@@ -66,8 +66,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh label create digest --color 0e8a16 --force >/dev/null
-          gh label create run-failure --color d73a4a --force >/dev/null
+          for l in review:1d76db intake:5319e7 report:fbca04 digest:0e8a16 run-failure:d73a4a \
+                   needs-attention:b60205 why:needs-metadata:c5def5 why:needs-evidence:c5def5 \
+                   why:uses-ndif:c5def5 why:check-label:c5def5; do
+            gh label create "${l%:*}" --color "${l##*:}" --force >/dev/null
+          done
 
       - name: Pipeline
         timeout-minutes: 75
@@ -107,6 +110,15 @@ jobs:
           args=(--label digest --title "Catalog digest — $(date -u +%F)" --body-file "$RUNNER_TEMP/digest.md")
           [ -n "$CURATORS" ] && args+=(--assignee "$CURATORS")
           gh issue create "${args[@]}"
+
+      # After "Digest issue". Phase 2 moved secrets off the job level, so gh needs step env.
+      - name: Sync review issues
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CURATORS: ${{ vars.CURATORS }}
+        run: python -m ndif_citations review-sync
 
       - name: Keep this run's catalog if anything failed
         if: ${{ failure() }}

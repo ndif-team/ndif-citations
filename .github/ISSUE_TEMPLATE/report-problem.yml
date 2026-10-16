@@ -1,0 +1,18 @@
+name: Report a problem with a listed paper
+description: Wrong details, wrong category, or not actually related to NDIF / NNsight
+title: "Problem: "
+labels: [report]
+body:
+  - type: input
+    id: paper_url
+    attributes:
+      label: Paper URL
+      description: The link shown on ndif.us
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's wrong?
+    validations:
+      required: true

@@ -1,0 +1,71 @@
+# Secret-less front door for issue events (spec §6.2): checks the commenter's repo
+# permission, reacts, acknowledges reports, and dispatches real work into the
+# catalog-writer queue (catalog-apply.yml). Untrusted text only ever travels via env.
+#
+# Intake trust chain: intake_from_issue trusts the URL in the issue BODY without checking
+# who wrote it. So kind=intake is dispatched only for `issues: opened` events carrying the
+# `intake` label AND only when the issue AUTHOR has admin|write on this repo; anyone else
+# gets an acknowledgement instead. catalog-apply's Load step then re-fetches the issue by
+# number and re-checks its author's permission (comment_id=0 path) before writing.
+name: Review triage
+
+on:
+  issue_comment:
+    types: [created]
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+  actions: write
+  contents: read
+
+jobs:
+  triage:
+    if: ${{ !github.event.issue.pull_request && github.event.sender.type != 'Bot' }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      EVENT: ${{ github.event_name }}
+      ACTOR: ${{ github.event.sender.login }}
+      ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
+      COMMENT_BODY: ${{ github.event.comment.body }}
+      COMMENT_ID: ${{ github.event.comment.id }}
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      LABELS: ${{ join(github.event.issue.labels.*.name, ',') }}
+    steps:
+      - name: Triage
+        run: |
+          set -euo pipefail
+          allowed() {  # $1 = login whose repo permission is checked
+            perm=$(gh api "repos/$GH_REPO/collaborators/$1/permission" --jq .permission 2>/dev/null || echo none)
+            [ "$perm" = admin ] || [ "$perm" = write ]
+          }
+          react() { gh api -X POST "repos/$GH_REPO/issues/comments/$COMMENT_ID/reactions" -f "content=$1" >/dev/null; }
+          if [ "$EVENT" = issue_comment ]; then
+            # Here-string, not printf | grep: under pipefail, grep -q exiting early can
+            # SIGPIPE printf and silently drop a real command.
+            grep -qiE '^[[:space:]]*/[a-z]' <<< "$COMMENT_BODY" || exit 0
+            # Only bot-managed issues take commands: a stray "/path" line elsewhere must not queue a run.
+            case ",$LABELS," in *,review,*|*,digest,*|*,report,*|*,intake,*) ;; *) exit 0 ;; esac
+            if allowed "$ACTOR"; then
+              react eyes
+              gh workflow run catalog-apply.yml -f kind=command -f issue_number="$ISSUE_NUMBER" -f comment_id="$COMMENT_ID" \
+                || { react confused; exit 1; }
+            else
+              react -1
+            fi
+            exit 0
+          fi
+          case ",$LABELS," in
+            *,report,*)
+              gh issue comment "$ISSUE_NUMBER" --body "Thanks — a maintainer will review this report." ;;
+            *,intake,*)
+              if allowed "$ISSUE_AUTHOR"; then
+                gh workflow run catalog-apply.yml -f kind=intake -f issue_number="$ISSUE_NUMBER" -f comment_id=0 \
+                  || { gh api -X POST "repos/$GH_REPO/issues/$ISSUE_NUMBER/reactions" -f content=confused >/dev/null; exit 1; }
+              else
+                gh issue comment "$ISSUE_NUMBER" --body 'Thanks — a maintainer will review it; they can run `/add <url>` to add it.'
+              fi ;;
+          esac
