@@ -468,6 +468,9 @@ In **digest** or **report** issues, name the paper right after the command:
 
 **Never attach a paywalled PDF to an issue** — issues are public. Paste a quote instead.
 
+Don't close review issues by hand — the paper is still pending and the next sync opens a new
+issue. Use `/verify` or `/discard`.
+
 **Suggest a paper:** New issue → "Add a paper" (maintainers' suggestions are added
 automatically; others wait for a maintainer to comment `/add <url>`).
 **Report a listed paper:** the "Report" link on every paper on ndif.us.
