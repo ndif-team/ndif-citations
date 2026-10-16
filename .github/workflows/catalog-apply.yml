@@ -28,8 +28,11 @@ jobs:
     permissions:
       contents: write
       issues: write
-    # Tokens live only on the steps that call gh. Install (pip) and Apply never see them
-    # (phase2 T6 review: job-level secrets are readable by every step's code).
+    # Tokens go only to the steps that call gh/git (Load, Push, Reply, Sync), never at job
+    # level, and the checkout persists none in .git/config. Caches are restore-only, so
+    # nothing this job runs is saved for catalog-run. Same-job isolation is still partial:
+    # Install/Apply code could tamper with later steps via $GITHUB_PATH or the venv. Splitting
+    # untrusted apply from the writer into two jobs is a tracked follow-up.
     env:
       GH_REPO: ${{ github.repository }}
       KIND: ${{ inputs.kind }}
@@ -45,18 +48,19 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: main
+          persist-credentials: false
 
       - id: py
         uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
-      - uses: actions/cache@v6
+      - uses: actions/cache/restore@v6
         with:
           path: ~/venv
           key: venv-${{ runner.os }}-py${{ steps.py.outputs.python-version }}-${{ hashFiles('constraints-ci.txt', 'pyproject.toml') }}
 
-      - uses: actions/cache@v6
+      - uses: actions/cache/restore@v6
         with:
           path: ~/.cache/huggingface
           key: hf-${{ runner.os }}-${{ hashFiles('constraints-ci.txt') }}
@@ -115,7 +119,15 @@ jobs:
       - name: Push catalog
         id: push
         if: ${{ steps.apply.outputs.changed == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          # The checkout persisted no credentials; push_catalog's git subprocesses inherit
+          # this env-only auth header (catalog_git._git copies os.environ).
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+                 GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           python -m ndif_citations push-catalog --push-conflict-branch -m "data: review #$ISSUE_NUMBER"
