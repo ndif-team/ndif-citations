@@ -10,7 +10,6 @@ Entry point: ``add_paper_by_url(out, url, *, cancel_check=None) -> dict``
 from __future__ import annotations
 
 import logging
-import re
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -81,7 +80,7 @@ def find_duplicate(out: Path, *, title: str, arxiv_id: str | None = None, doi: s
                 return p
     if doi:
         for p in existing:
-            if p.doi and p.doi == doi:
+            if p.doi and p.doi.lower() == doi.lower():
                 return p
     if title and title.strip():
         for p in existing:
@@ -90,18 +89,29 @@ def find_duplicate(out: Path, *, title: str, arxiv_id: str | None = None, doi: s
     return None
 
 
-_DOI_RE = re.compile(r"(10\.\d{4,9}/\S+)")
+_DOI_HOSTS = {"doi.org", "dx.doi.org", "www.doi.org"}
+_ARXIV_HOSTS = {"arxiv.org", "www.arxiv.org", "export.arxiv.org"}
 
 
 def s2_id_for_url(url: str) -> str:
-    """Semantic Scholar paper id for a URL: DOI: > ARXIV: > URL: (S2 resolves arXiv/ACL/ACM/bioRxiv URLs)."""
+    """Semantic Scholar paper id for a URL: DOI: > ARXIV: > URL: (S2 resolves arXiv/ACL/ACM/bioRxiv URLs).
+
+    Ids come only from the URL's host + path (never its query or another host's path), so the
+    stored url can't point at a different paper than the metadata.
+    """
+    from urllib.parse import unquote, urlparse
+
     from ndif_citations.utils import extract_arxiv_id_from_url
-    m = _DOI_RE.search(url) if "doi.org/" in url or url.startswith("10.") else None
-    if m:
-        return f"DOI:{m.group(1).rstrip('/')}"
-    arxiv = extract_arxiv_id_from_url(url)
-    if arxiv:
-        return f"ARXIV:{arxiv}"
+    u = urlparse(url)
+    host = u.netloc.lower()
+    if host in _DOI_HOSTS and u.path.startswith("/10."):
+        return f"DOI:{unquote(u.path[1:]).rstrip('/')}"
+    if url.startswith("10."):
+        return f"DOI:{url}"
+    if host in _ARXIV_HOSTS:
+        arxiv = extract_arxiv_id_from_url(url)
+        if arxiv:
+            return f"ARXIV:{arxiv}"
     return f"URL:{url}"
 
 

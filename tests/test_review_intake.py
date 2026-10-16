@@ -181,3 +181,16 @@ def test_add_command_needs_intake_label_and_explicit_url(tmp_path, monkeypatch):
     assert not run_commands(bad).changed
     noarg = ReviewContext(tmp_path, 3, "", "alice", {"intake"}, "/add", "bob")
     assert "explicitly" in run_commands(noarg).reply
+
+
+@pytest.mark.parametrize("url, want", [
+    ("https://evil.example/doi.org/10.1234/x", "URL:https://evil.example/doi.org/10.1234/x"),
+    ("https://evil.example/x?r=doi.org/&id=10.1234/abc", "URL:https://evil.example/x?r=doi.org/&id=10.1234/abc"),
+    ("https://evil.example/arxiv.org/abs/2501.00001", "URL:https://evil.example/arxiv.org/abs/2501.00001"),
+    ("https://doi.org/10.1145/abc?utm=1#frag", "DOI:10.1145/abc"),
+    ("https://dx.doi.org/10.1145/a%2Fb/", "DOI:10.1145/a/b"),
+    ("https://export.arxiv.org/abs/2501.00001", "ARXIV:2501.00001"),
+    ("10.1145/abc", "DOI:10.1145/abc"),
+])
+def test_s2_id_for_url_anchors_the_host(url, want):
+    assert manual_add.s2_id_for_url(url) == want

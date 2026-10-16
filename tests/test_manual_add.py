@@ -269,3 +269,12 @@ def test_find_duplicate_matches_title_subtitle(monkeypatch, tmp_path):
     monkeypatch.setattr("ndif_citations.output.load_existing_papers", lambda out: existing)
 
     assert manual_add.find_duplicate(tmp_path, title="Not Just a Piece of Cake") is existing[0]
+
+
+def test_find_duplicate_doi_is_case_insensitive(monkeypatch, tmp_path):
+    from ndif_citations import manual_add
+    from tests.conftest import make_paper
+
+    existing = [make_paper(title="Some Other Paper", arxiv_id=None, doi="10.1145/abc")]
+    monkeypatch.setattr("ndif_citations.output.load_existing_papers", lambda out: existing)
+    assert manual_add.find_duplicate(tmp_path, title="x", doi="10.1145/ABC") is existing[0]
