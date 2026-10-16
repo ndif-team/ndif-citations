@@ -313,7 +313,7 @@ def test_merge_repos_skip_does_not_blank_stats_on_failed_fetch(monkeypatch):
 
 
 def test_unknown_catalog_fields_survive_load_and_rewrite(tmp_path):
-    """Fields this version doesn't know (a newer phase's curator_quotes, a hand-added key) must
+    """Fields this version doesn't know (a newer phase's field, a hand-added key) must
     not be silently dropped by the next run or the post-rebase slim regeneration."""
     import json
 
@@ -324,7 +324,7 @@ def test_unknown_catalog_fields_survive_load_and_rewrite(tmp_path):
     out = tmp_path / "output"
     (out / "images").mkdir(parents=True)
     paper = {**make_paper(arxiv_id="1", bucket=Bucket.VERIFIED, has_classification=True).to_full_dict(),
-             "curator_quotes": [{"quote": "we use NDIF", "page": 3}]}
+             "curator_quotes": ["we use NDIF"], "future_field": {"page": 3}}
     repo = {**make_repo().to_full_dict(), "hand_note": "keep me"}
     full = out / "research-papers-full.json"
     full.write_text(json.dumps({"pending": [], "verified": [paper], "discarded": []}))
