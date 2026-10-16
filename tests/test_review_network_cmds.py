@@ -257,3 +257,34 @@ def test_no_new_figure_wording(pending, tmp_path, monkeypatch):
     _write(out, [q])
     (out / "images" / "c.png").write_bytes(b"c")
     assert "kept the existing thumbnail" in run_commands(_ctx(out, q, "/thumbnail")).reply
+
+
+# ---- fix round 2 ----
+def test_slow_drip_download_is_cut_by_timer(pending, monkeypatch):
+    import threading
+    import time
+    out, p = pending
+    gate = threading.Event()
+
+    class Drip(_Stream):
+        def iter_content(self, chunk_size=65536):
+            gate.wait(30)            # blocks until close() releases it
+            raise OSError("stream closed")
+
+        def close(self):
+            gate.set()
+    monkeypatch.setattr("ndif_citations.review_commands._DOWNLOAD_DEADLINE", 0.2)
+    monkeypatch.setattr(requests, "get", lambda url, **k: Drip(b""))
+    t = time.monotonic()
+    r = run_commands(_ctx(out, p, "/pdf https://example.org/a.pdf"))
+    assert "The download took too long." in r.reply and not r.changed and time.monotonic() - t < 5
+
+
+def test_thumbnail_pixel_cap(pending, monkeypatch):
+    out, p = pending
+    monkeypatch.setattr("ndif_citations.review_commands._MAX_IMG_PIXELS", 100)
+    b = io.BytesIO()
+    Image.new("RGB", (20, 20), "red").save(b, "PNG")
+    monkeypatch.setattr(requests, "get", lambda url, **k: _Stream(b.getvalue()))
+    r = run_commands(_ctx(out, p, _ATT))
+    assert "isn't an image I can read" in r.reply and not r.changed

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import threading
 import time
 import warnings
 from dataclasses import dataclass, field
@@ -202,6 +203,7 @@ def run_commands(ctx: ReviewContext) -> Result:
 _MAX_PDF = 50 * 1024 * 1024
 _MAX_IMG = 10 * 1024 * 1024
 _IMG_RE = re.compile(r"!\[[^\]]*\]\((https?://[^)\s]+)\)|<img[^>]+src=\"(https?://[^\"]+)\"", re.I)
+_MAX_IMG_PIXELS = 25_000_000
 _DOWNLOAD_DEADLINE = 120  # seconds, total per download
 _ATTACHMENT_PATH = re.compile(r"/user-attachments/assets/[A-Za-z0-9-]+")
 _IMG_HOSTS = {"private-user-images.githubusercontent.com", "user-images.githubusercontent.com"}
@@ -211,17 +213,24 @@ def _download(url: str, max_bytes: int) -> bytes:
     """https-only bounded download (redirects allowed — GitHub attachments 302 to signed URLs)."""
     if urlparse(url).scheme != "https":
         raise UserError("Only https:// links are accepted.")
-    resp = None
+    resp, timer, timed_out = None, None, threading.Event()
     try:
         start = time.monotonic()
-        resp = requests.get(url, stream=True, timeout=60, allow_redirects=True,
+        resp = requests.get(url, stream=True, timeout=(10, 30), allow_redirects=True,
                             headers={"User-Agent": "NDIFCitationTracker/1.0 (https://ndif.us)"})
         resp.raise_for_status()
         hops = [*getattr(resp, "history", []), resp]
         if any(urlparse(getattr(h, "url", url)).scheme != "https" for h in hops):
             raise UserError("That link redirects to a non-https address.")
+        # A slow-drip server can stall one read far past the per-recv timeout: a timer closes the stream.
+        def _expire():
+            timed_out.set()
+            resp.close()
+        timer = threading.Timer(max(0.0, _DOWNLOAD_DEADLINE - (time.monotonic() - start)), _expire)
+        timer.daemon = True
+        timer.start()
         chunks, total = [], 0
-        for chunk in resp.iter_content(chunk_size=65536):
+        for chunk in resp.iter_content(chunk_size=8192):
             if time.monotonic() - start > _DOWNLOAD_DEADLINE:
                 raise UserError("The download took too long.")
             total += len(chunk)
@@ -229,11 +238,19 @@ def _download(url: str, max_bytes: int) -> bytes:
                 raise UserError(f"File is larger than {max_bytes // (1024 * 1024)} MB.")
             chunks.append(chunk)
         return b"".join(chunks)
-    except ValueError:  # InvalidURL, bad port, http://[::1 ... (first: InvalidURL is also a RequestException)
-        raise UserError("That isn't a valid link.")
-    except requests.RequestException:
-        raise UserError("Couldn't download that link (it may need a login or have expired).")
+    except UserError:
+        raise
+    except Exception as e:  # noqa: BLE001 — mapped to fixed replies; never echo text
+        if timed_out.is_set():  # the timer closed the stream under us
+            raise UserError("The download took too long.") from None
+        if isinstance(e, ValueError):  # InvalidURL, bad port, http://[::1 ... (InvalidURL is also a RequestException)
+            raise UserError("That isn't a valid link.") from None
+        if isinstance(e, requests.RequestException):
+            raise UserError("Couldn't download that link (it may need a login or have expired).") from None
+        raise
     finally:
+        if timer is not None:
+            timer.cancel()
         if resp is not None:
             resp.close()
 
@@ -287,6 +304,8 @@ def cmd_thumbnail(ctx: ReviewContext, key: str, args: str, res: Result) -> str:
             with warnings.catch_warnings():
                 warnings.simplefilter("error", Image.DecompressionBombWarning)
                 img = Image.open(io.BytesIO(data), formats=["PNG", "JPEG", "GIF", "WEBP"])
+                if img.size[0] * img.size[1] > _MAX_IMG_PIXELS:
+                    raise ValueError("too many pixels")
                 img.load()
         except Exception:  # noqa: BLE001 — any decode failure is the user's file
             raise UserError("That attachment isn't an image I can read.")
