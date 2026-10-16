@@ -132,17 +132,31 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           python -m ndif_citations push-catalog --push-conflict-branch -m "data: review #$ISSUE_NUMBER"
 
-      # Reply + close BEFORE the sync: a closed issue is out of review-sync's open list,
-      # so no "Resolved"/"can't find" noise follows the reply.
-      - name: Reply and close
+      # Marker refresh first and separately: /edit can change the ids in the issue's marker, and
+      # Sync must not run on a stale one (a title-keyed paper would get a duplicate issue).
+      - name: Refresh issue marker
+        id: marker
         if: ${{ inputs.kind != 'sync' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # /edit can change the ids in the issue's marker: write the re-rendered body back first,
-          # so the sync below still resolves this issue (it stays bot-authored).
           jq -r '.body // empty' "$RUNNER_TEMP/result.json" > "$RUNNER_TEMP/body.md"
-          if [ -s "$RUNNER_TEMP/body.md" ]; then gh issue edit "$ISSUE_NUMBER" --body-file "$RUNNER_TEMP/body.md"; fi
+          [ -s "$RUNNER_TEMP/body.md" ] || exit 0
+          for i in 1 2 3; do
+            gh issue edit "$ISSUE_NUMBER" --body-file "$RUNNER_TEMP/body.md" && exit 0
+            [ "$i" = 3 ] || sleep 5
+          done
+          echo "::error::could not refresh the issue marker after 3 attempts"
+          exit 1
+
+      # Reply + close BEFORE the sync: a closed issue is out of review-sync's open list,
+      # so no "Resolved"/"can't find" noise follows the reply. Runs even if the marker
+      # refresh failed (the push already happened); explicit because success() would skip it.
+      - name: Reply and close
+        if: ${{ !cancelled() && inputs.kind != 'sync' && steps.install.outcome == 'success' && steps.load.outcome == 'success' && steps.apply.outcome == 'success' && steps.push.outcome != 'failure' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
           jq -r .reply "$RUNNER_TEMP/result.json" > "$RUNNER_TEMP/reply.md"
           gh issue comment "$ISSUE_NUMBER" --body-file "$RUNNER_TEMP/reply.md"
           if [ "$(jq -r .close "$RUNNER_TEMP/result.json")" = true ]; then gh issue close "$ISSUE_NUMBER"; fi
@@ -151,7 +165,7 @@ jobs:
       # may then hold changes that never reached main. (Skipped steps don't count, so
       # kind=sync still runs.)
       - name: Sync review issues
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.load.outcome != 'failure' && steps.apply.outcome != 'failure' && steps.push.outcome != 'failure' }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.load.outcome != 'failure' && steps.apply.outcome != 'failure' && steps.push.outcome != 'failure' && steps.marker.outcome != 'failure' }}
         env:
           GH_TOKEN: ${{ github.token }}
           CURATORS: ${{ vars.CURATORS }}
