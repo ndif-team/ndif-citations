@@ -177,3 +177,61 @@ def test_review_apply_cli_prints_reply_without_markup(pending, monkeypatch):  # 
     assert got["changed"] is True and got["close"] is False and "`[/x]`" in got["reply"]
     assert (out / "gh_output").read_text() == "changed=true\n"
     assert _get(out, p.merge_key()).venue == "ICLR 2026"
+
+
+# --- I4: a curator's own /edit must not break the issue's marker ---
+
+def _title_keyed(tmp_path, url):
+    p = make_paper(title="Keyless Paper", arxiv_id=None, doi=None, bucket=Bucket.PENDING,
+                   category=Category.USES_NNSIGHT, url=url)
+    _write(tmp_path, [p])
+    return p
+
+
+def _sync_kinds(out, ctx):
+    from ndif_citations.review_sync import plan_sync
+    issue = {"number": 12, "title": "x", "body": ctx.issue_body, "labels": [{"name": "review"}],
+             "author": {"login": "github-actions[bot]"}}
+    return [a.kind for a in plan_sync(load_existing_papers(out), [issue])]
+
+
+def test_edit_title_and_url_then_verify_in_one_comment(tmp_path):
+    p = _title_keyed(tmp_path, "https://example.org/a")
+    ctx = _ctx(tmp_path, p, "/edit title: Renamed Paper\n/edit url: https://example.org/b\n/verify")
+    r = run_commands(ctx)
+    assert r.reply.count("✅") == 3 and "can't find" not in r.reply, r.reply
+    assert _get(tmp_path, "title:renamed paper").bucket == Bucket.VERIFIED
+    kinds = _sync_kinds(tmp_path, ctx)
+    assert "attention" not in kinds and "create" not in kinds
+
+
+def test_edit_title_on_urlless_paper_keeps_issue(tmp_path):
+    p = _title_keyed(tmp_path, "")
+    ctx = _ctx(tmp_path, p, "/edit title: Renamed Paper")
+    assert run_commands(ctx).changed
+    kinds = _sync_kinds(tmp_path, ctx)
+    assert "attention" not in kinds and "create" not in kinds
+
+
+def test_review_apply_cli_returns_refreshed_body_only_after_edit(pending, monkeypatch):
+    from click.testing import CliRunner
+
+    from ndif_citations import config
+    from ndif_citations.cli import cli
+
+    out, p = pending
+    _, body, _ = render_issue(p)
+    (out / "issue.json").write_text(json.dumps({"number": 12, "body": body, "user": {"login": "github-actions[bot]"},
+                                                "labels": [{"name": "review"}]}))
+    monkeypatch.setattr(config, "get_output_dir", lambda _: out)
+
+    def apply(comment):
+        (out / "comment.json").write_text(json.dumps({"body": comment, "user": {"login": "alice"}}))
+        res = CliRunner().invoke(cli, ["review-apply", "--kind", "command", "--issue-json", str(out / "issue.json"),
+                                       "--comment-json", str(out / "comment.json"), "--out", str(out / "result.json")])
+        assert res.exit_code == 0, res.output
+        return json.loads((out / "result.json").read_text())
+
+    assert "body" not in apply("/help")
+    got = apply("/edit title: Pending One Renamed")
+    assert "Pending One Renamed" in got["body"] and got["body"] != body

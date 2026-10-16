@@ -139,6 +139,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # /edit can change the ids in the issue's marker: write the re-rendered body back first,
+          # so the sync below still resolves this issue (it stays bot-authored).
+          jq -r '.body // empty' "$RUNNER_TEMP/result.json" > "$RUNNER_TEMP/body.md"
+          if [ -s "$RUNNER_TEMP/body.md" ]; then gh issue edit "$ISSUE_NUMBER" --body-file "$RUNNER_TEMP/body.md"; fi
           jq -r .reply "$RUNNER_TEMP/result.json" > "$RUNNER_TEMP/reply.md"
           gh issue comment "$ISSUE_NUMBER" --body-file "$RUNNER_TEMP/reply.md"
           if [ "$(jq -r .close "$RUNNER_TEMP/result.json")" = true ]; then gh issue close "$ISSUE_NUMBER"; fi

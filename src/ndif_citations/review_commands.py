@@ -13,9 +13,9 @@ from urllib.parse import urlparse
 import requests
 
 from ndif_citations.digest import _SAFE_URL
-from ndif_citations.models import Category
+from ndif_citations.models import Category, DiscoveredPaper
 from ndif_citations.output import load_existing_papers
-from ndif_citations.review_render import BOT_LOGINS, HELP_TEXT, parse_marker
+from ndif_citations.review_render import BOT_LOGINS, HELP_TEXT, parse_marker, render_issue
 from ndif_citations.review_sync import resolve_paper
 from ndif_citations.utils import extract_arxiv_id_from_url
 
@@ -156,10 +156,14 @@ def cmd_edit(ctx: ReviewContext, key: str, args: str, res: Result) -> str:
     try:
         # No explicit bucket: edit_paper's _bucket_after_edit never publishes, keeps verified/discarded,
         # and refreshes a pending reason (e.g. /edit year clears stub_metadata → why: label updates).
-        papers_svc.edit_paper(ctx.out, key, {field_name: value})
+        d = papers_svc.edit_paper(ctx.out, key, {field_name: value})
     except ValueError:
         raise UserError(f"Couldn't set {field_name}: check the value's format (e.g. `/edit year: 2025`).")
     res.changed = True
+    if _bot_review_issue(ctx):
+        # A title/url edit can change every id the marker holds: re-render so later commands in
+        # this comment resolve, and catalog-apply writes the body back after the push.
+        ctx.issue_body = render_issue(DiscoveredPaper.model_validate(d))[1]
     return f"Updated {field_name}."
 
 

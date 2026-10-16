@@ -1143,7 +1143,10 @@ def review_apply_cmd(kind: str, issue_json: str, comment_json: str, out_path: st
         res = intake_from_issue(ctx)
     else:
         res = run_commands(ctx)
-    Path(out_path).write_text(json.dumps({"reply": res.reply, "changed": res.changed, "close": res.close}))
+    result = {"reply": res.reply, "changed": res.changed, "close": res.close}
+    if kind == "command" and ctx.issue_body != (issue.get("body") or ""):
+        result["body"] = ctx.issue_body  # /edit re-rendered the marker; the workflow writes it back
+    Path(out_path).write_text(json.dumps(result))
     if os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
             fh.write(f"changed={'true' if res.changed else 'false'}\n")
