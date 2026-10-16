@@ -1110,7 +1110,7 @@ def review_sync_cmd(dry_run: bool) -> None:
     log = apply_sync(actions, gh, assignees=os.environ.get("CURATORS", ""), dry_run=dry_run,
                      current_labels=current)
     for line in log:
-        console.print(line, markup=False, highlight=False)
+        console.print(line, markup=False, highlight=False, soft_wrap=True)
     console.print(f"{len(actions)} action(s){' (dry run)' if dry_run else ''}")
     if any(line.startswith("FAILED") for line in log):
         raise SystemExit(1)
@@ -1150,7 +1150,7 @@ def review_apply_cmd(kind: str, issue_json: str, comment_json: str, out_path: st
     if os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
             fh.write(f"changed={'true' if res.changed else 'false'}\n")
-    console.print(res.reply, markup=False, highlight=False)
+    console.print(res.reply, markup=False, highlight=False, soft_wrap=True)
 
 
 @cli.command()

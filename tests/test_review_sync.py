@@ -190,3 +190,60 @@ def test_list_command_is_single_unfiltered_by_author():
     Gh(runner=lambda args, stdin=None: calls.append(args) or "[]").list_review_issues()
     assert calls == [["issue", "list", "--label", "review", "--state", "open",
                       "--json", "number,title,body,labels,author", "--limit", "500"]]
+
+
+# --- log-line injection (M2), pacing (M8), attention order (M7) ---
+
+def test_log_lines_cannot_start_a_workflow_command():
+    from ndif_citations.review_sync import SyncAction
+
+    def runner(args, stdin=None):
+        raise RuntimeError("gh failed: oops\n::error::spoofed")
+    a = SyncAction("create", None, "title:x\n::add-mask::secret", "t", "b", ["review"])
+    log = apply_sync([a], Gh(runner=runner))
+    assert all("\n" not in line for line in log)
+    assert log == ["create    #- title:x ::add-mask::secret", "FAILED create #-: gh failed: oops ::error::spoofed"]
+
+
+def test_cli_does_not_wrap_long_log_lines(monkeypatch):
+    import ndif_citations.output as output
+    import ndif_citations.review_sync as rs
+    from ndif_citations.cli import cli
+
+    def runner(args, stdin=None):
+        if args[:2] == ["issue", "list"]:
+            return "[]"
+        raise RuntimeError("x" * 50 + " ::error::spoofed")  # 85 chars: rich would wrap at 80
+
+    monkeypatch.setattr(output, "load_existing_papers", lambda out: _three_papers()[:1])
+    monkeypatch.setattr(rs, "Gh", lambda: Gh(runner=runner))
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    res = CliRunner().invoke(cli, ["review-sync"])
+    assert not any(line.startswith("::") for line in res.output.splitlines()), res.output
+
+
+def test_pacing_sleep_runs_even_when_gh_raises(monkeypatch):
+    import ndif_citations.review_sync as rs
+    slept = []
+    monkeypatch.setattr(rs.time, "sleep", slept.append)
+
+    def runner(args, stdin=None):
+        raise RuntimeError("HTTP 403 secondary rate limit")
+    gh = Gh(runner=runner)
+    gh.pace = 1.0
+    for call in (lambda: gh.create("t", "b", []), lambda: gh.edit(1, "t", "b", [], []),
+                 lambda: gh.comment(1, "c"), lambda: gh.close(1), lambda: gh.add_label(1, "l")):
+        with pytest.raises(RuntimeError):
+            call()
+    assert slept == [1.0] * 5
+
+
+def test_attention_labels_before_commenting():
+    from ndif_citations.review_sync import SyncAction
+    calls = []
+
+    def runner(args, stdin=None):
+        calls.append(args[:2])
+        raise RuntimeError("label missing")
+    log = apply_sync([SyncAction("attention", 7, comment="can't find")], Gh(runner=runner))
+    assert calls == [["issue", "edit"]] and log[-1].startswith("FAILED attention #7")

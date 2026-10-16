@@ -235,3 +235,21 @@ def test_review_apply_cli_returns_refreshed_body_only_after_edit(pending, monkey
     assert "body" not in apply("/help")
     got = apply("/edit title: Pending One Renamed")
     assert "Pending One Renamed" in got["body"] and got["body"] != body
+
+
+def test_review_apply_cli_does_not_wrap_reply_lines(pending, monkeypatch):  # M2: rich wraps at 80 in CI
+    from click.testing import CliRunner
+
+    from ndif_citations import config, review_commands
+    from ndif_citations.cli import cli
+
+    out, p = pending
+    (out / "issue.json").write_text(json.dumps({"number": 12, "body": "", "labels": []}))
+    (out / "comment.json").write_text("{}")
+    monkeypatch.setattr(config, "get_output_dir", lambda _: out)
+    monkeypatch.setattr(review_commands, "run_commands",
+                        lambda ctx: review_commands.Result(replies=["a " * 40 + "::error::spoofed"]))
+    res = CliRunner().invoke(cli, ["review-apply", "--kind", "command", "--issue-json", str(out / "issue.json"),
+                                   "--comment-json", str(out / "comment.json"), "--out", str(out / "result.json")])
+    assert res.exit_code == 0, res.output
+    assert not any(line.startswith("::") for line in res.output.splitlines()), res.output

@@ -132,8 +132,7 @@ class Gh:
             args += ["--label", l]
         if assignees:
             args += ["--assignee", assignees]
-        self.run(args, stdin=body)
-        time.sleep(self.pace)
+        self._do(args, stdin=body)
 
     def edit(self, number: int, title: str, body: str, add_labels: list[str], remove_labels: list[str]) -> None:
         args = ["issue", "edit", str(number), "--title", title, "--body-file", "-"]
@@ -141,20 +140,27 @@ class Gh:
             args += ["--add-label", l]
         for l in remove_labels:
             args += ["--remove-label", l]
-        self.run(args, stdin=body)
-        time.sleep(self.pace)
+        self._do(args, stdin=body)
 
     def comment(self, number: int, body: str) -> None:
-        self.run(["issue", "comment", str(number), "--body-file", "-"], stdin=body)
-        time.sleep(self.pace)
+        self._do(["issue", "comment", str(number), "--body-file", "-"], stdin=body)
 
     def close(self, number: int) -> None:
-        self.run(["issue", "close", str(number)])
-        time.sleep(self.pace)
+        self._do(["issue", "close", str(number)])
 
     def add_label(self, number: int, label: str) -> None:
-        self.run(["issue", "edit", str(number), "--add-label", label])
-        time.sleep(self.pace)
+        self._do(["issue", "edit", str(number), "--add-label", label])
+
+    def _do(self, args: list[str], stdin: str | None = None) -> None:
+        # Pace failures too: under a secondary rate limit, back-to-back retries prolong the block.
+        try:
+            self.run(args, stdin=stdin)
+        finally:
+            time.sleep(self.pace)
+
+
+def _one_line(x) -> str:
+    return " ".join(str(x or "").split())
 
 
 def apply_sync(actions: list[SyncAction], gh: Gh, *, assignees: str = "", dry_run: bool = False,
@@ -165,7 +171,8 @@ def apply_sync(actions: list[SyncAction], gh: Gh, *, assignees: str = "", dry_ru
     """
     log: list[str] = []
     for a in actions:
-        log.append(f"{a.kind:9} #{a.issue or '-'} {a.paper_key or ''}")
+        # One line each: a newline in a title-derived key or gh stderr could start a workflow command.
+        log.append(f"{a.kind:9} #{a.issue or '-'} {_one_line(a.paper_key)}")
         if dry_run:
             continue
         try:
@@ -180,8 +187,8 @@ def apply_sync(actions: list[SyncAction], gh: Gh, *, assignees: str = "", dry_ru
                 gh.comment(a.issue, a.comment)
                 gh.close(a.issue)
             elif a.kind == "attention":
+                gh.add_label(a.issue, "needs-attention")  # label first: a failing label can't repeat the comment
                 gh.comment(a.issue, a.comment)
-                gh.add_label(a.issue, "needs-attention")
         except Exception as e:  # noqa: BLE001 - keep syncing; the CLI turns FAILED lines into exit 1
-            log.append(f"FAILED {a.kind} #{a.issue or '-'}: {e}")
+            log.append(f"FAILED {a.kind} #{a.issue or '-'}: {_one_line(e)}")
     return log
