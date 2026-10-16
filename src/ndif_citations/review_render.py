@@ -5,7 +5,7 @@ import json
 import re
 from urllib.parse import quote
 
-from ndif_citations.digest import _SAFE_URL, fence, plain
+from ndif_citations.digest import _SAFE_URL, fence, inline, plain
 from ndif_citations.models import Category, DiscoveredPaper, PaperReason
 
 BOT_LOGINS = frozenset({"app/github-actions", "github-actions[bot]", "github-actions"})
@@ -36,8 +36,9 @@ In digest/report issues, put the paper's URL (or `arxiv:<id>` / `doi:<doi>`) rig
 def marker_for(paper: DiscoveredPaper) -> str:
     data = {"key": paper.merge_key(), "url": paper.url or "", "arxiv": paper.arxiv_id or "",
             "doi": paper.doi or "", "title": paper.title}
-    # "--" can't appear inside an HTML comment; the JSON escape \u002d decodes back to "-".
-    blob = json.dumps(data, ensure_ascii=False).replace("--", "\\u002d\\u002d")
+    # "--" can't appear inside an HTML comment and a raw "@" could mention someone; the JSON
+    # escapes \u002d / \u0040 decode back to "-" / "@".
+    blob = json.dumps(data, ensure_ascii=False).replace("--", "\\u002d\\u002d").replace("@", "\\u0040")
     return f"<!-- ndif-paper: {blob} -->"
 
 
@@ -64,18 +65,6 @@ def why_label(paper: DiscoveredPaper) -> str:
     if paper.category == Category.USES_NDIF:
         return "why:uses-ndif"
     return "why:check-label"
-
-
-_MD = re.compile(r"([\\`*_\[\]<>~$])")
-_GH = re.compile(r"gh-(\d)", re.I)
-_ZW = chr(0x200B)
-
-
-def inline(text: str) -> str:
-    """Untrusted text for an issue/comment BODY: plain() plus Markdown escaping and defanged autolinks / GH- refs (no live HTML, links, images, emphasis, strikethrough, math, code spans, bare URLs, www. links, #N or GH-N references)."""
-    out = _MD.sub(r"\\\1", plain(text)).replace("#", "#" + _ZW)
-    out = out.replace("://", ":" + _ZW + "//").replace("www.", "www" + _ZW + ".")
-    return _GH.sub(lambda m: "GH" + _ZW + "-" + m.group(1), out)
 
 
 def _href(u: str | None) -> str | None:

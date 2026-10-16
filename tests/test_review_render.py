@@ -22,6 +22,13 @@ def test_parse_marker_handles_garbage():
     assert parse_marker("<!-- ndif-paper: {not json} -->") is None
 
 
+def test_marker_has_no_raw_at_and_round_trips_mentions():
+    p = make_paper(title="Ping @team and @everyone", arxiv_id="2501.00003")
+    m = marker_for(p)
+    assert "@" not in m
+    assert parse_marker(m)["title"] == "Ping @team and @everyone"
+
+
 def test_marker_in_untrusted_excerpt_is_ignored():
     """An excerpt carrying another paper's marker must not redirect the issue (only the last marker counts)."""
     victim = make_paper(title="Victim", arxiv_id="2407.14561")
