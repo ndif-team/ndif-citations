@@ -109,7 +109,9 @@ def test_llm_down_blocks_pdf(pending, monkeypatch):
                         lambda *a, **k: {"ok": False, "detail": "HTTP 410"})
     monkeypatch.setenv("LLM_API_KEY", "x")
     r = run_commands(_ctx(out, p, "/pdf https://example.org/a.pdf"))
-    assert "LLM is unavailable" in r.reply and not r.changed
+    assert "The LLM check failed" in r.reply and not r.changed
+    from ndif_citations import config   # M10: never disclose the provider in a public reply
+    assert "HTTP 410" not in r.reply and config.LLM_MODEL not in r.reply and config.LLM_BASE_URL not in r.reply
 
 
 def test_thumbnail_from_attachment(pending, monkeypatch):

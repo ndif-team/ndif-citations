@@ -71,7 +71,11 @@ def _reply(r: IntakeResult, res: Result) -> None:
 
 
 def intake_from_issue(ctx: ReviewContext) -> Result:
-    """Issue opened by a maintainer with the intake form → use the form's URL."""
+    """Issue opened by a maintainer with the intake form → use the form's URL.
+
+    Caller must have verified the commenter/issue author has write access (catalog-apply's
+    Load step); this function performs no authorization.
+    """
     res = Result()
     url = url_from_issue_form(ctx.issue_body)
     if not url:

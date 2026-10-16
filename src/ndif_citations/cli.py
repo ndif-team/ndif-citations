@@ -1122,7 +1122,11 @@ def review_sync_cmd(dry_run: bool) -> None:
 @click.option("--comment-json", required=True, help="gh api issues/comments/<id> output ({} for intake)")
 @click.option("--out", "out_path", required=True, help="Write {reply, changed, close} JSON here")
 def review_apply_cmd(kind: str, issue_json: str, comment_json: str, out_path: str) -> None:
-    """Apply review commands / intake for one issue event (data fetched by ID, never from inputs)."""
+    """Apply review commands / intake for one issue event (data fetched by ID, never from inputs).
+
+    Caller must have verified the commenter/issue author has write access (catalog-apply's
+    Load step); this function performs no authorization.
+    """
     import json
     import os
     from ndif_citations.review_commands import ReviewContext, run_commands

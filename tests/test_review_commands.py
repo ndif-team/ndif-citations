@@ -97,6 +97,14 @@ def test_explicit_target_in_digest_issue(pending):
     assert r.changed and _get(out, p.merge_key()).bucket == Bucket.DISCARDED
 
 
+def test_versioned_arxiv_target_resolves(pending):  # M9: the form copied from arXiv carries vN
+    out, p = pending
+    ctx = ReviewContext(out=out, issue_number=40, issue_body="digest", issue_author="github-actions[bot]",
+                        issue_labels={"digest"}, comment_body="/discard arxiv:2501.00001v2",
+                        comment_author="alice")
+    assert run_commands(ctx).changed and _get(out, p.merge_key()).bucket == Bucket.DISCARDED
+
+
 def test_title_target_rejected(pending):
     out, p = pending
     ctx = ReviewContext(out=out, issue_number=40, issue_body="", issue_author="github-actions[bot]",

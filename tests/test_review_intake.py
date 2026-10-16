@@ -79,7 +79,7 @@ def test_intake_waits_when_llm_unavailable(tmp_path, monkeypatch):
     monkeypatch.delenv("LLM_API_KEY", raising=False)
     monkeypatch.setattr(review_intake, "run_intake", lambda out, url: pytest.fail("ran without the LLM"))
     r = review_intake.intake_from_issue(ReviewContext(tmp_path, 3, FORM, "alice", {"intake"}, "", ""))
-    assert not r.changed and "LLM is unavailable" in r.reply
+    assert not r.changed and "The LLM check failed" in r.reply and "LLM_API_KEY" not in r.reply
 
 
 def test_discarded_match_is_duplicate(tmp_path, monkeypatch):

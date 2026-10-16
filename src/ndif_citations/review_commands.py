@@ -1,6 +1,7 @@
 """Slash commands in review / digest / report / intake issues (spec §6.3)."""
 from __future__ import annotations
 
+import logging
 import re
 import threading
 import time
@@ -17,7 +18,9 @@ from ndif_citations.models import Category, DiscoveredPaper
 from ndif_citations.output import load_existing_papers
 from ndif_citations.review_render import BOT_LOGINS, HELP_TEXT, parse_marker, render_issue
 from ndif_citations.review_sync import resolve_paper
-from ndif_citations.utils import extract_arxiv_id_from_url
+from ndif_citations.utils import extract_arxiv_id_from_url, normalize_arxiv_id
+
+logger = logging.getLogger(__name__)
 
 CATEGORIES = {"uses_ndif", "uses_nnsight", "referencing"}
 EDIT_FIELDS = {"title": "title", "authors": "authors", "affiliations": "affiliations", "venue": "venue",
@@ -72,7 +75,7 @@ def parse_commands(text: str, limit: int = 10) -> list[Command]:
 def _ident_from_token(token: str) -> dict | None:
     t = token.strip()
     if t.lower().startswith("arxiv:"):
-        return {"arxiv": t[6:]}
+        return {"arxiv": normalize_arxiv_id(t[6:])}
     if t.lower().startswith("doi:"):
         return {"doi": t[4:]}
     if t.startswith(("http://", "https://")):
@@ -184,6 +187,11 @@ HANDLERS: dict[str, Handler] = {
 
 
 def run_commands(ctx: ReviewContext) -> Result:
+    """Apply the slash commands in ctx.comment_body.
+
+    Caller must have verified the commenter/issue author has write access (catalog-apply's
+    Load step); this function performs no authorization.
+    """
     res = Result()
     cmds = parse_commands(ctx.comment_body)
     if not cmds:
@@ -263,8 +271,9 @@ def _llm_ready() -> None:
     from ndif_citations.preflight import preflight
     pf = preflight(skip_papers=False, skip_github=True, validate_llm=True)
     if not pf["ok"]:
-        raise UserError("The LLM is unavailable right now, so I didn't change anything: "
-                        + "; ".join(pf["blocking"]) + " — try again later.")
+        logger.warning("; ".join(pf["blocking"]))  # the run log only: it names the provider endpoint/model
+        raise UserError("The LLM check failed, so I didn't change anything — try again later "
+                        "(details are in the run log).")
 
 
 def cmd_pdf(ctx: ReviewContext, key: str, args: str, res: Result) -> str:
