@@ -175,3 +175,85 @@ def test_thumbnail_downscales_and_flattens_alpha(pending, monkeypatch):
     got = next(x for x in load_existing_papers(out) if x.merge_key() == p.merge_key())
     img = Image.open(out / got.image.lstrip("/"))
     assert max(img.size) <= 1600 and img.mode == "RGB" and img.getpixel((0, 0)) == (255, 255, 255)
+
+
+# ---- fix round 1 ----
+_ATT = '/thumbnail\n![x](https://github.com/user-attachments/assets/abc)'
+
+
+def _saved(out, p):
+    return next(x for x in load_existing_papers(out) if x.merge_key() == p.merge_key())
+
+
+@pytest.mark.parametrize("fmt,payload", [("TGA", None), ("EPS", b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 4 4\n")])
+def test_thumbnail_rejects_non_allowlisted_formats(pending, monkeypatch, fmt, payload):
+    out, p = pending
+    if payload is None:
+        b = io.BytesIO()
+        Image.new("RGB", (4, 4), "red").save(b, fmt)
+        payload = b.getvalue()
+    monkeypatch.setattr(requests, "get", lambda url, **k: _Stream(payload))
+    r = run_commands(_ctx(out, p, _ATT))
+    assert "isn't an image I can read" in r.reply and not r.changed and not _saved(out, p).image
+
+
+def test_download_closes_response_on_all_paths(pending, monkeypatch):
+    out, p = pending
+    closed = []
+
+    class S(_Stream):
+        def close(self):
+            closed.append(1)
+    monkeypatch.setattr(requests, "get", lambda url, **k: S(b"<html>"))
+    run_commands(_ctx(out, p, "/pdf https://example.org/a.pdf"))
+    monkeypatch.setattr(requests, "get", lambda url, **k: S(b"x", status=500))
+    run_commands(_ctx(out, p, "/pdf https://example.org/a.pdf"))
+    assert len(closed) == 2
+
+
+@pytest.mark.parametrize("exc", [requests.exceptions.InvalidURL("secret"), ValueError("secret")])
+def test_malformed_url_is_fixed_reply(pending, monkeypatch, exc):
+    out, p = pending
+
+    def boom(url, **k):
+        raise exc
+    monkeypatch.setattr(requests, "get", boom)
+    r = run_commands(_ctx(out, p, "/pdf https://example.org/a.pdf"))
+    assert "That isn't a valid link." in r.reply and "secret" not in r.reply and not r.changed
+
+
+def test_attachment_path_traversal_rejected(pending, monkeypatch):
+    out, p = pending
+    monkeypatch.setattr(requests, "get", lambda url, **k: pytest.fail("must not download"))
+    r = run_commands(_ctx(out, p, "/thumbnail\n![x](https://github.com/user-attachments/assets/../../x)"))
+    assert "GitHub attachment" in r.reply and not r.changed
+
+
+def test_decompression_bomb_warning_is_refused(pending, monkeypatch):
+    out, p = pending
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 10)   # 4x4=16 px > 10 -> warning (< 2x limit)
+    monkeypatch.setattr(requests, "get", lambda url, **k: _Stream(_png()))
+    r = run_commands(_ctx(out, p, _ATT))
+    assert "isn't an image I can read" in r.reply and not r.changed
+
+
+def test_download_deadline(pending, monkeypatch):
+    out, p = pending
+    ticks = iter([0, 0, 500, 500, 500])
+    monkeypatch.setattr("ndif_citations.review_commands.time.monotonic", lambda: next(ticks))
+    monkeypatch.setattr(requests, "get", lambda url, **k: _Stream(b"%PDF-" + b"x" * 200000))
+    r = run_commands(_ctx(out, p, "/pdf https://example.org/a.pdf"))
+    assert "The download took too long." in r.reply and not r.changed
+
+
+def test_no_new_figure_wording(pending, tmp_path, monkeypatch):
+    out, p = pending
+    monkeypatch.setattr("ndif_citations.pdf_cache.get_cached_pdf", lambda paper, o: out / "x.pdf")
+    monkeypatch.setattr("ndif_citations.reprocess.reprocess_papers", lambda o, ids, fields, **k: {})
+    r = run_commands(_ctx(out, p, "/thumbnail")).reply
+    assert "No new figure found." in r and "kept the existing" not in r
+    q = make_paper(title="Has Fig", arxiv_id="2502.00009", bucket=Bucket.PENDING,
+                   category=Category.USES_NNSIGHT, image="/images/c.png")
+    _write(out, [q])
+    (out / "images" / "c.png").write_bytes(b"c")
+    assert "kept the existing thumbnail" in run_commands(_ctx(out, q, "/thumbnail")).reply

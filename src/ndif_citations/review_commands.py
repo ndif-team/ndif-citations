@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import re
+import time
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -200,6 +202,8 @@ def run_commands(ctx: ReviewContext) -> Result:
 _MAX_PDF = 50 * 1024 * 1024
 _MAX_IMG = 10 * 1024 * 1024
 _IMG_RE = re.compile(r"!\[[^\]]*\]\((https?://[^)\s]+)\)|<img[^>]+src=\"(https?://[^\"]+)\"", re.I)
+_DOWNLOAD_DEADLINE = 120  # seconds, total per download
+_ATTACHMENT_PATH = re.compile(r"/user-attachments/assets/[A-Za-z0-9-]+")
 _IMG_HOSTS = {"private-user-images.githubusercontent.com", "user-images.githubusercontent.com"}
 
 
@@ -207,7 +211,9 @@ def _download(url: str, max_bytes: int) -> bytes:
     """https-only bounded download (redirects allowed — GitHub attachments 302 to signed URLs)."""
     if urlparse(url).scheme != "https":
         raise UserError("Only https:// links are accepted.")
+    resp = None
     try:
+        start = time.monotonic()
         resp = requests.get(url, stream=True, timeout=60, allow_redirects=True,
                             headers={"User-Agent": "NDIFCitationTracker/1.0 (https://ndif.us)"})
         resp.raise_for_status()
@@ -216,13 +222,20 @@ def _download(url: str, max_bytes: int) -> bytes:
             raise UserError("That link redirects to a non-https address.")
         chunks, total = [], 0
         for chunk in resp.iter_content(chunk_size=65536):
+            if time.monotonic() - start > _DOWNLOAD_DEADLINE:
+                raise UserError("The download took too long.")
             total += len(chunk)
             if total > max_bytes:
                 raise UserError(f"File is larger than {max_bytes // (1024 * 1024)} MB.")
             chunks.append(chunk)
         return b"".join(chunks)
+    except ValueError:  # InvalidURL, bad port, http://[::1 ... (first: InvalidURL is also a RequestException)
+        raise UserError("That isn't a valid link.")
     except requests.RequestException:
         raise UserError("Couldn't download that link (it may need a login or have expired).")
+    finally:
+        if resp is not None:
+            resp.close()
 
 
 def _llm_ready() -> None:
@@ -266,13 +279,15 @@ def cmd_thumbnail(ctx: ReviewContext, key: str, args: str, res: Result) -> str:
         url = m.group(1) or m.group(2)
         u = urlparse(url)
         ok = u.scheme == "https" and (u.netloc in _IMG_HOSTS or
-                                      (u.netloc == "github.com" and u.path.startswith("/user-attachments/assets/")))
+                                      (u.netloc == "github.com" and _ATTACHMENT_PATH.fullmatch(u.path)))
         if not ok:
             raise UserError("Paste the screenshot directly into the comment (it must be a GitHub attachment).")
         data = _download(url, _MAX_IMG)
         try:
-            img = Image.open(io.BytesIO(data))
-            img.load()
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", Image.DecompressionBombWarning)
+                img = Image.open(io.BytesIO(data), formats=["PNG", "JPEG", "GIF", "WEBP"])
+                img.load()
         except Exception:  # noqa: BLE001 — any decode failure is the user's file
             raise UserError("That attachment isn't an image I can read.")
         img.thumbnail((1600, 1600))
@@ -299,7 +314,8 @@ def cmd_thumbnail(ctx: ReviewContext, key: str, args: str, res: Result) -> str:
     res.changed = True  # reprocess rewrote the catalog (lock) either way
     after = _img_bytes()
     if after is None or after == before:
-        return "No new figure found in the PDF; kept the existing thumbnail."
+        return ("No new figure found in the PDF; kept the existing thumbnail." if before is not None
+                else "No new figure found.")
     return "Thumbnail re-extracted from the PDF."
 
 
