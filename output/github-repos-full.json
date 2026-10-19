@@ -4,9 +4,9 @@
     "repo": "ARENA_materials",
     "url": "https://github.com/ARENA-education/ARENA_materials",
     "description": null,
-    "stars": 1349,
-    "forks": 887,
-    "last_commit": "2026-10-09",
+    "stars": 1366,
+    "forks": 890,
+    "last_commit": "2026-10-19",
     "archived": false,
     "is_fork": false,
     "language": "Jupyter Notebook",
@@ -22,22 +22,22 @@
     "classification_reason": "github_dependent",
     "repo_type": "course",
     "parent_full_name": null,
-    "content_hash": "a3b044c59b98e358",
+    "content_hash": "986385477b7e7d97",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
-    "processing_bucket": "new",
+    "processing_bucket": "reprocess",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "hijohnnylin",
     "repo": "neuronpedia",
     "url": "https://github.com/hijohnnylin/neuronpedia",
     "description": "open source interpretability platform 🧠",
-    "stars": 1162,
-    "forks": 157,
-    "last_commit": "2026-10-12",
+    "stars": 1175,
+    "forks": 158,
+    "last_commit": "2026-10-16",
     "archived": false,
     "is_fork": false,
     "language": "TypeScript",
@@ -53,13 +53,13 @@
     "classification_reason": "github_dependent",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "8a2a0ed9d367a6c5",
+    "content_hash": "3c1ae9bf640c2d6b",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "callummcdougall",
@@ -123,7 +123,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "EleutherAI",
@@ -153,7 +153,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "TransluceAI",
@@ -181,7 +181,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "saprmarks",
@@ -211,16 +211,16 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "FOR-sight-ai",
     "repo": "interpreto",
     "url": "https://github.com/FOR-sight-ai/interpreto",
     "description": "🪄 Interpreto is an interpretability toolbox for LLMs",
-    "stars": 207,
+    "stars": 209,
     "forks": 6,
-    "last_commit": "2026-10-07",
+    "last_commit": "2026-10-16",
     "archived": false,
     "is_fork": false,
     "language": "Python",
@@ -250,13 +250,13 @@
     "classification_reason": "github_dependent",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "542b21276362aabe",
+    "content_hash": "b3a04c2b83cd3b76",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "adamkarvonen",
@@ -291,7 +291,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "UKGovernmentBEIS",
@@ -299,8 +299,8 @@
     "url": "https://github.com/UKGovernmentBEIS/vllm-lens",
     "description": "Extract residual-stream activations and apply steering vectors (including activation oracles) to any vLLM model during inference.",
     "stars": 135,
-    "forks": 17,
-    "last_commit": "2026-10-02",
+    "forks": 18,
+    "last_commit": "2026-10-13",
     "archived": false,
     "is_fork": false,
     "language": "Python",
@@ -313,13 +313,13 @@
     "classification_reason": "github_dependent",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "18ae962db65b249a",
+    "content_hash": "eb1b10e7f0378d25",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "ndif-team",
@@ -328,7 +328,7 @@
     "description": "Unified access to Large Language Model modules using NNsight",
     "stars": 121,
     "forks": 12,
-    "last_commit": "2026-10-09",
+    "last_commit": "2026-10-16",
     "archived": false,
     "is_fork": false,
     "language": "Python",
@@ -338,20 +338,22 @@
       "nnsight",
       "patchscopes"
     ],
-    "readme_arxiv_ids": [],
-    "linked_paper_url": null,
-    "linked_paper_tier": null,
-    "category": "uses_nnsight",
-    "classification_reason": "github_dependent",
+    "readme_arxiv_ids": [
+      "2511.14465"
+    ],
+    "linked_paper_url": "https://arxiv.org/abs/2511.14465",
+    "linked_paper_tier": 1,
+    "category": "uses_ndif",
+    "classification_reason": "ndif_keyword_match",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "7594e82524f66ada",
+    "content_hash": "e0c45b9591aa0f7e",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "goodfire-ai",
@@ -379,7 +381,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "JoshEngels",
@@ -409,7 +411,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "ExplainableML",
@@ -439,7 +441,46 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
+  },
+  {
+    "owner": "sup3rus3r",
+    "repo": "obsidian-ai",
+    "url": "https://github.com/sup3rus3r/obsidian-ai",
+    "description": "Obsidian AI is an open-source platform that gives you a full visual interface for building, managing, and running AI agents — no SDKs, no boilerplate, no glue code required.",
+    "stars": 65,
+    "forks": 15,
+    "last_commit": "2026-10-19",
+    "archived": false,
+    "is_fork": false,
+    "language": "Python",
+    "license": "AGPL-3.0",
+    "topics": [
+      "agentic-ai",
+      "agentic-workflow",
+      "automation",
+      "large-language-models",
+      "llm",
+      "low-code",
+      "obsidian",
+      "open-source",
+      "orchestration",
+      "platform"
+    ],
+    "readme_arxiv_ids": [],
+    "linked_paper_url": null,
+    "linked_paper_tier": null,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "research",
+    "parent_full_name": null,
+    "content_hash": "4129212ce272f6e1",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "new",
+    "first_seen": "2026-10-19",
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "ndif-team",
@@ -448,7 +489,7 @@
     "description": "The NDIF server, which performs deep inference and serves nnsight requests remotely",
     "stars": 51,
     "forks": 18,
-    "last_commit": "2026-10-08",
+    "last_commit": "2026-10-18",
     "archived": false,
     "is_fork": false,
     "language": "Python",
@@ -458,20 +499,22 @@
       "machine-learning",
       "server"
     ],
-    "readme_arxiv_ids": [],
-    "linked_paper_url": null,
-    "linked_paper_tier": null,
-    "category": "uses_nnsight",
-    "classification_reason": "github_dependent",
+    "readme_arxiv_ids": [
+      "2407.14561"
+    ],
+    "linked_paper_url": "https://arxiv.org/abs/2407.14561",
+    "linked_paper_tier": 1,
+    "category": "uses_ndif",
+    "classification_reason": "ndif_keyword_match",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "75a1053aec6d1c4c",
+    "content_hash": "9ea34c971f9b0633",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
-    "processing_bucket": "new",
+    "processing_bucket": "reprocess",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "tdooms",
@@ -501,16 +544,16 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "decoderesearch",
     "repo": "interp-engine",
     "url": "https://github.com/decoderesearch/interp-engine",
     "description": "Fast, standardized, and easy-to-use interpretability engine.",
-    "stars": 39,
-    "forks": 5,
-    "last_commit": "2026-10-10",
+    "stars": 40,
+    "forks": 6,
+    "last_commit": "2026-10-16",
     "archived": false,
     "is_fork": false,
     "language": "Python",
@@ -525,13 +568,13 @@
     "classification_reason": "github_dependent",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "50b02db467faccae",
+    "content_hash": "408127df85a80297",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
-    "processing_bucket": "new",
+    "processing_bucket": "reprocess",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "safety-research",
@@ -561,7 +604,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "wollschlager",
@@ -591,7 +634,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "RobertCsordas",
@@ -619,7 +662,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "adamkarvonen",
@@ -647,7 +690,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "belindal",
@@ -677,7 +720,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "Xmaster6y",
@@ -709,7 +752,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "koayon",
@@ -743,7 +786,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "science-of-finetuning",
@@ -771,7 +814,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "ndif-team",
@@ -780,7 +823,7 @@
     "description": null,
     "stars": 18,
     "forks": 10,
-    "last_commit": "2026-09-18",
+    "last_commit": "2026-10-16",
     "archived": false,
     "is_fork": false,
     "language": "TypeScript",
@@ -789,17 +832,17 @@
     "readme_arxiv_ids": [],
     "linked_paper_url": null,
     "linked_paper_tier": null,
-    "category": "uses_nnsight",
-    "classification_reason": "github_dependent",
-    "repo_type": "experiment",
+    "category": "uses_ndif",
+    "classification_reason": "ndif_keyword_match",
+    "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "6f63ea112b1e74a5",
+    "content_hash": "ef12e85e62de592d",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "sfeucht",
@@ -829,7 +872,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "curt-tigges",
@@ -857,7 +900,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "johnyang101",
@@ -887,7 +930,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "DanielSc4",
@@ -917,7 +960,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "DeepRCL",
@@ -953,7 +996,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "kdu4108",
@@ -983,7 +1026,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "yzp11",
@@ -1013,7 +1056,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "Butanium",
@@ -1047,7 +1090,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "MaheepChaudhary",
@@ -1082,7 +1125,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "Cadenza-Labs",
@@ -1110,7 +1153,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "jkminder",
@@ -1140,7 +1183,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "joelburget",
@@ -1173,7 +1216,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "obvslib",
@@ -1201,7 +1244,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "EmilRyd",
@@ -1229,7 +1272,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "kureha-yamaguchi",
@@ -1275,7 +1318,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "DavidUdell",
@@ -1316,7 +1359,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "facebookresearch",
@@ -1346,7 +1389,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "UKPLab",
@@ -1374,7 +1417,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "canrager",
@@ -1404,7 +1447,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "hijohnnylin",
@@ -1432,7 +1475,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "juand-r",
@@ -1463,7 +1506,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "loganriggs",
@@ -1491,7 +1534,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "lucyfarnik",
@@ -1521,7 +1564,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "sharanry",
@@ -1551,7 +1594,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "alphavector",
@@ -1579,7 +1622,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "efarrell1",
@@ -1607,7 +1650,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "jcoombes",
@@ -1635,7 +1678,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "jkminder",
@@ -1663,7 +1706,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "pleask",
@@ -1691,7 +1734,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "redwoodresearch",
@@ -1719,7 +1762,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "MaheepChaudhary",
@@ -1749,7 +1792,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "MikolajSzawerda",
@@ -1784,7 +1827,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "safety-research",
@@ -1812,7 +1855,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "vminvsky",
@@ -1842,7 +1885,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "Gusanidas",
@@ -1870,7 +1913,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "redwoodresearch",
@@ -1879,7 +1922,7 @@
     "description": "Alignment Faking Model Organism Finetuning and Evaluation Utils",
     "stars": 4,
     "forks": 17,
-    "last_commit": "2026-10-06",
+    "last_commit": "2026-10-16",
     "archived": false,
     "is_fork": false,
     "language": "Jupyter Notebook",
@@ -1892,13 +1935,13 @@
     "classification_reason": "github_dependent",
     "repo_type": "experiment",
     "parent_full_name": null,
-    "content_hash": "1bb26fc8d0b6a894",
+    "content_hash": "790d4cdbe89b3f5e",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
-    "processing_bucket": "new",
+    "processing_bucket": "reprocess",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "aalok-sathe",
@@ -1926,7 +1969,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "AI4Bharat",
@@ -1956,7 +1999,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "cadentj",
@@ -1984,7 +2027,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "danibalcells",
@@ -2012,7 +2055,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "Lyn4ever29",
@@ -2040,7 +2083,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "adamkarvonen",
@@ -2068,7 +2111,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "cadentj",
@@ -2096,7 +2139,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "canrager",
@@ -2124,7 +2167,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "carlomarxdk",
@@ -2133,7 +2176,7 @@
     "description": "A research project on competing notions of truth in large language models.",
     "stars": 2,
     "forks": 0,
-    "last_commit": "2026-08-31",
+    "last_commit": "2026-10-15",
     "archived": false,
     "is_fork": false,
     "language": "Python",
@@ -2154,18 +2197,18 @@
       "2506.23921"
     ],
     "linked_paper_url": "https://arxiv.org/abs/2506.23921",
-    "linked_paper_tier": 3,
+    "linked_paper_tier": 1,
     "category": "uses_nnsight",
     "classification_reason": "github_dependent",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "aa1d0b9c47ef31c9",
+    "content_hash": "b52b6aaedf7d27ef",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "charlieoneill11",
@@ -2193,7 +2236,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "cma1114",
@@ -2221,7 +2264,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "DanielSc4",
@@ -2251,7 +2294,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "gucioopielka",
@@ -2281,7 +2324,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "JacksonKaunismaa",
@@ -2311,7 +2354,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "loftusa",
@@ -2339,7 +2382,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "Lucent-Financial-Group",
@@ -2348,7 +2391,7 @@
     "description": "F# implementation of DBSP for .NET 10",
     "stars": 2,
     "forks": 1,
-    "last_commit": "2026-10-11",
+    "last_commit": "2026-10-17",
     "archived": false,
     "is_fork": false,
     "language": "TypeScript",
@@ -2363,13 +2406,13 @@
     "classification_reason": "github_dependent",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "e9572bcdde3141bb",
+    "content_hash": "11242b35ed4fc568",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
-    "processing_bucket": "new",
+    "processing_bucket": "reprocess",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "Madjakul",
@@ -2406,7 +2449,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "magikarp01",
@@ -2434,7 +2477,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "AmirSahrani",
@@ -2462,7 +2505,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "AnnemetteBP",
@@ -2490,7 +2533,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "AsteroidHunter",
@@ -2524,7 +2567,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "atlaie",
@@ -2552,7 +2595,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "canrager",
@@ -2580,7 +2623,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "chris-pinier",
@@ -2589,7 +2632,7 @@
     "description": null,
     "stars": 1,
     "forks": 4,
-    "last_commit": "2026-06-28",
+    "last_commit": "2026-10-14",
     "archived": false,
     "is_fork": false,
     "language": "Jupyter Notebook",
@@ -2604,13 +2647,13 @@
     "classification_reason": "github_dependent",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "fbf5cdfa8c8d8032",
+    "content_hash": "4515e01b4d7ea5a0",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "dashstander",
@@ -2638,7 +2681,38 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
+  },
+  {
+    "owner": "EIDOSLAB",
+    "repo": "MedSAE",
+    "url": "https://github.com/EIDOSLAB/MedSAE",
+    "description": "MedSAE: Dissecting MedCLIP Representations with Sparse Autoencoders [ICIP 2026]",
+    "stars": 1,
+    "forks": 0,
+    "last_commit": "2026-10-15",
+    "archived": false,
+    "is_fork": false,
+    "language": "Python",
+    "license": null,
+    "topics": [],
+    "readme_arxiv_ids": [
+      "2504.02821",
+      "2501.18052"
+    ],
+    "linked_paper_url": "https://arxiv.org/abs/2504.02821",
+    "linked_paper_tier": 4,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "research",
+    "parent_full_name": null,
+    "content_hash": "25bc537fb215f9cb",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "reprocess",
+    "first_seen": "2026-06-10",
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "FergusFettes",
@@ -2666,7 +2740,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "FlexCode29",
@@ -2696,7 +2770,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "hectorxm25",
@@ -2724,7 +2798,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "JacksonKaunismaa",
@@ -2755,7 +2829,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "juand-r",
@@ -2786,7 +2860,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "kisate",
@@ -2814,7 +2888,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "kuehn-lars",
@@ -2842,7 +2916,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "lccqqqqq",
@@ -2870,7 +2944,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "lmb-freiburg",
@@ -2908,7 +2982,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "man-shar",
@@ -2936,7 +3010,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "migerovitch",
@@ -2967,7 +3041,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "muherng",
@@ -2997,7 +3071,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "nqgl",
@@ -3025,7 +3099,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "parsed-labs",
@@ -3081,7 +3155,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "TalibKhweled",
@@ -3109,7 +3183,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "tatami-galaxy",
@@ -3137,7 +3211,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "viktorvesely",
@@ -3165,7 +3239,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "xocelyk",
@@ -3193,7 +3267,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "yulonglin",
@@ -3221,7 +3295,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "4gatepylon",
@@ -3252,7 +3326,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "5uru",
@@ -3280,7 +3354,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "7vik",
@@ -3308,7 +3382,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "84rt",
@@ -3338,7 +3412,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "AanshSamyani",
@@ -3366,7 +3440,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "aaron-sandoval",
@@ -3396,7 +3470,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "abibalimi",
@@ -3427,7 +3501,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "adamimos",
@@ -3455,7 +3529,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "ahmedmahmud",
@@ -3483,7 +3557,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "akul-sethi",
@@ -3511,7 +3585,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "AlexanderGetka-cbica",
@@ -3539,7 +3613,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "AndersWoodruff",
@@ -3570,7 +3644,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "AntonKorznikov",
@@ -3598,7 +3672,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "aokellermann",
@@ -3629,7 +3703,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "archive-jgf",
@@ -3657,7 +3731,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "Arrrlex",
@@ -3685,7 +3759,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "atharvanihalani",
@@ -3716,7 +3790,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "atlaie",
@@ -3744,7 +3818,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "bell-boy",
@@ -3772,7 +3846,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "benvigano",
@@ -3800,7 +3874,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "BerkeArgin",
@@ -3828,7 +3902,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "cadentj",
@@ -3856,7 +3930,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "cadentj",
@@ -3884,7 +3958,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "cadentj",
@@ -3912,7 +3986,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "cadentj",
@@ -3940,7 +4014,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "canrager",
@@ -3968,7 +4042,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "canrager",
@@ -3996,7 +4070,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "CarlosGIbanez",
@@ -4024,7 +4098,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "chloeli-15",
@@ -4052,7 +4126,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "cicero-im",
@@ -4080,7 +4154,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "ClaireBookworm",
@@ -4108,7 +4182,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "collijk",
@@ -4136,7 +4210,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "danielmccannsayles",
@@ -4164,7 +4238,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "dashstander",
@@ -4192,7 +4266,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "DennwsLee",
@@ -4222,7 +4296,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "devishraq",
@@ -4250,7 +4324,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "DGeisz",
@@ -4278,7 +4352,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "DGeisz",
@@ -4306,7 +4380,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "dislovelhl",
@@ -4337,7 +4411,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "ebalp",
@@ -4365,7 +4439,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "edithvillegas",
@@ -4393,7 +4467,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "edtallison",
@@ -4424,38 +4498,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
-  },
-  {
-    "owner": "EIDOSLAB",
-    "repo": "MedSAE",
-    "url": "https://github.com/EIDOSLAB/MedSAE",
-    "description": "MedSAE: Dissecting MedCLIP Representations with Sparse Autoencoders [ICIP 2026]",
-    "stars": 0,
-    "forks": 0,
-    "last_commit": "2026-02-04",
-    "archived": false,
-    "is_fork": false,
-    "language": "Python",
-    "license": null,
-    "topics": [],
-    "readme_arxiv_ids": [
-      "2504.02821",
-      "2501.18052"
-    ],
-    "linked_paper_url": "https://arxiv.org/abs/2504.02821",
-    "linked_paper_tier": 4,
-    "category": "uses_nnsight",
-    "classification_reason": "github_dependent",
-    "repo_type": "research",
-    "parent_full_name": null,
-    "content_hash": "ef6e05eb925df64f",
-    "manual_override": false,
-    "has_metadata": true,
-    "has_classification": true,
-    "processing_bucket": "reprocess",
-    "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "Eugleo",
@@ -4483,7 +4526,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "FergusFettes",
@@ -4511,7 +4554,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "FPIEDRAH-BU",
@@ -4539,7 +4582,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "FrogAndCranberries",
@@ -4569,7 +4612,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "Gattocrucco",
@@ -4600,7 +4643,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "gitary",
@@ -4628,7 +4671,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "gitary",
@@ -4658,7 +4701,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "gitary",
@@ -4686,7 +4729,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "gitary",
@@ -4717,7 +4760,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "GlacierEQ",
@@ -4745,7 +4788,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "good-epic",
@@ -4773,7 +4816,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "HassenAissa",
@@ -4801,7 +4844,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "iakshay",
@@ -4829,7 +4872,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "IMMachinations",
@@ -4857,7 +4900,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "ipdimitrov",
@@ -4885,7 +4928,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "jacobcd52",
@@ -4913,7 +4956,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "jacobcd52",
@@ -4946,7 +4989,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "jacobcd52",
@@ -4979,7 +5022,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "jacobcd52",
@@ -5007,7 +5050,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "jamesyc23",
@@ -5037,7 +5080,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "jasonrichdarmawan",
@@ -5065,7 +5108,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "jaysonleon",
@@ -5093,7 +5136,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "Jim-Maar",
@@ -5124,7 +5167,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "Jiyuan-Tan",
@@ -5152,7 +5195,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "jkhouja",
@@ -5180,7 +5223,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "joanvelja",
@@ -5210,7 +5253,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "JuhanPauklin",
@@ -5238,7 +5281,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "kenjinp",
@@ -5266,7 +5309,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "khalid-alim",
@@ -5294,7 +5337,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "lccqqqqq",
@@ -5322,7 +5365,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "lccqqqqq",
@@ -5350,7 +5393,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "leogagnon",
@@ -5378,7 +5421,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "loftusa",
@@ -5406,7 +5449,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "loftusa",
@@ -5434,7 +5477,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "lrfreeman",
@@ -5462,7 +5505,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "LukeSamkharadze",
@@ -5490,7 +5533,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "magikarp01",
@@ -5518,7 +5561,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "MagriniGabriele",
@@ -5546,7 +5589,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "MaheepChaudhary",
@@ -5574,7 +5617,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "marbinner",
@@ -5602,7 +5645,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "Matthew-Jennings",
@@ -5632,7 +5675,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "mfrisch3",
@@ -5660,7 +5703,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "MichaelRipa",
@@ -5688,7 +5731,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "Mushrimpy",
@@ -5716,7 +5759,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "na-naina",
@@ -5744,7 +5787,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "na-naina",
@@ -5772,7 +5815,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "nikozhuk",
@@ -5800,7 +5843,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "nottonofclay",
@@ -5828,7 +5871,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "nuprl",
@@ -5858,7 +5901,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "olliematthews",
@@ -5888,7 +5931,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "OmarMohammed88",
@@ -5916,7 +5959,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "oscaryas",
@@ -5946,7 +5989,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "Parabrele",
@@ -5974,7 +6017,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "Parabrele",
@@ -6002,7 +6045,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "parsed-labs",
@@ -6058,7 +6101,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "Reality2byte",
@@ -6088,7 +6131,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "rhite-tech",
@@ -6118,7 +6161,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "sabazm",
@@ -6146,7 +6189,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "Samusasuke",
@@ -6176,7 +6219,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "sebastian-sosa",
@@ -6204,7 +6247,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "sgovil5",
@@ -6232,7 +6275,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "shailu1309",
@@ -6263,7 +6306,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "skysneakers",
@@ -6291,7 +6334,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "slinkp",
@@ -6319,7 +6362,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "SomBagchi",
@@ -6347,7 +6390,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "spfaul",
@@ -6375,7 +6418,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "sterfd",
@@ -6405,7 +6448,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "submarat",
@@ -6435,7 +6478,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "submitter123",
@@ -6463,7 +6506,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "suspiciousleaf",
@@ -6493,7 +6536,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "Swaragnyani",
@@ -6521,7 +6564,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "tarmopungas",
@@ -6551,7 +6594,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "ThomasHeap",
@@ -6579,7 +6622,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "tinuademargaret",
@@ -6609,7 +6652,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "tinuademargaret",
@@ -6637,7 +6680,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "tinuademargaret",
@@ -6665,7 +6708,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "tinycrops",
@@ -6693,7 +6736,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "tinycrops",
@@ -6723,7 +6766,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "tom-bbc",
@@ -6758,7 +6801,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "tom-pollak",
@@ -6786,7 +6829,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "tuotol",
@@ -6816,7 +6859,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "Venn1998",
@@ -6847,7 +6890,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "vminvsky",
@@ -6875,7 +6918,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "wendlerc",
@@ -6903,7 +6946,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "williamsnell",
@@ -6931,7 +6974,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "windsornguyen",
@@ -6959,7 +7002,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "wj210",
@@ -6987,7 +7030,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "yus100",
@@ -7017,7 +7060,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "Yuxiao2234",
@@ -7045,7 +7088,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   },
   {
     "owner": "zndx",
@@ -7054,7 +7097,7 @@
     "description": null,
     "stars": 0,
     "forks": 1,
-    "last_commit": "2026-10-12",
+    "last_commit": "2026-10-19",
     "archived": false,
     "is_fork": false,
     "language": "Python",
@@ -7072,12 +7115,12 @@
     "classification_reason": "github_dependent",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "6d202d80a6f4250a",
+    "content_hash": "986385477b7e7d97",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
-    "processing_bucket": "new",
+    "processing_bucket": "reprocess",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-13"
+    "last_seen": "2026-10-19"
   }
 ]
