@@ -33,6 +33,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: main   # not the event SHA: see every push made while we waited in the queue
+          persist-credentials: false   # no token in .git/config; push auth lives only in Push catalog
 
       - id: py
         uses: actions/setup-python@v7
@@ -93,7 +94,15 @@ jobs:
 
       - name: Push catalog
         if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          # The checkout persisted no credentials; push_catalog's git subprocesses inherit
+          # this env-only auth header (catalog_git._git copies os.environ).
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+                 GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           python -m ndif_citations push-catalog --push-conflict-branch -m "data: weekly catalog run $(date -u +%F)"
