@@ -28,6 +28,19 @@ def test_glued_footnote_mention_still_counts():
     assert len(find_mentions("implemented with nnsight3 (see footnote)")) == 1
 
 
+def test_ocr_nnsights_for_insights_is_not_a_mention():
+    assert find_mentions("Kahneman's nnsights") == []
+    for t in ("nnsights", "Nnsights", "NNSIGHTS", "I nsights"):
+        assert find_mentions(t) == [], t
+
+
+def test_real_nnsight_variants_still_count_next_to_ocr_typo():
+    for t in ("nnsight3", "NNsight's", "We use nnsight.", "nnsight_", "nnsight.net", "NNsight-based", "NNSIGHT"):
+        assert len(find_mentions(t)) == 1, t
+    text = "Kahneman's nnsights; Nnsights; we use nnsight3 and NNsight's API."
+    assert len(find_mentions(text)) == 2
+
+
 def test_extract_bibliography_excerpts_come_last(monkeypatch):
     body = "x" * 600 + " we use nnsight for patching " + "y" * 600
     bib = " Nnsight and ndif: Democratizing access to open-weight foundation model internals. "

@@ -340,7 +340,8 @@ def find_mentions(text: str, keywords: list[str] | None = None) -> list[int]:
     overlapping keywords ("import nnsight" / "nnsight" / "nnsight.net") count once.
     Only the bare keyword "ndif" is word-bounded (rejects "endif", "indifferent");
     nnsight-family keywords stay substrings so PDF-glued text like "nnsight3"
-    (a footnote marker) still counts.
+    (a footnote marker) still counts. They reject "nnsights" (OCR of "Insights")
+    but not "nnsight's" / "nnsight3".
     """
     from ndif_citations.config import NDIF_KEYWORDS
 
@@ -349,7 +350,7 @@ def find_mentions(text: str, keywords: list[str] | None = None) -> list[int]:
     kws = sorted({k.lower() for k in (keywords or NDIF_KEYWORDS) if k}, key=len, reverse=True)
     if not kws:
         return []
-    parts = [rf"\b{re.escape(k)}\b" if k == "ndif" else re.escape(k) for k in kws]
+    parts = [rf"\b{re.escape(k)}\b" if k == "ndif" else re.escape(k) + r"(?!s(?![a-z]))" for k in kws]
     return [m.start() for m in re.finditer("|".join(parts), text, re.IGNORECASE)]
 
 
