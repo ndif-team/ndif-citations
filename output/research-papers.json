@@ -100,6 +100,16 @@
     "image": "/images/Can-you-map-it-to-English-The-Role-of-Cross-Lingual-Alignment-in-the-Multilingual-Performance-of-LLMs.png"
   },
   {
+    "title": "CircuitKIT : Circuit Discovery, Evaluation, and Application Toolkit for Mechanistic Interpretability",
+    "authors": "Pratinav Seth, Hem Gosalia, Aditya Kasliwal, Vinay Kumar Sankarapu",
+    "venue": "ArXiv 2026",
+    "year": 2026,
+    "url": "https://arxiv.org/abs/2607.19317",
+    "description": "CircuitKIT unifies the fragmented process of circuit analysis by offering a shared, structured framework for discovering, evaluating, and applying insights from neural network circuits. It streamlines workflows with reusable components for prompt generation, diagnostic tools, and intervention modules, enabling researchers to more easily compare methods and extend analyses beyond standard benchmarks. By making circuit analysis more accessible and interoperable, the library supports deeper model understanding and practical interventions like pruning or steering in real-world applications.",
+    "category": "referencing",
+    "image": "/images/CircuitKIT-Circuit-Discovery-Evaluation-and-Application-Toolkit-for-Mechanistic-Interpretability.png"
+  },
+  {
     "title": "Counting Hypothesis: Potential Mechanism of In-Context Learning",
     "authors": "Jung H. Lee, Sujith Vijayan",
     "venue": "ArXiv 2026",
