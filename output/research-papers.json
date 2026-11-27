@@ -50,6 +50,15 @@
     "image": "/images/ADAG-Automatically-Describing-Attribution-Graphs.png"
   },
   {
+    "title": "Adversarial elicitation suppresses confident misattribution but does not improve introspective accuracy: an activation-injection audit of five open-weight models",
+    "authors": "Alishba Zainab Khan",
+    "venue": "Digital Minds Research Sprint 2026",
+    "year": 2026,
+    "url": "https://pys8vc40ox3z7qxp.public.blob.vercel-storage.com/files/bcac095f40cb7671-b3cf70cb-39f8-47c4-9629-06dddbb9ea4c-adversarial_elicitation_paper.pdf",
+    "description": "I explore how directly inserting a known concept into the internal processing stream of several open-weight language models affects their responses when queried in isolation. By examining whether the models detect or acknowledge this subtle intervention, the study probes the transparency and self-awareness of their internal representations. The findings shed light on how language models encode and potentially reflect upon injected information, offering insights into interpretability and the boundaries of model introspection.",
+    "category": "uses_nnsight"
+  },
+  {
     "title": "Attention Calibration for Position-Fair Dense Information Retrieval",
     "authors": "Andrianos Michail, Elias Schuhmacher, Juri Opitz, Simon Clematide, Rico Sennrich",
     "venue": "ArXiv 2026",
