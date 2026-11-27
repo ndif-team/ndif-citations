@@ -665,6 +665,16 @@
     "image": "/images/reward-lens-A-Mechanistic-Interpretability-Library-for-Reward-Models.png"
   },
   {
+    "title": "Similar, but why? A Toolkit for Explaining Text Similarity",
+    "authors": "Juri Opitz, Andrianos Michail, Lucas Moeller, Sebastian Padó, Simon Clematide",
+    "venue": "EACL 2026",
+    "year": 2026,
+    "url": "https://aclanthology.org/2026.eacl-demo.16/",
+    "description": "",
+    "category": "referencing",
+    "image": "/images/Similar-but-why-A-Toolkit-for-Explaining-Text-Similarity.png"
+  },
+  {
     "title": "Spectra: A Mechanistic Interpretability Library for Vision-Language Models",
     "authors": "Clement Neo, Yongsen Zheng, Kwok-Yan Lam, C.-H. Luke Ong",
     "venue": "ACL 2026",
