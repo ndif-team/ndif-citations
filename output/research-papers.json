@@ -775,6 +775,16 @@
     "image": "/images/Unboxing-Diffusion-Models-for-the-Arts-Interactive-Model-Bending-and-Practice-Based-Explainability.png"
   },
   {
+    "title": "VASAE: Naming SAE Dictionary Directions with Vocabulary-Aligned Anchoring",
+    "authors": "Kairui Zhang, Ziwen Yu, Zahraa S. Abdallah, Martha Lewis",
+    "venue": "ArXiv 2026",
+    "year": 2026,
+    "url": "https://arxiv.org/abs/2606.27941",
+    "description": "This paper introduces Vocabulary-Aligned Sparse Autoencoder (VASAE), a method that directly links learned features in Transformer models to specific tokens from the model’s vocabulary by anchoring each feature to the nearest token embedding during training. Unlike standard sparse autoencoders, which require post hoc naming of features, VASAE assigns intrinsic token names to features without sacrificing reconstruction performance. Experiments on GPT-2-small and Llama-3.1-8B show that a large proportion of features in early and middle layers become meaningfully aligned with vocabulary tokens, and even after adjusting for sentence-level context, many of these names remain relevant to nearby input tokens. This approach enhances interpretability by providing a natural, built-in connection between learned representations and the model’s linguistic vocabulary.",
+    "category": "uses_nnsight",
+    "image": "/images/VASAE-Naming-SAE-Dictionary-Directions-with-Vocabulary-Aligned-Anchoring.png"
+  },
+  {
     "title": "Vision-Default, Prior-Override: Causal Mechanisms of Perception-Knowledge Conflict in Vision-Language Models",
     "authors": "Niclas Lietzow, Danielle Bitterman, Carsten Eickhoff, William Rudman, Michal Golovanevsky",
     "venue": "EMNLP 2026",
