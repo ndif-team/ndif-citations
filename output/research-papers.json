@@ -339,6 +339,16 @@
     "image": "/images/Fine-Grained-Analysis-of-Shared-Syntactic-Mechanisms-in-Language-Models.png"
   },
   {
+    "title": "FLEET: From Logits Entropy to Enhanced Trajectories in Text Generation",
+    "authors": "Oleksii Streltsov, Oleksandra Vitko",
+    "venue": "ArXiv 2026",
+    "year": 2026,
+    "url": "https://arxiv.org/abs/2609.27657",
+    "description": "FLEET introduces a memory-aware approach to language model generation that tracks meaningful variations in outputs to avoid redundant samples. By representing each generation as a sparse trajectory through high-entropy states, it estimates per-token usefulness and adjusts model predictions accordingly. This allows FLEET to match the accuracy of repeated sampling while being significantly faster, and to boost performance on challenging coding tasks without increasing computational cost. The method is designed to be practical — deterministic in greedy mode, requiring only one calibration step, and easy to integrate into existing systems.",
+    "category": "uses_nnsight",
+    "image": "/images/FLEET-From-Logits-Entropy-to-Enhanced-Trajectories-in-Text-Generation.png"
+  },
+  {
     "title": "Fluid Representations in Reasoning Models",
     "authors": "Dmitrii Kharlapenko, Alessandro Stolfo, Arthur Conmy, Mrinmaya Sachan, Zhijing Jin",
     "venue": "Findings of the Association for Computational Linguistics: EMNLP 2026",
