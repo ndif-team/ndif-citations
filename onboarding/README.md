@@ -391,7 +391,7 @@ the **Publish** tab after curating locally:
 The app pulls the latest catalog when it starts (only if you have no unpushed changes).
 **Export .xlsx** is still here for spreadsheets.
 
-The weekly cloud run and the GitHub review bot now do this for you — see §24.
+To review papers without the local app, use the GitHub review bot (§24); its changes go live on their own. Edits you make in the local app still need **Push catalog** here.
 
 ---
 
@@ -448,6 +448,8 @@ If you ever want to refresh one, run the app (`python -m ndif_citations serve`),
 
 You can approve papers without opening the local app: every paper waiting for review
 has a GitHub issue, and you act on it by commenting a slash command.
+Open the queue at https://github.com/ndif-team/ndif-citations/issues?q=is%3Aopen+label%3Areview
+(ask the maintainer for write access first).
 
 **Where issues come from.** The weekly catalog run (Mondays, 05:17 UTC) adds papers.
 Each pending paper gets one bot-opened issue, **"Review: <title>"**. The **Why you're
@@ -455,7 +457,7 @@ seeing this** line tells you what's missing (bucket/category/confidence: see §1
 
 | Label | Plain meaning |
 |---|---|
-| `why:needs-metadata` | Metadata is incomplete (year, abstract, or identifier missing) |
+| `why:needs-metadata` | Metadata is incomplete (year, abstract, or identifier missing) — `/edit year:` / `/edit url:` fix the year and identifier; a missing abstract needs the local app (§14) |
 | `why:needs-evidence` | No full-text PDF was found; the bot only saw the abstract (or nothing) |
 | `why:uses-ndif` | The model thinks it used NDIF; the public "NDIF-supported" badge always gets a human check |
 | `why:check-label` | The model's label isn't confident enough to publish automatically |
@@ -467,48 +469,55 @@ your comment: 👀 queued, 👎 you don't have access, 😕 the permission looku
 
 | Command | Example |
 |---|---|
-| `/verify` (optionally with a label: `uses_nnsight`, `uses_ndif`, `referencing`) | `/verify uses_nnsight` |
+| `/verify` (add a label — `uses_nnsight`, `uses_ndif`, `referencing` — to change it; required if the paper is unclassified) | `/verify uses_nnsight` |
 | `/discard <reason>` | `/discard survey, never runs the library` |
 | `/pdf <https link>` (open-access only) | `/pdf https://arxiv.org/pdf/2601.01234` |
-| `/evidence <sentence>` (paywalled papers) | `/evidence We use nnsight to patch layer 12.` |
-| `/thumbnail` + a pasted screenshot | comment `/thumbnail`, paste the image |
+| `/evidence <sentence>` (paywalled papers; keep the quote on one line, ≤2,000 characters) | `/evidence We use nnsight to patch layer 12.` |
+| `/thumbnail` + a screenshot pasted into the same comment | `/thumbnail` then paste the image below it, one comment |
 | `/edit <field>: <value>` — fields: title, authors, affiliations, venue, year, summary, url, github | `/edit year: 2025` |
 | `/retry` (re-run PDF lookup + classification), `/summarize` (new summary) | `/retry` |
 | `/add <https link>` (only in "Add paper" intake issues) | `/add https://arxiv.org/abs/2601.01234` |
 | `/help` | the command table |
 
 `/pdf`, `/retry`, `/summarize` and `/add` use the LLM. If it's down the bot replies
-**"The LLM check failed, so I didn't change anything"** and changes nothing; try later.
+**"The LLM check failed, so I didn't change anything"** for that command; other commands in the same comment still run. Try later.
 
 ### How to write a comment
 
-- **One comment per paper**, up to **10 commands**, one per line. Put `/edit` and
-  `/evidence` first and `/verify` or `/discard` last.
-- **Wait for the bot's reply before commenting again.** Each comment is one queued job and one data commit.
+- Put the commands for one paper in one comment, each at the start of its own line (up to 10; extra lines are ignored). They run top to bottom, and each one runs even if an earlier one failed (⚠️).
+- Put `/edit` and `/evidence` before `/verify` or `/discard`.
+- **Never put `/verify` in the same comment as `/pdf`, `/retry` or `/summarize`.** Read the bot's reply (the new label) first, then `/verify` in a new comment.
+- **Wait for the bot's reply before commenting again.** Each comment is one queued job; one that changes data becomes one `data: review #N` commit.
+- Editing a comment does nothing; post a new one. No 👀 within a few minutes means the bot saw no command.
+- A "⚠️ /cmd — …" line means that command changed nothing: fix it and post just that command again.
+- "⚠️ Something went wrong" means the job failed, possibly after saving. Check the issue and the paper before repeating, and tell the maintainer.
+- On Monday mornings replies can wait behind the weekly run (up to ~1.5 h).
 
 ### What /verify and /discard do
 
 Both **lock the paper** ("curator-locked"): later weekly runs never reclassify it
 (it is marked as a manual override). In a review issue they also **close the issue**.
+Exception: `/discard` on a paper that was added by hand (`/add`, the add-paper form, or the local app) deletes it instead, so a later run may find it again. If it comes back, discard it again.
+Every command except `/evidence` and `/help` locks the paper. A locked paper stays pending, and the weekly run won't publish it, until you `/verify` or `/discard`.
 After `/verify`, ndif.us picks it up at its next daily build ("ndif.us updates within a day").
 
 ### Digest, report and intake issues
 
 - **Weekly digest** ("Catalog digest — <date>"): a new issue on each Monday run where something
-  changed; the previous digest closes as superseded.
+  changed; the previous digest closes as superseded. Its **Auto-published** list is papers published with no human check (they get no review issue). Skim it every week. To pull one, copy the `/discard <link>` line under it into a comment. On the suggested `/verify` line, keep only one label.
 - **Report link** on ndif.us/research opens a "Problem: …" issue (report-a-problem form).
-  The **add-a-paper form** opens an "Add paper: …" intake issue, where `/add` works.
+  The **add-a-paper form** opens an "Add paper: …" intake issue. If you filed it, the bot adds the paper and closes the issue by itself. If someone without write access filed it, or the bot says the add failed, comment `/add <link>` (an arXiv, DOI or ACL Anthology link, written out in full).
 - In digest, report and intake issues the bot can't tell which paper you mean, so **name it
   right after the command**: `/verify arxiv:2601.01234 uses_nnsight`,
   `/discard doi:10.1234/x not relevant`, or `/verify https://…` (the paper URL).
-  These issues stay open after a command.
+  Digest and report issues stay open after a command; `/add` closes its intake issue.
 - **"Catalog run failed"** is a single reused issue. Don't fix it: tell the maintainer.
 
 ### Rules
 
 - **Never decide a paper is irrelevant from its abstract.** Read the full text, and for
   no-mention papers check whether the paper's own code uses nnsight.
-- **Never close a review issue by hand.** The next sync reopens the paper as a duplicate issue.
+- **Never close a review issue by hand.** The next sync opens a second issue for the same paper. Exception: an issue the bot labelled `needs-attention` ("I can't find this paper in the catalog anymore") has no paper behind it. Leave it for the maintainer.
 - **Never edit the issue body.** Its last line is the bot's marker; break it and the bot loses the paper.
 - **Never attach a paywalled PDF.** Use `/evidence` + `/verify`.
 - **Don't mix local-app edits and GitHub commands on the same paper at the same time.**
