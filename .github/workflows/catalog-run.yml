@@ -132,6 +132,17 @@ jobs:
           CURATORS: ${{ vars.CURATORS }}
         run: python -m ndif_citations review-sync
 
+      - name: Close the run-failure issue (recovered)
+        if: ${{ !inputs.dry_run }}
+        continue-on-error: true   # a gh hiccup here must not fail a run that pushed the catalog (notify would post a false failure)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          n=$(gh issue list --label run-failure --state open --json number --jq '.[0].number // empty')
+          if [ -n "$n" ]; then
+            gh issue close "$n" --comment "Recovered: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID succeeded."
+          fi
+
       - name: Keep this run's catalog if anything failed
         if: ${{ failure() }}
         uses: actions/upload-artifact@v7
