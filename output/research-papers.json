@@ -1317,6 +1317,16 @@
     "image": "/images/Punctuation-and-Predicates-in-Language-Models.png"
   },
   {
+    "title": "RankAlign: A Ranking View of the Generator-Validator Gap in Large Language Models",
+    "authors": "Juan Diego Rodriguez, Wenxuan Ding, Katrin Erk, Greg Durrett",
+    "venue": "COLM 2025",
+    "year": 2025,
+    "url": "https://arxiv.org/abs/2504.11381",
+    "description": "",
+    "category": "uses_nnsight",
+    "image": "/images/RankAlign-A-Ranking-View-of-the-Generator-Validator-Gap-in-Large-Language-Models.png"
+  },
+  {
     "title": "Representation Shattering in Transformers: A Synthetic Study with Knowledge Editing",
     "authors": "Kento Nishi, Rahul Ramesh, Maya Okawa, Mikail Khona, Hidenori Tanaka, Ekdeep Singh Lubana",
     "venue": "ICML 2025",
