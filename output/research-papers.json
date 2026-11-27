@@ -517,6 +517,16 @@
     "image": "/images/Limitations-of-Automated-Simulatability-LLM-Simulators-Can-Bypass-Explanations.png"
   },
   {
+    "title": "Lingua Franca or Probing Artifact? Rethinking Latent Language in Multilingual LLMs",
+    "authors": "Deniz Bayazit, Badr AlKhamissi, Antoine Bosselut",
+    "venue": "Findings of EMNLP 2026",
+    "year": 2026,
+    "url": "https://arxiv.org/abs/2609.00155",
+    "description": "Researchers examined how different methods for detecting latent language in multilingual models lead to conflicting conclusions about how these models process multiple languages. They found that probes based on the geometric structure of internal representations suggest earlier blending across languages, while those relying on what can be decoded from the model’s output tend to show stronger, more persistent language-specific patterns — especially favoring English. These discrepancies vary with how multilingual a model is and how far along it is in training, but remain consistent across different types of data. The study concludes that no single probe captures a unified \"internal lingua franca,\" and instead, each method reveals a different facet of how multilingual computation is organized, urging caution in interpreting such probes as direct evidence of language routing.",
+    "category": "uses_nnsight",
+    "image": "/images/Lingua-Franca-or-Probing-Artifact-Rethinking-Latent-Language-in-Multilingual-LLMs.png"
+  },
+  {
     "title": "Mathematical Modeling of Common-Pool Resources: A Comprehensive Review of Bioeconomics, Strategic Interaction, and Complex Adaptive Systems",
     "authors": "Zebiao Li, Rui Liu, Chengyi Tu",
     "venue": "ArXiv 2026",
