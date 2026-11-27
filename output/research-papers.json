@@ -695,6 +695,16 @@
     "image": "/images/SymTorch-A-Framework-for-Symbolic-Distillation-of-Deep-Neural-Networks.png"
   },
   {
+    "title": "TADA! Tuning Audio Diffusion Models through Activation Steering",
+    "authors": "Łukasz Staniszewski, Katarzyna Zaleska, Mateusz Modrzejewski, Kamil Deja",
+    "venue": "ArXiv 2026",
+    "year": 2026,
+    "url": "https://arxiv.org/abs/2602.11910",
+    "description": "Researchers have uncovered that audio diffusion models rely on a small set of specific attention layers to encode key musical features like instruments, vocals, and genre — revealing a kind of internal \"semantic bottleneck.\" By targeting these layers with precise activation adjustments, they show that steering the model’s internal representations yields far more accurate and controllable music generation than modifying prompts, scores, or model weights directly. This approach, validated through a new benchmark and user study, sets a new standard for fine-grained control in AI-generated music.",
+    "category": "uses_nnsight",
+    "image": "/images/TADA-Tuning-Audio-Diffusion-Models-through-Activation-Steering.png"
+  },
+  {
     "title": "TAGTorch: A PyTorch Library for Geometry, Topology, and Symmetry-Aware Machine Learning",
     "authors": "Brendan Kennedy, Tegan Emerson, Gregory Roek, Emilie Purvine, Henry Kvinge",
     "venue": "ArXiv 2026",
