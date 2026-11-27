@@ -4,17 +4,22 @@
     "repo": "ARENA_materials",
     "url": "https://github.com/ARENA-education/ARENA_materials",
     "description": null,
-    "stars": 1366,
-    "forks": 890,
-    "last_commit": "2026-10-19",
+    "stars": 1432,
+    "forks": 946,
+    "last_commit": "2026-11-27",
     "archived": false,
     "is_fork": false,
-    "language": "Jupyter Notebook",
+    "language": "Python",
     "license": null,
     "topics": [],
     "readme_arxiv_ids": [
       "2211.00593",
-      "2212.09251"
+      "2212.09251",
+      "2312.06942",
+      "2506.11613",
+      "2509.14260",
+      "2412.14093",
+      "2506.19143"
     ],
     "linked_paper_url": null,
     "linked_paper_tier": null,
@@ -22,22 +27,22 @@
     "classification_reason": "github_dependent",
     "repo_type": "course",
     "parent_full_name": null,
-    "content_hash": "986385477b7e7d97",
+    "content_hash": "04aa76d981d8a82d",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "hijohnnylin",
     "repo": "neuronpedia",
     "url": "https://github.com/hijohnnylin/neuronpedia",
     "description": "open source interpretability platform 🧠",
-    "stars": 1175,
-    "forks": 158,
-    "last_commit": "2026-10-16",
+    "stars": 1236,
+    "forks": 175,
+    "last_commit": "2026-11-26",
     "archived": false,
     "is_fork": false,
     "language": "TypeScript",
@@ -53,13 +58,13 @@
     "classification_reason": "github_dependent",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "3c1ae9bf640c2d6b",
+    "content_hash": "c6ae92b9b35a4ffe",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "callummcdougall",
@@ -97,9 +102,9 @@
     "repo": "dictionary_learning",
     "url": "https://github.com/saprmarks/dictionary_learning",
     "description": null,
-    "stars": 421,
-    "forks": 100,
-    "last_commit": "2025-08-21",
+    "stars": 436,
+    "forks": 107,
+    "last_commit": "2026-11-21",
     "archived": false,
     "is_fork": false,
     "language": "Python",
@@ -117,22 +122,22 @@
     "classification_reason": "github_dependent",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "3a8686056fccf10c",
+    "content_hash": "1462b2d1426b2df5",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "EleutherAI",
     "repo": "delphi",
     "url": "https://github.com/EleutherAI/delphi",
     "description": "Delphi was the home of a temple to Phoebus Apollo, which famously had the inscription, 'Know Thyself.' This library lets language models know themselves through automated interpretability.",
-    "stars": 279,
-    "forks": 62,
-    "last_commit": "2026-10-12",
+    "stars": 285,
+    "forks": 68,
+    "last_commit": "2026-11-26",
     "archived": false,
     "is_fork": false,
     "language": "Python",
@@ -147,13 +152,13 @@
     "classification_reason": "github_dependent",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "c93e4a451159afec",
+    "content_hash": "4691853dcf71aad4",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "TransluceAI",
@@ -181,7 +186,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "saprmarks",
@@ -211,7 +216,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "FOR-sight-ai",
@@ -219,8 +224,8 @@
     "url": "https://github.com/FOR-sight-ai/interpreto",
     "description": "🪄 Interpreto is an interpretability toolbox for LLMs",
     "stars": 209,
-    "forks": 6,
-    "last_commit": "2026-10-16",
+    "forks": 7,
+    "last_commit": "2026-11-20",
     "archived": false,
     "is_fork": false,
     "language": "Python",
@@ -250,22 +255,22 @@
     "classification_reason": "github_dependent",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "b3a04c2b83cd3b76",
+    "content_hash": "5d108d5a68d41edc",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "adamkarvonen",
     "repo": "SAEBench",
     "url": "https://github.com/adamkarvonen/SAEBench",
     "description": null,
-    "stars": 169,
-    "forks": 41,
-    "last_commit": "2026-05-01",
+    "stars": 186,
+    "forks": 46,
+    "last_commit": "2026-11-21",
     "archived": false,
     "is_fork": false,
     "language": "Python",
@@ -285,13 +290,13 @@
     "classification_reason": "github_dependent",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "68c6f93fb3badbf3",
+    "content_hash": "1462b2d1426b2df5",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "UKGovernmentBEIS",
@@ -319,50 +324,16 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
-  },
-  {
-    "owner": "ndif-team",
-    "repo": "nnterp",
-    "url": "https://github.com/ndif-team/nnterp",
-    "description": "Unified access to Large Language Model modules using NNsight",
-    "stars": 121,
-    "forks": 12,
-    "last_commit": "2026-10-16",
-    "archived": false,
-    "is_fork": false,
-    "language": "Python",
-    "license": "MIT",
-    "topics": [
-      "mechanistic-interpretability",
-      "nnsight",
-      "patchscopes"
-    ],
-    "readme_arxiv_ids": [
-      "2511.14465"
-    ],
-    "linked_paper_url": "https://arxiv.org/abs/2511.14465",
-    "linked_paper_tier": 1,
-    "category": "uses_ndif",
-    "classification_reason": "ndif_keyword_match",
-    "repo_type": "research",
-    "parent_full_name": null,
-    "content_hash": "e0c45b9591aa0f7e",
-    "manual_override": false,
-    "has_metadata": true,
-    "has_classification": true,
-    "processing_bucket": "reprocess",
-    "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "goodfire-ai",
     "repo": "causalab",
     "url": "https://github.com/goodfire-ai/causalab",
     "description": null,
-    "stars": 120,
-    "forks": 41,
-    "last_commit": "2026-09-30",
+    "stars": 133,
+    "forks": 44,
+    "last_commit": "2026-11-06",
     "archived": false,
     "is_fork": false,
     "language": "Python",
@@ -375,13 +346,77 @@
     "classification_reason": "ndif_keyword_match",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "65af7a9500ba14c2",
+    "content_hash": "0e5c6ea34f81169a",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
+  },
+  {
+    "owner": "ndif-team",
+    "repo": "nnterp",
+    "url": "https://github.com/ndif-team/nnterp",
+    "description": "Unified access to Large Language Model modules using NNsight",
+    "stars": 126,
+    "forks": 12,
+    "last_commit": "2026-11-18",
+    "archived": false,
+    "is_fork": false,
+    "language": "HTML",
+    "license": "MIT",
+    "topics": [
+      "mechanistic-interpretability",
+      "nnsight",
+      "patchscopes"
+    ],
+    "readme_arxiv_ids": [
+      "2511.14465"
+    ],
+    "linked_paper_url": "https://arxiv.org/abs/2511.14465",
+    "linked_paper_tier": 1,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "research",
+    "parent_full_name": null,
+    "content_hash": "fe0a5704e1c74c22",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "reprocess",
+    "first_seen": "2026-06-10",
+    "last_seen": "2026-11-27"
+  },
+  {
+    "owner": "ExplainableML",
+    "repo": "sae-for-vlm",
+    "url": "https://github.com/ExplainableML/sae-for-vlm",
+    "description": "[NeurIPS 2025] Sparse Autoencoders Learn Monosemantic Features in Vision-Language Models",
+    "stars": 100,
+    "forks": 17,
+    "last_commit": "2026-11-04",
+    "archived": false,
+    "is_fork": false,
+    "language": "Python",
+    "license": null,
+    "topics": [],
+    "readme_arxiv_ids": [
+      "2504.02821"
+    ],
+    "linked_paper_url": "https://arxiv.org/abs/2504.02821",
+    "linked_paper_tier": 3,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "research",
+    "parent_full_name": null,
+    "content_hash": "57f24b67de6efe9e",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "reprocess",
+    "first_seen": "2026-06-10",
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "JoshEngels",
@@ -411,46 +446,16 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
-  },
-  {
-    "owner": "ExplainableML",
-    "repo": "sae-for-vlm",
-    "url": "https://github.com/ExplainableML/sae-for-vlm",
-    "description": "[NeurIPS 2025] Sparse Autoencoders Learn Monosemantic Features in Vision-Language Models",
-    "stars": 84,
-    "forks": 15,
-    "last_commit": "2026-06-05",
-    "archived": false,
-    "is_fork": false,
-    "language": "Python",
-    "license": null,
-    "topics": [],
-    "readme_arxiv_ids": [
-      "2504.02821"
-    ],
-    "linked_paper_url": "https://arxiv.org/abs/2504.02821",
-    "linked_paper_tier": 3,
-    "category": "uses_nnsight",
-    "classification_reason": "github_dependent",
-    "repo_type": "research",
-    "parent_full_name": null,
-    "content_hash": "4515a6deaaf8e04c",
-    "manual_override": false,
-    "has_metadata": true,
-    "has_classification": true,
-    "processing_bucket": "reprocess",
-    "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "sup3rus3r",
     "repo": "obsidian-ai",
     "url": "https://github.com/sup3rus3r/obsidian-ai",
     "description": "Obsidian AI is an open-source platform that gives you a full visual interface for building, managing, and running AI agents — no SDKs, no boilerplate, no glue code required.",
-    "stars": 65,
-    "forks": 15,
-    "last_commit": "2026-10-19",
+    "stars": 85,
+    "forks": 16,
+    "last_commit": "2026-10-23",
     "archived": false,
     "is_fork": false,
     "language": "Python",
@@ -474,13 +479,13 @@
     "classification_reason": "github_dependent",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "4129212ce272f6e1",
+    "content_hash": "680a38909485ffc3",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
-    "processing_bucket": "new",
+    "processing_bucket": "reprocess",
     "first_seen": "2026-10-19",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "ndif-team",
@@ -489,7 +494,7 @@
     "description": "The NDIF server, which performs deep inference and serves nnsight requests remotely",
     "stars": 51,
     "forks": 18,
-    "last_commit": "2026-10-18",
+    "last_commit": "2026-11-26",
     "archived": false,
     "is_fork": false,
     "language": "Python",
@@ -508,13 +513,43 @@
     "classification_reason": "ndif_keyword_match",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "9ea34c971f9b0633",
+    "content_hash": "44695a7462f3a185",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
+  },
+  {
+    "owner": "decoderesearch",
+    "repo": "interp-engine",
+    "url": "https://github.com/decoderesearch/interp-engine",
+    "description": "Fast, standardized, and easy-to-use interpretability engine.",
+    "stars": 46,
+    "forks": 10,
+    "last_commit": "2026-10-27",
+    "archived": false,
+    "is_fork": false,
+    "language": "Python",
+    "license": "Apache-2.0",
+    "topics": [
+      "ai-interpretability"
+    ],
+    "readme_arxiv_ids": [],
+    "linked_paper_url": null,
+    "linked_paper_tier": null,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "research",
+    "parent_full_name": null,
+    "content_hash": "854a2c76e4981e8d",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "reprocess",
+    "first_seen": "2026-10-13",
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "tdooms",
@@ -544,37 +579,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
-  },
-  {
-    "owner": "decoderesearch",
-    "repo": "interp-engine",
-    "url": "https://github.com/decoderesearch/interp-engine",
-    "description": "Fast, standardized, and easy-to-use interpretability engine.",
-    "stars": 40,
-    "forks": 6,
-    "last_commit": "2026-10-16",
-    "archived": false,
-    "is_fork": false,
-    "language": "Python",
-    "license": "Apache-2.0",
-    "topics": [
-      "ai-interpretability"
-    ],
-    "readme_arxiv_ids": [],
-    "linked_paper_url": null,
-    "linked_paper_tier": null,
-    "category": "uses_nnsight",
-    "classification_reason": "github_dependent",
-    "repo_type": "research",
-    "parent_full_name": null,
-    "content_hash": "408127df85a80297",
-    "manual_override": false,
-    "has_metadata": true,
-    "has_classification": true,
-    "processing_bucket": "reprocess",
-    "first_seen": "2026-10-13",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "safety-research",
@@ -604,7 +609,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "wollschlager",
@@ -634,7 +639,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "RobertCsordas",
@@ -662,7 +667,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "adamkarvonen",
@@ -690,7 +695,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "belindal",
@@ -720,7 +725,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "Xmaster6y",
@@ -752,7 +757,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "koayon",
@@ -786,7 +791,35 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
+  },
+  {
+    "owner": "ndif-team",
+    "repo": "workbench",
+    "url": "https://github.com/ndif-team/workbench",
+    "description": null,
+    "stars": 20,
+    "forks": 10,
+    "last_commit": "2026-11-26",
+    "archived": false,
+    "is_fork": false,
+    "language": "TypeScript",
+    "license": null,
+    "topics": [],
+    "readme_arxiv_ids": [],
+    "linked_paper_url": null,
+    "linked_paper_tier": null,
+    "category": "uses_ndif",
+    "classification_reason": "ndif_keyword_match",
+    "repo_type": "research",
+    "parent_full_name": null,
+    "content_hash": "d11a2cbc9a9cb191",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "reprocess",
+    "first_seen": "2026-06-10",
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "science-of-finetuning",
@@ -814,35 +847,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
-  },
-  {
-    "owner": "ndif-team",
-    "repo": "workbench",
-    "url": "https://github.com/ndif-team/workbench",
-    "description": null,
-    "stars": 18,
-    "forks": 10,
-    "last_commit": "2026-10-16",
-    "archived": false,
-    "is_fork": false,
-    "language": "TypeScript",
-    "license": null,
-    "topics": [],
-    "readme_arxiv_ids": [],
-    "linked_paper_url": null,
-    "linked_paper_tier": null,
-    "category": "uses_ndif",
-    "classification_reason": "ndif_keyword_match",
-    "repo_type": "research",
-    "parent_full_name": null,
-    "content_hash": "ef12e85e62de592d",
-    "manual_override": false,
-    "has_metadata": true,
-    "has_classification": true,
-    "processing_bucket": "reprocess",
-    "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "sfeucht",
@@ -872,7 +877,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "curt-tigges",
@@ -900,7 +905,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "johnyang101",
@@ -930,7 +935,71 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
+  },
+  {
+    "owner": "Cadenza-Labs",
+    "repo": "liars-bench",
+    "url": "https://github.com/Cadenza-Labs/liars-bench",
+    "description": null,
+    "stars": 15,
+    "forks": 6,
+    "last_commit": "2026-11-07",
+    "archived": false,
+    "is_fork": false,
+    "language": "Jupyter Notebook",
+    "license": "Apache-2.0",
+    "topics": [],
+    "readme_arxiv_ids": [],
+    "linked_paper_url": null,
+    "linked_paper_tier": null,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "experiment",
+    "parent_full_name": null,
+    "content_hash": "88b282629a43a72f",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "reprocess",
+    "first_seen": "2026-06-10",
+    "last_seen": "2026-11-27"
+  },
+  {
+    "owner": "DeepRCL",
+    "repo": "Steering_Geometry",
+    "url": "https://github.com/DeepRCL/Steering_Geometry",
+    "description": "[EMNLP 2026 Main] Steering Geometry: Validating Human Value Geometry in LLM Steering Space.",
+    "stars": 15,
+    "forks": 3,
+    "last_commit": "2026-10-24",
+    "archived": false,
+    "is_fork": false,
+    "language": "Python",
+    "license": null,
+    "topics": [
+      "activation-steering",
+      "emnlp2026",
+      "mechanistic-interpretability",
+      "representation-engineering",
+      "value-alignment"
+    ],
+    "readme_arxiv_ids": [
+      "2609.06289"
+    ],
+    "linked_paper_url": "https://arxiv.org/abs/2609.06289",
+    "linked_paper_tier": 3,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "research",
+    "parent_full_name": null,
+    "content_hash": "4ec41b8fe64fd973",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "reprocess",
+    "first_seen": "2026-10-13",
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "DanielSc4",
@@ -960,43 +1029,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
-  },
-  {
-    "owner": "DeepRCL",
-    "repo": "Steering_Geometry",
-    "url": "https://github.com/DeepRCL/Steering_Geometry",
-    "description": "[EMNLP 2026 Main] Steering Geometry: Validating Human Value Geometry in LLM Steering Space.",
-    "stars": 14,
-    "forks": 3,
-    "last_commit": "2026-09-09",
-    "archived": false,
-    "is_fork": false,
-    "language": "Python",
-    "license": null,
-    "topics": [
-      "activation-steering",
-      "emnlp2026",
-      "mechanistic-interpretability",
-      "representation-engineering",
-      "value-alignment"
-    ],
-    "readme_arxiv_ids": [
-      "2609.06289"
-    ],
-    "linked_paper_url": "https://arxiv.org/abs/2609.06289",
-    "linked_paper_tier": 1,
-    "category": "uses_nnsight",
-    "classification_reason": "github_dependent",
-    "repo_type": "research",
-    "parent_full_name": null,
-    "content_hash": "5cb37047c74c0558",
-    "manual_override": false,
-    "has_metadata": true,
-    "has_classification": true,
-    "processing_bucket": "new",
-    "first_seen": "2026-10-13",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "kdu4108",
@@ -1026,7 +1059,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "yzp11",
@@ -1056,7 +1089,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "Butanium",
@@ -1090,7 +1123,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "MaheepChaudhary",
@@ -1125,35 +1158,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
-  },
-  {
-    "owner": "Cadenza-Labs",
-    "repo": "liars-bench",
-    "url": "https://github.com/Cadenza-Labs/liars-bench",
-    "description": null,
-    "stars": 12,
-    "forks": 4,
-    "last_commit": "2026-05-07",
-    "archived": false,
-    "is_fork": false,
-    "language": "Jupyter Notebook",
-    "license": "Apache-2.0",
-    "topics": [],
-    "readme_arxiv_ids": [],
-    "linked_paper_url": null,
-    "linked_paper_tier": null,
-    "category": "uses_nnsight",
-    "classification_reason": "github_dependent",
-    "repo_type": "experiment",
-    "parent_full_name": null,
-    "content_hash": "cd11146c67341832",
-    "manual_override": false,
-    "has_metadata": true,
-    "has_classification": true,
-    "processing_bucket": "reprocess",
-    "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "jkminder",
@@ -1183,7 +1188,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "joelburget",
@@ -1216,7 +1221,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "obvslib",
@@ -1244,44 +1249,16 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
-  },
-  {
-    "owner": "EmilRyd",
-    "repo": "eliciting-secrets",
-    "url": "https://github.com/EmilRyd/eliciting-secrets",
-    "description": null,
-    "stars": 9,
-    "forks": 2,
-    "last_commit": "2025-05-30",
-    "archived": false,
-    "is_fork": false,
-    "language": "Python",
-    "license": "Apache-2.0",
-    "topics": [],
-    "readme_arxiv_ids": [],
-    "linked_paper_url": null,
-    "linked_paper_tier": null,
-    "category": "uses_nnsight",
-    "classification_reason": "github_dependent",
-    "repo_type": "experiment",
-    "parent_full_name": null,
-    "content_hash": "365b31cfeb3d14df",
-    "manual_override": false,
-    "has_metadata": true,
-    "has_classification": true,
-    "processing_bucket": "reprocess",
-    "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "kureha-yamaguchi",
     "repo": "reasoning-manipulation",
     "url": "https://github.com/kureha-yamaguchi/reasoning-manipulation",
     "description": "Adversarial Manipulation of CoT",
-    "stars": 9,
+    "stars": 10,
     "forks": 0,
-    "last_commit": "2026-05-11",
+    "last_commit": "2026-11-05",
     "archived": false,
     "is_fork": false,
     "language": "Jupyter Notebook",
@@ -1312,13 +1289,69 @@
     "classification_reason": "github_dependent",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "e9f9444f6a092835",
+    "content_hash": "05991f3da420e78a",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
+  },
+  {
+    "owner": "EmilRyd",
+    "repo": "eliciting-secrets",
+    "url": "https://github.com/EmilRyd/eliciting-secrets",
+    "description": null,
+    "stars": 9,
+    "forks": 2,
+    "last_commit": "2025-05-30",
+    "archived": false,
+    "is_fork": false,
+    "language": "Python",
+    "license": "Apache-2.0",
+    "topics": [],
+    "readme_arxiv_ids": [],
+    "linked_paper_url": null,
+    "linked_paper_tier": null,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "experiment",
+    "parent_full_name": null,
+    "content_hash": "365b31cfeb3d14df",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "reprocess",
+    "first_seen": "2026-06-10",
+    "last_seen": "2026-11-27"
+  },
+  {
+    "owner": "UKPLab",
+    "repo": "murano",
+    "url": "https://github.com/UKPLab/murano",
+    "description": "Murano: the interpretability research design framework.",
+    "stars": 9,
+    "forks": 1,
+    "last_commit": "2026-11-04",
+    "archived": false,
+    "is_fork": false,
+    "language": "Jupyter Notebook",
+    "license": "Apache-2.0",
+    "topics": [],
+    "readme_arxiv_ids": [],
+    "linked_paper_url": null,
+    "linked_paper_tier": null,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "research",
+    "parent_full_name": null,
+    "content_hash": "a965b5d6649e4aa2",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "reprocess",
+    "first_seen": "2026-10-13",
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "DavidUdell",
@@ -1359,7 +1392,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "facebookresearch",
@@ -1389,35 +1422,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
-  },
-  {
-    "owner": "UKPLab",
-    "repo": "murano",
-    "url": "https://github.com/UKPLab/murano",
-    "description": "Murano: the interpretability research design framework.",
-    "stars": 8,
-    "forks": 1,
-    "last_commit": "2026-08-30",
-    "archived": false,
-    "is_fork": false,
-    "language": "Jupyter Notebook",
-    "license": "Apache-2.0",
-    "topics": [],
-    "readme_arxiv_ids": [],
-    "linked_paper_url": null,
-    "linked_paper_tier": null,
-    "category": "uses_nnsight",
-    "classification_reason": "github_dependent",
-    "repo_type": "research",
-    "parent_full_name": null,
-    "content_hash": "ff81a330b08ceee6",
-    "manual_override": false,
-    "has_metadata": true,
-    "has_classification": true,
-    "processing_bucket": "new",
-    "first_seen": "2026-10-13",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "canrager",
@@ -1447,7 +1452,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "hijohnnylin",
@@ -1475,7 +1480,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "juand-r",
@@ -1506,7 +1511,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "loganriggs",
@@ -1534,7 +1539,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "lucyfarnik",
@@ -1564,7 +1569,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "sharanry",
@@ -1594,7 +1599,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "alphavector",
@@ -1622,7 +1627,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "efarrell1",
@@ -1650,7 +1655,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "jcoombes",
@@ -1678,7 +1683,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "jkminder",
@@ -1706,7 +1711,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "pleask",
@@ -1734,7 +1739,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "redwoodresearch",
@@ -1762,7 +1767,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "MaheepChaudhary",
@@ -1792,7 +1797,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "MikolajSzawerda",
@@ -1827,7 +1832,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "safety-research",
@@ -1855,7 +1860,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "vminvsky",
@@ -1885,7 +1890,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "Gusanidas",
@@ -1913,7 +1918,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "redwoodresearch",
@@ -1941,7 +1946,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "aalok-sathe",
@@ -1950,7 +1955,7 @@
     "description": null,
     "stars": 3,
     "forks": 1,
-    "last_commit": "2026-10-07",
+    "last_commit": "2026-11-13",
     "archived": false,
     "is_fork": false,
     "language": "Jupyter Notebook",
@@ -1963,13 +1968,13 @@
     "classification_reason": "github_dependent",
     "repo_type": "experiment",
     "parent_full_name": null,
-    "content_hash": "54eac20e07cac4c4",
+    "content_hash": "f6babbcd435ae440",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "AI4Bharat",
@@ -1999,7 +2004,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "cadentj",
@@ -2027,7 +2032,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "danibalcells",
@@ -2055,7 +2060,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "Lyn4ever29",
@@ -2083,7 +2088,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "adamkarvonen",
@@ -2111,7 +2116,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "cadentj",
@@ -2139,7 +2144,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "canrager",
@@ -2167,7 +2172,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "carlomarxdk",
@@ -2176,7 +2181,7 @@
     "description": "A research project on competing notions of truth in large language models.",
     "stars": 2,
     "forks": 0,
-    "last_commit": "2026-10-15",
+    "last_commit": "2026-10-28",
     "archived": false,
     "is_fork": false,
     "language": "Python",
@@ -2202,13 +2207,13 @@
     "classification_reason": "github_dependent",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "b52b6aaedf7d27ef",
+    "content_hash": "bbf1e1131f852991",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "charlieoneill11",
@@ -2236,7 +2241,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "cma1114",
@@ -2264,7 +2269,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "DanielSc4",
@@ -2294,7 +2299,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "gucioopielka",
@@ -2324,7 +2329,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "JacksonKaunismaa",
@@ -2354,7 +2359,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "loftusa",
@@ -2382,7 +2387,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "Lucent-Financial-Group",
@@ -2391,7 +2396,7 @@
     "description": "F# implementation of DBSP for .NET 10",
     "stars": 2,
     "forks": 1,
-    "last_commit": "2026-10-17",
+    "last_commit": "2026-11-25",
     "archived": false,
     "is_fork": false,
     "language": "TypeScript",
@@ -2406,13 +2411,13 @@
     "classification_reason": "github_dependent",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "11242b35ed4fc568",
+    "content_hash": "d2a6e9110360bbc0",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "Madjakul",
@@ -2449,7 +2454,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "magikarp01",
@@ -2477,7 +2482,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "AmirSahrani",
@@ -2505,7 +2510,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "AnnemetteBP",
@@ -2533,7 +2538,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "AsteroidHunter",
@@ -2567,7 +2572,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "atlaie",
@@ -2595,7 +2600,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "canrager",
@@ -2623,7 +2628,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "chris-pinier",
@@ -2653,7 +2658,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "dashstander",
@@ -2681,7 +2686,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "EIDOSLAB",
@@ -2712,7 +2717,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "FergusFettes",
@@ -2740,7 +2745,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "FlexCode29",
@@ -2770,7 +2775,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "hectorxm25",
@@ -2798,7 +2803,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "JacksonKaunismaa",
@@ -2829,7 +2834,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "juand-r",
@@ -2860,7 +2865,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "kisate",
@@ -2888,7 +2893,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "kuehn-lars",
@@ -2916,7 +2921,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "lccqqqqq",
@@ -2944,7 +2949,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "lmb-freiburg",
@@ -2982,7 +2987,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "man-shar",
@@ -3010,7 +3015,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "migerovitch",
@@ -3041,7 +3046,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "muherng",
@@ -3071,7 +3076,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "nqgl",
@@ -3099,7 +3104,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "parsed-labs",
@@ -3155,7 +3160,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "TalibKhweled",
@@ -3183,7 +3188,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "tatami-galaxy",
@@ -3211,7 +3216,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "viktorvesely",
@@ -3239,7 +3244,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "xocelyk",
@@ -3267,7 +3272,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "yulonglin",
@@ -3295,7 +3300,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "4gatepylon",
@@ -3326,7 +3331,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "5uru",
@@ -3354,7 +3359,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "7vik",
@@ -3382,7 +3387,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "84rt",
@@ -3412,7 +3417,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "AanshSamyani",
@@ -3440,7 +3445,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "aaron-sandoval",
@@ -3470,7 +3475,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "abibalimi",
@@ -3501,7 +3506,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "adamimos",
@@ -3529,7 +3534,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "ahmedmahmud",
@@ -3557,7 +3562,37 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
+  },
+  {
+    "owner": "aiml-sdu",
+    "repo": "routing-subspaces",
+    "url": "https://github.com/aiml-sdu/routing-subspaces",
+    "description": "Routing Subspaces: Auditing Evaluation-to-Deployment Mismatch in Fine-Tuned Language Models (NeurIPS 2026)",
+    "stars": 0,
+    "forks": 0,
+    "last_commit": "2026-11-01",
+    "archived": false,
+    "is_fork": false,
+    "language": "Python",
+    "license": "MIT",
+    "topics": [],
+    "readme_arxiv_ids": [
+      "2607.20436"
+    ],
+    "linked_paper_url": "https://arxiv.org/abs/2607.20436",
+    "linked_paper_tier": 1,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "research",
+    "parent_full_name": null,
+    "content_hash": "78b4ec157a8b1e8a",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "new",
+    "first_seen": "2026-11-27",
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "akul-sethi",
@@ -3585,7 +3620,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "AlexanderGetka-cbica",
@@ -3613,7 +3648,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "AndersWoodruff",
@@ -3644,7 +3679,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "AntonKorznikov",
@@ -3672,7 +3707,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "aokellermann",
@@ -3703,7 +3738,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "archive-jgf",
@@ -3731,7 +3766,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "Arrrlex",
@@ -3759,7 +3794,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "atharvanihalani",
@@ -3790,7 +3825,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "atlaie",
@@ -3818,7 +3853,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "bell-boy",
@@ -3846,7 +3881,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "benvigano",
@@ -3874,7 +3909,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "BerkeArgin",
@@ -3902,7 +3937,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "cadentj",
@@ -3930,7 +3965,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "cadentj",
@@ -3958,7 +3993,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "cadentj",
@@ -4014,7 +4049,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "canrager",
@@ -4042,7 +4077,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "canrager",
@@ -4070,7 +4105,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "CarlosGIbanez",
@@ -4098,7 +4133,35 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
+  },
+  {
+    "owner": "chapll",
+    "repo": "post-hoc-interp",
+    "url": "https://github.com/chapll/post-hoc-interp",
+    "description": "final project repository for stanford cs224n",
+    "stars": 0,
+    "forks": 0,
+    "last_commit": "2026-11-08",
+    "archived": false,
+    "is_fork": false,
+    "language": "Python",
+    "license": null,
+    "topics": [],
+    "readme_arxiv_ids": [],
+    "linked_paper_url": null,
+    "linked_paper_tier": null,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "experiment",
+    "parent_full_name": null,
+    "content_hash": "bee49167f88325ba",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "new",
+    "first_seen": "2026-11-27",
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "chloeli-15",
@@ -4126,7 +4189,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "cicero-im",
@@ -4154,7 +4217,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "ClaireBookworm",
@@ -4182,7 +4245,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "collijk",
@@ -4210,7 +4273,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "danielmccannsayles",
@@ -4238,7 +4301,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "dashstander",
@@ -4266,7 +4329,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "DennwsLee",
@@ -4296,7 +4359,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "devishraq",
@@ -4324,7 +4387,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "DGeisz",
@@ -4352,7 +4415,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "DGeisz",
@@ -4380,7 +4443,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "dislovelhl",
@@ -4411,7 +4474,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "ebalp",
@@ -4439,7 +4502,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "edithvillegas",
@@ -4467,7 +4530,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "edtallison",
@@ -4498,7 +4561,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "Eugleo",
@@ -4526,7 +4589,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "FergusFettes",
@@ -4554,7 +4617,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "FPIEDRAH-BU",
@@ -4582,7 +4645,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "FrogAndCranberries",
@@ -4612,7 +4675,37 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
+  },
+  {
+    "owner": "GaganaMD",
+    "repo": "temporal-awareness",
+    "url": "https://github.com/GaganaMD/temporal-awareness",
+    "description": "Detecting and steering temporal reasoning in LLMs",
+    "stars": 0,
+    "forks": 0,
+    "last_commit": "2026-11-21",
+    "archived": false,
+    "is_fork": true,
+    "language": null,
+    "license": null,
+    "topics": [],
+    "readme_arxiv_ids": [
+      "2505.13508"
+    ],
+    "linked_paper_url": "https://arxiv.org/abs/2505.13508",
+    "linked_paper_tier": 3,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "research",
+    "parent_full_name": "justinshenk/temporal-awareness",
+    "content_hash": "d4ca4f39c1c3305a",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "new",
+    "first_seen": "2026-11-27",
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "Gattocrucco",
@@ -4643,7 +4736,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "gitary",
@@ -4671,7 +4764,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "gitary",
@@ -4701,7 +4794,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "gitary",
@@ -4729,7 +4822,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "gitary",
@@ -4760,7 +4853,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "GlacierEQ",
@@ -4788,7 +4881,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "good-epic",
@@ -4816,7 +4909,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "HassenAissa",
@@ -4844,7 +4937,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "iakshay",
@@ -4872,7 +4965,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "IMMachinations",
@@ -4900,7 +4993,40 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
+  },
+  {
+    "owner": "impactyogi",
+    "repo": "dictionary_learning",
+    "url": "https://github.com/impactyogi/dictionary_learning",
+    "description": null,
+    "stars": 0,
+    "forks": 0,
+    "last_commit": "2025-08-21",
+    "archived": false,
+    "is_fork": true,
+    "language": null,
+    "license": "MIT",
+    "topics": [],
+    "readme_arxiv_ids": [
+      "2404.16014",
+      "2406.04093",
+      "2412.06410",
+      "2407.14435"
+    ],
+    "linked_paper_url": "https://arxiv.org/abs/2412.06410",
+    "linked_paper_tier": 4,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "research",
+    "parent_full_name": "saprmarks/dictionary_learning",
+    "content_hash": "3a8686056fccf10c",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "new",
+    "first_seen": "2026-11-27",
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "ipdimitrov",
@@ -4928,7 +5054,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "jacobcd52",
@@ -4956,7 +5082,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "jacobcd52",
@@ -4989,7 +5115,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "jacobcd52",
@@ -5022,7 +5148,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "jacobcd52",
@@ -5050,7 +5176,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "jamesyc23",
@@ -5080,7 +5206,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "jasonrichdarmawan",
@@ -5108,7 +5234,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "jaysonleon",
@@ -5136,7 +5262,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "Jim-Maar",
@@ -5167,7 +5293,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "Jiyuan-Tan",
@@ -5223,7 +5349,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "joanvelja",
@@ -5253,7 +5379,231 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
+  },
+  {
+    "owner": "jrh-mann",
+    "repo": "counterfactual_probing",
+    "url": "https://github.com/jrh-mann/counterfactual_probing",
+    "description": null,
+    "stars": 0,
+    "forks": 0,
+    "last_commit": "2026-01-18",
+    "archived": false,
+    "is_fork": false,
+    "language": "Python",
+    "license": null,
+    "topics": [],
+    "readme_arxiv_ids": [],
+    "linked_paper_url": null,
+    "linked_paper_tier": null,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "experiment",
+    "parent_full_name": null,
+    "content_hash": "879e3e6660bcb97d",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "new",
+    "first_seen": "2026-11-27",
+    "last_seen": "2026-11-27"
+  },
+  {
+    "owner": "jrh-mann",
+    "repo": "danhack",
+    "url": "https://github.com/jrh-mann/danhack",
+    "description": null,
+    "stars": 0,
+    "forks": 0,
+    "last_commit": "2025-11-03",
+    "archived": false,
+    "is_fork": false,
+    "language": "Python",
+    "license": null,
+    "topics": [],
+    "readme_arxiv_ids": [],
+    "linked_paper_url": null,
+    "linked_paper_tier": null,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "experiment",
+    "parent_full_name": null,
+    "content_hash": "894afe810afda739",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "new",
+    "first_seen": "2026-11-27",
+    "last_seen": "2026-11-27"
+  },
+  {
+    "owner": "jrh-mann",
+    "repo": "llm-progress-monitor",
+    "url": "https://github.com/jrh-mann/llm-progress-monitor",
+    "description": null,
+    "stars": 0,
+    "forks": 0,
+    "last_commit": "2025-10-07",
+    "archived": false,
+    "is_fork": true,
+    "language": "Jupyter Notebook",
+    "license": null,
+    "topics": [],
+    "readme_arxiv_ids": [],
+    "linked_paper_url": null,
+    "linked_paper_tier": null,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "experiment",
+    "parent_full_name": "hasanbaig8/llm-progress-monitor",
+    "content_hash": "f885a385e12af340",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "new",
+    "first_seen": "2026-11-27",
+    "last_seen": "2026-11-27"
+  },
+  {
+    "owner": "jrh-mann",
+    "repo": "reward_hacking",
+    "url": "https://github.com/jrh-mann/reward_hacking",
+    "description": null,
+    "stars": 0,
+    "forks": 0,
+    "last_commit": "2025-10-20",
+    "archived": false,
+    "is_fork": false,
+    "language": "Jupyter Notebook",
+    "license": null,
+    "topics": [],
+    "readme_arxiv_ids": [],
+    "linked_paper_url": null,
+    "linked_paper_tier": null,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "experiment",
+    "parent_full_name": null,
+    "content_hash": "ad5d015bd85d4221",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "new",
+    "first_seen": "2026-11-27",
+    "last_seen": "2026-11-27"
+  },
+  {
+    "owner": "jrh-mann",
+    "repo": "reward_hacking_sae_dashboard",
+    "url": "https://github.com/jrh-mann/reward_hacking_sae_dashboard",
+    "description": null,
+    "stars": 0,
+    "forks": 0,
+    "last_commit": "2025-10-28",
+    "archived": false,
+    "is_fork": false,
+    "language": "Jupyter Notebook",
+    "license": null,
+    "topics": [],
+    "readme_arxiv_ids": [],
+    "linked_paper_url": null,
+    "linked_paper_tier": null,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "experiment",
+    "parent_full_name": null,
+    "content_hash": "7d78b5b44c398f59",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "new",
+    "first_seen": "2026-11-27",
+    "last_seen": "2026-11-27"
+  },
+  {
+    "owner": "jrh-mann",
+    "repo": "root",
+    "url": "https://github.com/jrh-mann/root",
+    "description": null,
+    "stars": 0,
+    "forks": 0,
+    "last_commit": "2025-10-10",
+    "archived": false,
+    "is_fork": false,
+    "language": "Jupyter Notebook",
+    "license": null,
+    "topics": [],
+    "readme_arxiv_ids": [],
+    "linked_paper_url": null,
+    "linked_paper_tier": null,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "experiment",
+    "parent_full_name": null,
+    "content_hash": "873f39d7ec4f1782",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "new",
+    "first_seen": "2026-11-27",
+    "last_seen": "2026-11-27"
+  },
+  {
+    "owner": "jrh-mann",
+    "repo": "temperature_probe",
+    "url": "https://github.com/jrh-mann/temperature_probe",
+    "description": null,
+    "stars": 0,
+    "forks": 0,
+    "last_commit": "2025-11-08",
+    "archived": false,
+    "is_fork": false,
+    "language": "Jupyter Notebook",
+    "license": null,
+    "topics": [],
+    "readme_arxiv_ids": [],
+    "linked_paper_url": null,
+    "linked_paper_tier": null,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "experiment",
+    "parent_full_name": null,
+    "content_hash": "2f980ce1e710d474",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "new",
+    "first_seen": "2026-11-27",
+    "last_seen": "2026-11-27"
+  },
+  {
+    "owner": "jrh-mann",
+    "repo": "thought_anchors_probing",
+    "url": "https://github.com/jrh-mann/thought_anchors_probing",
+    "description": null,
+    "stars": 0,
+    "forks": 0,
+    "last_commit": "2026-01-02",
+    "archived": false,
+    "is_fork": false,
+    "language": "HTML",
+    "license": null,
+    "topics": [],
+    "readme_arxiv_ids": [],
+    "linked_paper_url": null,
+    "linked_paper_tier": null,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "experiment",
+    "parent_full_name": null,
+    "content_hash": "c5e9a944645b6d1d",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "new",
+    "first_seen": "2026-11-27",
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "JuhanPauklin",
@@ -5281,7 +5631,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "kenjinp",
@@ -5309,7 +5659,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "khalid-alim",
@@ -5337,7 +5687,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "lccqqqqq",
@@ -5365,7 +5715,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "lccqqqqq",
@@ -5393,7 +5743,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "leogagnon",
@@ -5421,7 +5771,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "loftusa",
@@ -5449,7 +5799,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "loftusa",
@@ -5477,7 +5827,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "lrfreeman",
@@ -5505,7 +5855,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "LukeSamkharadze",
@@ -5533,7 +5883,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "magikarp01",
@@ -5561,7 +5911,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "MagriniGabriele",
@@ -5589,7 +5939,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "MaheepChaudhary",
@@ -5617,7 +5967,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "marbinner",
@@ -5645,7 +5995,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "Matthew-Jennings",
@@ -5675,7 +6025,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "mfrisch3",
@@ -5703,7 +6053,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "MichaelRipa",
@@ -5731,7 +6081,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "Mushrimpy",
@@ -5759,7 +6109,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "na-naina",
@@ -5787,7 +6137,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "na-naina",
@@ -5815,7 +6165,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "nikozhuk",
@@ -5843,7 +6193,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "nottonofclay",
@@ -5871,7 +6221,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "nuprl",
@@ -5901,7 +6251,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "olliematthews",
@@ -5931,7 +6281,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "OmarMohammed88",
@@ -5959,7 +6309,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "oscaryas",
@@ -5989,7 +6339,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "Parabrele",
@@ -6017,7 +6367,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "Parabrele",
@@ -6045,7 +6395,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "parsed-labs",
@@ -6076,6 +6426,34 @@
     "last_seen": "2026-10-13"
   },
   {
+    "owner": "passionInfinite",
+    "repo": "passioninfinite.github.io",
+    "url": "https://github.com/passionInfinite/passioninfinite.github.io",
+    "description": null,
+    "stars": 0,
+    "forks": 0,
+    "last_commit": "2026-11-18",
+    "archived": false,
+    "is_fork": false,
+    "language": "JavaScript",
+    "license": null,
+    "topics": [],
+    "readme_arxiv_ids": [],
+    "linked_paper_url": null,
+    "linked_paper_tier": null,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "experiment",
+    "parent_full_name": null,
+    "content_hash": "b8817786d14b80e6",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "new",
+    "first_seen": "2026-11-27",
+    "last_seen": "2026-11-27"
+  },
+  {
     "owner": "photonshi",
     "repo": "cbai_phoebe",
     "url": "https://github.com/photonshi/cbai_phoebe",
@@ -6101,7 +6479,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "Reality2byte",
@@ -6131,7 +6509,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "rhite-tech",
@@ -6161,7 +6539,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "sabazm",
@@ -6189,7 +6567,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "Samusasuke",
@@ -6219,7 +6597,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "sebastian-sosa",
@@ -6247,7 +6625,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "sgovil5",
@@ -6275,7 +6653,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "shailu1309",
@@ -6306,7 +6684,7 @@
     "has_classification": true,
     "processing_bucket": "new",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "skysneakers",
@@ -6334,7 +6712,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "slinkp",
@@ -6362,7 +6740,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "SomBagchi",
@@ -6390,7 +6768,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "spfaul",
@@ -6418,7 +6796,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "sterfd",
@@ -6448,7 +6826,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "submarat",
@@ -6478,7 +6856,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "submitter123",
@@ -6506,7 +6884,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "suspiciousleaf",
@@ -6536,7 +6914,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "Swaragnyani",
@@ -6564,7 +6942,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "tarmopungas",
@@ -6594,7 +6972,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "ThomasHeap",
@@ -6622,7 +7000,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "tinuademargaret",
@@ -6652,7 +7030,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "tinuademargaret",
@@ -6680,7 +7058,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "tinuademargaret",
@@ -6708,7 +7086,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "tinycrops",
@@ -6736,7 +7114,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "tinycrops",
@@ -6766,7 +7144,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "tom-bbc",
@@ -6801,7 +7179,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "tom-pollak",
@@ -6829,7 +7207,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "tuotol",
@@ -6859,7 +7237,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "Venn1998",
@@ -6890,7 +7268,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "vminvsky",
@@ -6918,7 +7296,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "wendlerc",
@@ -6946,7 +7324,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "williamsnell",
@@ -6974,7 +7352,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "windsornguyen",
@@ -7002,7 +7380,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "wj210",
@@ -7030,7 +7408,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "yus100",
@@ -7060,7 +7438,7 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "Yuxiao2234",
@@ -7088,7 +7466,35 @@
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-06-10",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
+  },
+  {
+    "owner": "zarnab222-dev",
+    "repo": "lmlab",
+    "url": "https://github.com/zarnab222-dev/lmlab",
+    "description": null,
+    "stars": 0,
+    "forks": 0,
+    "last_commit": "2026-11-18",
+    "archived": false,
+    "is_fork": false,
+    "language": "Python",
+    "license": null,
+    "topics": [],
+    "readme_arxiv_ids": [],
+    "linked_paper_url": null,
+    "linked_paper_tier": null,
+    "category": "uses_nnsight",
+    "classification_reason": "github_dependent",
+    "repo_type": "experiment",
+    "parent_full_name": null,
+    "content_hash": "b8817786d14b80e6",
+    "manual_override": false,
+    "has_metadata": true,
+    "has_classification": true,
+    "processing_bucket": "new",
+    "first_seen": "2026-11-27",
+    "last_seen": "2026-11-27"
   },
   {
     "owner": "zndx",
@@ -7097,7 +7503,7 @@
     "description": null,
     "stars": 0,
     "forks": 1,
-    "last_commit": "2026-10-19",
+    "last_commit": "2026-11-25",
     "archived": false,
     "is_fork": false,
     "language": "Python",
@@ -7115,12 +7521,12 @@
     "classification_reason": "github_dependent",
     "repo_type": "research",
     "parent_full_name": null,
-    "content_hash": "986385477b7e7d97",
+    "content_hash": "7fc9a84fef3484de",
     "manual_override": false,
     "has_metadata": true,
     "has_classification": true,
     "processing_bucket": "reprocess",
     "first_seen": "2026-10-13",
-    "last_seen": "2026-10-19"
+    "last_seen": "2026-11-27"
   }
 ]
