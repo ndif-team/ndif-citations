@@ -1139,6 +1139,16 @@
     "image": "/images/Emergence-of-Hierarchical-Emotion-Organization-in-Large-Language-Models.png"
   },
   {
+    "title": "Epistemic Familiarity is Associated With Belief Stability in Large Language Models",
+    "authors": "Samantha Dies, Courtney Maynard, Germans Savcisens, Tina Eliassi-Rad",
+    "venue": "Findings of EMNLP 2026",
+    "year": 2025,
+    "url": "https://arxiv.org/abs/2511.19166",
+    "description": "This research introduces a new way to test how consistently large language models maintain their beliefs when faced with subtle changes in how information is framed. By comparing how models respond to familiar fictional statements versus unfamiliar synthetic ones, the study finds that models are more likely to retract or change their beliefs when confronted with unfamiliar or obscure content — even if the underlying meaning remains similar. The results suggest that a model’s stability depends not just on what it knows, but on how familiar or intuitive the framing of that knowledge feels. This insight highlights that reliability in AI systems isn’t only about getting answers right, but about holding steady under reasonable reinterpretations — a crucial factor for real-world trust and deployment.",
+    "category": "uses_nnsight",
+    "image": "/images/Epistemic-Familiarity-is-Associated-With-Belief-Stability-in-Large-Language-Models.png"
+  },
+  {
     "title": "Even Heads Fix Odd Errors: Mechanistic Discovery and Surgical Repair in Transformer Attention",
     "authors": "Gustavo Sandoval",
     "venue": "ArXiv 2025",
