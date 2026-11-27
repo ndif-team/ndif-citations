@@ -270,6 +270,16 @@
     "image": "/images/Enabling-Performant-and-Flexible-Model-Internal-Observability-for-LLM-Inference.png"
   },
   {
+    "title": "Encoded Early, Used Late: Where Transformers Begin to Act on an Inferred Partner's Expertise",
+    "authors": "Mika Okamoto, Gabriele Sarti",
+    "venue": "Scientific Understanding of Foundation Models (Sci-FM) Workshop at COLM 2026",
+    "year": 2026,
+    "url": "https://arxiv.org/abs/2609.07139",
+    "description": "Researchers investigated how a language model represents and uses information about its conversation partner's expertise during a dialogue. They found that the model encodes this inferred attribute — how expert the partner is — in its early processing layers, long before it actually influences the model's later responses or decisions. Even though the information is present and readable early on, it doesn't start to affect the output until much deeper in the network. This separation between when information becomes available and when it gets used suggests that efforts to interpret or steer the model's behavior based on partner expertise would need to target specific internal stages, and that simply reading internal states early may not reflect what ultimately drives the model's actions. The study highlights a fundamental timing gap in how transformers process socially relevant, inferred attributes over time.",
+    "category": "uses_ndif",
+    "image": "/images/Encoded-Early-Used-Late-Where-Transformers-Begin-to-Act-on-an-Inferred-Partners-Expertise.png"
+  },
+  {
     "title": "Explaining the Explainer: Understanding the Inner Workings of Transformer-based Symbolic Regression Models",
     "authors": "Arco van Breda, Erman Acar",
     "venue": "ArXiv 2026",
