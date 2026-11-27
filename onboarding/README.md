@@ -486,25 +486,24 @@ your comment: 👀 queued, 👎 you don't have access, 😕 the permission looku
 
 - Put the commands for one paper in one comment, each at the start of its own line (up to 10; extra lines are ignored). They run top to bottom, and each one runs even if an earlier one failed (⚠️).
 - Put `/edit` and `/evidence` before `/verify` or `/discard`.
-- **Never put `/verify` in the same comment as `/pdf`, `/retry` or `/summarize`.** Read the bot's reply (the new label) first, then `/verify` in a new comment.
+- **Never put `/verify` in the same comment as `/pdf`, `/retry` or `/summarize`.** Read the bot's reply (the new label or summary) first, then `/verify` in a new comment.
 - **Wait for the bot's reply before commenting again.** Each comment is one queued job; one that changes data becomes one `data: review #N` commit.
 - Editing a comment does nothing; post a new one. No 👀 within a few minutes means the bot saw no command.
 - A "⚠️ /cmd — …" line means that command changed nothing: fix it and post just that command again.
 - "⚠️ Something went wrong" means the job failed, possibly after saving. Check the issue and the paper before repeating, and tell the maintainer.
-- On Monday mornings replies can wait behind the weekly run (up to ~1.5 h).
+- On Mondays the weekly run is scheduled for 05:17 UTC, but GitHub often starts it hours later; while it runs (up to ~1.5 h) replies wait behind it.
 
 ### What /verify and /discard do
 
-Both **lock the paper** ("curator-locked"): later weekly runs never reclassify it
-(it is marked as a manual override). In a review issue they also **close the issue**.
+Both **lock the paper** ("curator-locked"). In a review issue they also **close the issue**.
 Exception: `/discard` on a paper that was added by hand (`/add`, the add-paper form, or the local app) deletes it instead, so a later run may find it again. If it comes back, discard it again.
-Every command except `/evidence` and `/help` locks the paper. A locked paper stays pending, and the weekly run won't publish it, until you `/verify` or `/discard`.
+Every command except `/evidence`, `/add` and `/help` locks the paper, and the weekly run never re-decides a locked paper: it stays pending until you `/verify` or `/discard`. One exception: `/pdf` and `/retry` re-decide it themselves and can publish a confident `referencing` or `uses_nnsight` label on the spot (the reply says "now **verified**" and the bot closes the issue). If that label is wrong, post `/verify <right label>` or `/discard` in the same issue; commands still work on a closed review issue.
 After `/verify`, ndif.us picks it up at its next daily build ("ndif.us updates within a day").
 
 ### Digest, report and intake issues
 
 - **Weekly digest** ("Catalog digest — <date>"): a new issue on each Monday run where something
-  changed; the previous digest closes as superseded. Its **Auto-published** list is papers published with no human check (they get no review issue). Skim it every week. To pull one, copy the `/discard <link>` line under it into a comment. On the suggested `/verify` line, keep only one label.
+  changed; the previous digest closes as superseded. Its **Auto-published** list is papers published with no human check (they get no review issue). Skim it every week. Under each paper is `/discard <link> · /verify <link> uses_ndif|uses_nnsight|referencing`: copy only the command you want into a comment (for `/verify`, keep one label). Never paste the whole line — the bot would run the `/discard`.
 - **Report link** on ndif.us/research opens a "Problem: …" issue (report-a-problem form).
   The **add-a-paper form** opens an "Add paper: …" intake issue. If you filed it, the bot adds the paper and closes the issue by itself. If someone without write access filed it, or the bot says the add failed, comment `/add <link>` (an arXiv, DOI or ACL Anthology link, written out in full).
 - In digest, report and intake issues the bot can't tell which paper you mean, so **name it
@@ -517,7 +516,7 @@ After `/verify`, ndif.us picks it up at its next daily build ("ndif.us updates w
 
 - **Never decide a paper is irrelevant from its abstract.** Read the full text, and for
   no-mention papers check whether the paper's own code uses nnsight.
-- **Never close a review issue by hand.** The next sync opens a second issue for the same paper. Exception: an issue the bot labelled `needs-attention` ("I can't find this paper in the catalog anymore") has no paper behind it. Leave it for the maintainer.
+- **Never close a review issue by hand.** The next sync opens a second issue for the same paper. The maintainer closes `needs-attention` issues ("I can't find this paper in the catalog anymore") by hand; leave those to them.
 - **Never edit the issue body.** Its last line is the bot's marker; break it and the bot loses the paper.
 - **Never attach a paywalled PDF.** Use `/evidence` + `/verify`.
 - **Don't mix local-app edits and GitHub commands on the same paper at the same time.**
