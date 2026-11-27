@@ -239,6 +239,16 @@
     "image": "/images/Do-All-LLMs-Know-When-Theyre-Being-Harmful-A-Reproducibility-Study-of-Latent-Space-Safety-Probes-Across-Model-Families.png"
   },
   {
+    "title": "Do Language Models Track Entities Across State Changes?",
+    "authors": "Zilu Tang, Qiao Zhao, Gabriel Franco, Derry Wijaya, Aaron Mueller, Sebastian Schuster, Najoung Kim",
+    "venue": "ICML 2026",
+    "year": 2026,
+    "url": "https://arxiv.org/abs/2605.30233",
+    "description": "This work explores how large language models handle the task of tracking entity states through sequences of actions like adding, removing, or moving objects. Rather than updating their internal representation step by step as events unfold, the models appear to gather all relevant information at once only when a question is asked. The study reveals that the mechanism for removing entities relies on a fragile, global suppression signal, which can lead to predictable errors when disrupted. By identifying and neutralizing this signal, the researchers show a way to partially improve the model’s behavior. These findings highlight a mismatch between the sequential nature of reasoning tasks and the models’ parallel, last-minute processing strategy, while demonstrating how combining behavioral tests with deep mechanistic analysis can uncover hidden weaknesses and guide better evaluations.",
+    "category": "uses_ndif",
+    "image": "/images/Do-Language-Models-Track-Entities-Across-State-Changes.png"
+  },
+  {
     "title": "Do Transformers Use their Depth Adaptively? Evidence from a Relational Reasoning Task",
     "authors": "Alicia Curth, Rachel Lawrence, Sushrut Karmalkar, Niranjani Prasad",
     "venue": "ICLR 2026",
