@@ -82,6 +82,9 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
+          LLM_TIMEOUT: ${{ vars.LLM_TIMEOUT }}
+          LLM_MAX_RETRIES: ${{ vars.LLM_MAX_RETRIES }}
+          LLM_RATE_LIMIT_SLEEP: ${{ vars.LLM_RATE_LIMIT_SLEEP }}
           LLM_EXTRA_BODY: ${{ vars.LLM_EXTRA_BODY }}
           AUTO_PUBLISH_RULES: ${{ vars.AUTO_PUBLISH_RULES }}
           OPENALEX_EMAIL: ${{ vars.OPENALEX_EMAIL }}

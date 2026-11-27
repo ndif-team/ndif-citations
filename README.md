@@ -328,7 +328,7 @@ SEED_ARXIV_ID = "2407.14561"
 
 ```python
 S2_RATE_LIMIT_SLEEP = 3.0       # unauthenticated
-LLM_RATE_LIMIT_SLEEP = 12.0     # NVIDIA Build free tier
+LLM_RATE_LIMIT_SLEEP = 12.0     # NVIDIA Build free tier (env LLM_RATE_LIMIT_SLEEP overrides; 0 = off)
 OPENALEX_RATE_LIMIT_SLEEP = 0.15
 SCHOLAR_RATE_LIMIT_SLEEP = 1.0
 ```
@@ -394,7 +394,8 @@ Internal tool for [NDIF](https://ndif.us) — an NSF-funded project at Northeast
 
 **Secrets / variables (ndif-citations → Settings → Secrets and variables → Actions)**
 Secrets: `LLM_API_KEY`, `S2_API_KEY`, `SERPAPI_API_KEY`. Variables (optional): `LLM_BASE_URL`,
-`LLM_MODEL`, `LLM_EXTRA_BODY`, `AUTO_PUBLISH_RULES`, `OPENALEX_EMAIL`, `UNPAYWALL_EMAIL`,
+`LLM_MODEL`, `LLM_EXTRA_BODY`, `LLM_TIMEOUT` (default 120 s per attempt), `LLM_MAX_RETRIES` (default 1),
+`LLM_RATE_LIMIT_SLEEP` (default 12 s between LLM calls for the NVIDIA free tier; 0 turns pacing off on a paid provider), `AUTO_PUBLISH_RULES`, `OPENALEX_EMAIL`, `UNPAYWALL_EMAIL`,
 `CURATORS` (comma-separated GitHub logins to assign digests to).
 
 **Switch to OpenRouter:** set variables `LLM_BASE_URL=https://openrouter.ai/api/v1`,

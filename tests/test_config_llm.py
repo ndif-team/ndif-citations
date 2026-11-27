@@ -59,3 +59,41 @@ def test_settings_store_accepts_dict_extra_body(tmp_path):
 def test_settings_store_rejects_non_dict_extra_body(tmp_path):
     with pytest.raises(ValueError):
         settings_store.save(tmp_path / "settings.json", {"llm_extra_body": "nope"})
+
+
+_TUNABLES = ("LLM_TIMEOUT", "LLM_MAX_RETRIES", "LLM_RATE_LIMIT_SLEEP")
+
+
+@pytest.fixture
+def reload_config(monkeypatch):
+    import importlib
+    for k in _TUNABLES:
+        monkeypatch.delenv(k, raising=False)
+    yield lambda: importlib.reload(config)
+    monkeypatch.undo()
+    importlib.reload(config)
+
+
+def test_llm_tunables_from_env(monkeypatch, reload_config):
+    monkeypatch.setenv("LLM_TIMEOUT", "45")
+    monkeypatch.setenv("LLM_MAX_RETRIES", "0")
+    monkeypatch.setenv("LLM_RATE_LIMIT_SLEEP", "3")
+    c = reload_config()
+    assert (c.LLM_TIMEOUT, c.LLM_MAX_RETRIES, c.LLM_RATE_LIMIT_SLEEP) == (45.0, 0, 3.0)
+
+
+def test_llm_tunables_empty_env_uses_defaults(monkeypatch, reload_config):
+    for k in _TUNABLES:
+        monkeypatch.setenv(k, "")
+    c = reload_config()
+    assert (c.LLM_TIMEOUT, c.LLM_MAX_RETRIES, c.LLM_RATE_LIMIT_SLEEP) == (120.0, 1, 12.0)
+
+
+def test_zero_pacing_does_not_sleep(monkeypatch):
+    from ndif_citations import utils
+    calls = []
+    monkeypatch.setattr(utils.time, "sleep", calls.append)
+    utils.rate_limit_sleep(0.0, "LLM summary")
+    assert calls == []
+    utils.rate_limit_sleep(12.0, "LLM summary")
+    assert calls == [12.0]

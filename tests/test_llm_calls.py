@@ -134,7 +134,8 @@ def _ctx(monkeypatch):
 def test_llm_client_is_bounded(monkeypatch):
     monkeypatch.setattr(config, "LLM_API_KEY", "test-key")
     client = process._get_llm_client()
-    assert client.timeout == config.LLM_TIMEOUT
+    assert client.timeout.read == config.LLM_TIMEOUT
+    assert client.timeout.connect == 5.0
     assert client.max_retries == config.LLM_MAX_RETRIES
 
 
