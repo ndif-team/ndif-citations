@@ -169,6 +169,16 @@
     "image": "/images/Creating-Steering-Vectors-via-Input-Optimisation.png"
   },
   {
+    "title": "Cross-layer SAE feature drift for early detection and mitigation of multi-turn jailbreaks",
+    "authors": "Yi-Wen Chu",
+    "venue": "M.S. Thesis, Iowa State University 2026",
+    "year": 2026,
+    "url": "https://doi.org/10.31274/td-20260804-162",
+    "description": "Researchers developed a system that detects when a conversation is gradually shifting toward harmful content before the model actually produces an unsafe response. By tracking changes in internal model features across multiple turns, the tool can identify jailbreak attempts early, though attempts to steer the model back to safety once detected proved ineffective. This highlights a key gap in AI safety: we can spot dangerous escalation, but we still don't know how to stop it at the feature level.",
+    "category": "uses_nnsight",
+    "project_url": "https://github.com/WilliamSnail/SAE-Jailbreak-Research"
+  },
+  {
     "title": "Cyberlens: taxonomy-mapped sparse autoencoders for cybersecurity interpretability of open-weight language models",
     "authors": "Fahad Hafeez",
     "venue": "AI and Ethics 2026",
