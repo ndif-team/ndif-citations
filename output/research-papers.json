@@ -875,6 +875,15 @@
     "image": "/images/Activation-space-interventions-can-be-transferred-between-large-language-models.png"
   },
   {
+    "title": "Adversarial Manipulation of Reasoning Models using Internal Representations",
+    "authors": "Kureha Yamaguchi, Benjamin Etheridge, Andy Arditi",
+    "venue": "ICML 2025 R2-FM Workshop",
+    "year": 2025,
+    "url": "https://openreview.net/forum?id=TYKp5HCb99",
+    "description": "",
+    "category": "uses_nnsight"
+  },
+  {
     "title": "Annotating the Chain-of-Thought: A Behavior-Labeled Dataset for AI Safety",
     "authors": "Antonio-Gabriel Chacón Menke, Phan Xuan Tan, Eiji Kamioka",
     "venue": "ArXiv 2025",
