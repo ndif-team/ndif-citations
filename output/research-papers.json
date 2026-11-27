@@ -625,6 +625,16 @@
     "image": "/images/PyHealth-20-A-Comprehensive-Open-Source-Toolkit-for-Accessible-and-Reproducible-Clinical-Deep-Learning.png"
   },
   {
+    "title": "Representation as a Bottleneck for Mechanistic Interpretability: The Manifestation Unit Protocol",
+    "authors": "Hussein Chouman, Wataru Sasaki, Tomokazu Matsui, Hirohiko Suwa, Keiichi Yasumoto",
+    "venue": "ArXiv 2026",
+    "year": 2026,
+    "url": "https://arxiv.org/abs/2607.00089",
+    "description": "This work introduces a structured framework called Manifestation Units to organize and make reusable the detailed findings from mechanistic interpretability studies. By defining a standardized typed tuple protocol — including components like entity, selectivity, response, distribution, and gradient, extended for transformers with attention-head primitives — it enables automatic population and natural language querying of per-component analyses across different model types. The approach shows that this structure improves retrieval effectiveness and allows recovered components to meet causal criteria for sufficiency and necessity, while revealing that only two fields are essential for core functionality. Ultimately, it proposes this schema as reusable infrastructure to bridge the gap between fine-grained analysis and practical downstream applications in model auditing and intervention.",
+    "category": "referencing",
+    "image": "/images/Representation-as-a-Bottleneck-for-Mechanistic-Interpretability-The-Manifestation-Unit-Protocol.png"
+  },
+  {
     "title": "Reproducing Transparent and Scrutable Recommendations: Exploring Open-Weight Models via Natural-Language User Profiles",
     "authors": "Noah Mamié, Laurin van den Bergh",
     "venue": "BlackboxNLP Workshop: Analyzing and Interpreting Neural Networks for NLP 2026",
