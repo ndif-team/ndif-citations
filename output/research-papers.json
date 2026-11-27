@@ -129,6 +129,16 @@
     "image": "/images/CircuitKIT-Circuit-Discovery-Evaluation-and-Application-Toolkit-for-Mechanistic-Interpretability.png"
   },
   {
+    "title": "Comparing Linear Probes with Mahalanobis Cosine Similarity",
+    "authors": "Zhuofan Josh Ying, Peter Hase, Nikolaus Kriegeskorte",
+    "venue": "EMNLP 2026",
+    "year": 2026,
+    "url": "https://arxiv.org/abs/2606.19603",
+    "description": "This work explains why a refined similarity measure — Mahalanobis cosine similarity — strongly predicts how well a linear probe generalizes to out-of-distribution data. By showing that both the probe’s OOD performance and its similarity to a reference probe depend in the same way on the signal-to-noise ratio in the data, the authors derive a theoretical basis for the observed linear relationship. They further demonstrate when this relationship holds and when it breaks down, validating their theory across diverse models, layers, and concepts. The result positions Mahalanobis cosine similarity as a more principled and effective tool for comparing linear probes in interpretability studies.",
+    "category": "uses_nnsight",
+    "image": "/images/Comparing-Linear-Probes-with-Mahalanobis-Cosine-Similarity.png"
+  },
+  {
     "title": "Counting Hypothesis: Potential Mechanism of In-Context Learning",
     "authors": "Jung H. Lee, Sujith Vijayan",
     "venue": "ArXiv 2026",
