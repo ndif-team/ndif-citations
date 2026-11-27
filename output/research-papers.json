@@ -428,6 +428,15 @@
     "image": "/images/Interpretability-Can-Be-Actionable.png"
   },
   {
+    "title": "Inverse Scaling in Activation Steering: Architecture and Scale Dependence of Refusal Manipulation",
+    "authors": "Siraj Mohammad, Sohail Mohammad",
+    "venue": "Preprint 2026",
+    "year": 2026,
+    "url": "https://sohailmo.ai/papers/activation-steering-2026.pdf",
+    "description": "The study reveals that two different methods for extracting model behaviors — nnsight and raw hooks — yield divergent results when applied to the same language model, suggesting that the choice of extraction technique significantly influences what is observed. This highlights a critical consideration for researchers interpreting model internals: methodological choices can shape conclusions, and consistency in approach is essential for reliable analysis. The work underscores the need for greater scrutiny of how we probe AI systems, especially as interpretability tools become more widely used.",
+    "category": "uses_nnsight"
+  },
+  {
     "title": "IRIS: A Visual Cortex-Inspired Framework for Analyzing Orientation Selectivity in Vision Transformers",
     "authors": "Vaishnavi B Mohan, Vijayakrishna Naganoor, Yashas Annadani, Shashank Hegde",
     "venue": "ArXiv 2026",
