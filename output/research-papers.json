@@ -407,14 +407,14 @@
     "image": "/images/FLEET-From-Logits-Entropy-to-Enhanced-Trajectories-in-Text-Generation.png"
   },
   {
-    "title": "Fluid Representations in Reasoning Models",
-    "authors": "Dmitrii Kharlapenko, Alessandro Stolfo, Arthur Conmy, Mrinmaya Sachan, Zhijing Jin",
-    "venue": "Findings of the Association for Computational Linguistics: EMNLP 2026",
+    "title": "Fluid Reasoning Representations",
+    "authors": "Dmitrii Kharlapenko, Terry Jingchen Zhang, Arth Singh, Alessandro Stolfo, Arthur Conmy, Mrinmaya Sachan, Zhijing Jin",
+    "venue": "Findings of EMNLP 2026",
     "year": 2026,
     "url": "https://arxiv.org/abs/2602.04843",
     "description": "Researchers have made strides in understanding how advanced language models process complex information, shedding light on the internal mechanisms that enable them to excel at abstract problem-solving. By analyzing a model trained to produce detailed reasoning traces, they discovered that it develops more effective representations of actions and concepts over time, focusing on underlying structure rather than specific details. This insight has significant implications for improving the performance of language models in complex problem-solving tasks.",
     "category": "referencing",
-    "image": "/images/Fluid-Representations-in-Reasoning-Models.png"
+    "image": "/images/Fluid-Reasoning-Representations.png"
   },
   {
     "title": "Friends and Grandmothers in Silico: Localizing Entity Cells in Language Models",
