@@ -247,3 +247,26 @@ def test_attention_labels_before_commenting():
         raise RuntimeError("label missing")
     log = apply_sync([SyncAction("attention", 7, comment="can't find")], Gh(runner=runner))
     assert calls == [["issue", "edit"]] and log[-1].startswith("FAILED attention #7")
+
+
+def _close_calls(state):
+    from ndif_citations.review_sync import SyncAction
+    calls = []
+
+    def runner(args, stdin=None):
+        calls.append(args[:2])
+        return state + "\n" if args[:2] == ["issue", "view"] else ""
+    log = apply_sync([SyncAction("close", 9, "k", comment="Resolved: now x")], Gh(runner=runner))
+    return calls, log
+
+
+def test_close_skipped_when_issue_already_closed():
+    calls, log = _close_calls("CLOSED")
+    assert calls == [["issue", "view"]]
+    assert "skip close #9: already closed" in log
+
+
+def test_close_comments_and_closes_when_open():
+    calls, log = _close_calls("OPEN")
+    assert calls == [["issue", "view"], ["issue", "comment"], ["issue", "close"]]
+    assert not any("skip" in l for l in log)

@@ -126,6 +126,13 @@ class Gh:
                         "--json", "number,title,body,labels,author", "--limit", "500"])
         return json.loads(out or "[]")
 
+    def state(self, number: int) -> str:
+        # Paced like _do: the lookup is a gh call too.
+        try:
+            return self.run(["issue", "view", str(number), "--json", "state", "--jq", ".state"]).strip()
+        finally:
+            time.sleep(self.pace)
+
     def create(self, title: str, body: str, labels: list[str], assignees: str = "") -> None:
         args = ["issue", "create", "--title", title, "--body-file", "-"]
         for l in labels:
@@ -184,6 +191,10 @@ def apply_sync(actions: list[SyncAction], gh: Gh, *, assignees: str = "", dry_ru
                 remove = sorted({l for l in current if l.startswith("why:") or l == "needs-attention"} - set(a.labels))
                 gh.edit(a.issue, a.title, a.body, a.labels, remove)
             elif a.kind == "close":
+                # The open-issue list lags: a command-closed issue can still appear in it.
+                if gh.state(a.issue) == "CLOSED":
+                    log.append(f"skip close #{a.issue}: already closed")
+                    continue
                 gh.comment(a.issue, a.comment)
                 gh.close(a.issue)
             elif a.kind == "attention":
