@@ -505,6 +505,15 @@
     "image": "/images/Language-Switching-Triggers-Take-a-Latent-Detour-Through-Language-Models.png"
   },
   {
+    "title": "Latent, Localized, Retrieved On Demand: Tracing Implicit User Attributes Across Multi-Turn Conversation",
+    "authors": "Valeriya Zelenkova, Gabriele Sarti",
+    "venue": "SPAR Spring 2026",
+    "year": 2026,
+    "url": "https://vzelenkova.com/spar_sp26_final_report.pdf",
+    "description": "Researchers investigate how a chat model retains and uses a user-specific attribute — such as a preference or identity — that is only hinted at once during a conversation, without being explicitly stated again. By analyzing the model’s internal behavior across multiple turns, they uncover how subtle contextual cues are encoded and later leveraged to guide responses, even when the original hint is no longer present. This work sheds light on the mechanisms behind personalized, context-aware AI interactions, revealing how models can maintain implicit user understanding over time.",
+    "category": "uses_ndif"
+  },
+  {
     "title": "Learning a Generative Meta-Model of LLM Activations",
     "authors": "Grace Luo, Jiahai Feng, Trevor Darrell, Alec Radford, Jacob Steinhardt",
     "venue": "ICML 2026",
