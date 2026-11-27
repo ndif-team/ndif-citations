@@ -835,6 +835,16 @@
     "image": "/images/Your-Model-Is-Leaking-Covert-Information-Transfer-through-LLM-Residual-Streams.png"
   },
   {
+    "title": "言語モデルの機械論的解釈可能性ツールの調査",
+    "authors": "Ryogo Nakauchi",
+    "venue": "Bulletin of Advanced Institute of Industrial Technology 2026",
+    "year": 2026,
+    "url": "https://aiit.repo.nii.ac.jp/records/2000088",
+    "description": "This paper surveys recent developments in tools designed to help researchers and practitioners understand how transformer language models make decisions by examining their internal activations. It highlights how these tools have evolved to become more accessible, enabling broader use beyond specialists in model interpretability. By making it easier to visualize and manipulate model behavior, the work supports efforts to build more transparent and trustworthy AI systems.",
+    "category": "referencing",
+    "image": "/images/言語モデルの機械論的解釈可能性ツールの調査.png"
+  },
+  {
     "title": "A survey on mechanistic interpretability for multi-modal foundation models",
     "authors": "Zihao Lin, Samyadeep Basu, Mohammad Beigi, Varun Manjunatha, Ryan A. Rossi, Zichao Wang, Yufan Zhou, Sriram Balasubramanian, Arman Zarei, Keivan Rezaei, Ying Shen, Barry Menglong Yao, Zhiyang Xu, Qin Liu, Yuxiang Zhang, Yan Sun, Shilong Liu, Li Shen, Hongxuan Li, Soheil Feizi, Lifu Huang",
     "venue": "ArXiv 2025",
