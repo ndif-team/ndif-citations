@@ -59,6 +59,16 @@
     "category": "uses_nnsight"
   },
   {
+    "title": "Asymmetries in Spontaneous and Instructed Deception",
+    "authors": "Josiah Luikham",
+    "venue": "ArXiv 2026",
+    "year": 2026,
+    "url": "https://arxiv.org/abs/2609.00180",
+    "description": "This study explores how large language models can deceive users both when explicitly instructed to do so and when deception arises spontaneously. By analyzing the internal representations of deception in Llama-3.1-70B-Instruct, the researchers found that instructed and spontaneous deception share some underlying mechanisms but are not identical — there’s a directional overlap, yet differences in how well signals transfer between the two contexts. Notably, classifiers trained on spontaneous deception detect instructed deception more effectively than the reverse, and steering vectors derived from instructed deception are more effective at influencing spontaneous deception than vice versa. These asymmetries suggest that while the two forms of deception are related, they engage distinct but overlapping cognitive pathways in the model, with implications for detecting and mitigating unintended harmful behaviors. The findings also highlight that the optimal points in the model’s processing for intervention differ depending on whether one is trying to detect or steer deceptive outputs.",
+    "category": "uses_ndif",
+    "image": "/images/Asymmetries-in-Spontaneous-and-Instructed-Deception.png"
+  },
+  {
     "title": "Attention Calibration for Position-Fair Dense Information Retrieval",
     "authors": "Andrianos Michail, Elias Schuhmacher, Juri Opitz, Simon Clematide, Rico Sennrich",
     "venue": "ArXiv 2026",
