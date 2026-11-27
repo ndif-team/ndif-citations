@@ -116,3 +116,43 @@ def test_breaker_propagates_out_of_process_papers(monkeypatch, tmp_path):
     ]
     with pytest.raises(process.LLMUnavailableError):
         process.process_papers(decisions, tmp_path)
+
+
+# --- bounded client + timeout flows through the existing failure path ---
+
+def _timeout():
+    import httpx
+    import openai
+    return openai.APITimeoutError(request=httpx.Request("POST", "http://x"))
+
+
+def _ctx(monkeypatch):
+    monkeypatch.setattr(process, "compute_context",
+                        lambda paper, out, pdf_path=None: (["we use nnsight to patch"], "pdf", None))
+
+
+def test_llm_client_is_bounded(monkeypatch):
+    monkeypatch.setattr(config, "LLM_API_KEY", "test-key")
+    client = process._get_llm_client()
+    assert client.timeout == config.LLM_TIMEOUT
+    assert client.max_retries == config.LLM_MAX_RETRIES
+
+
+def test_classify_timeout_falls_back_to_keywords(monkeypatch, tmp_path):
+    from ndif_citations.models import Confidence
+    _use(monkeypatch, _SpyClient([_timeout()]))
+    _ctx(monkeypatch)
+    paper = make_paper()
+    _, _, band = process.classify_category(paper, tmp_path)
+    assert band == Confidence.LOW
+    assert paper.classification_signal == "keyword_fallback"
+
+
+def test_three_timeouts_raise_unavailable(monkeypatch, tmp_path):
+    _use(monkeypatch, _SpyClient([_timeout() for _ in range(3)]))
+    _ctx(monkeypatch)
+    paper = make_paper()
+    process.classify_category(paper, tmp_path)
+    process.classify_category(paper, tmp_path)
+    with pytest.raises(process.LLMUnavailableError):
+        process.classify_category(paper, tmp_path)

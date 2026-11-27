@@ -143,6 +143,8 @@ LLM_MODEL: str = _env_or("LLM_MODEL", DEFAULT_LLM_MODEL)
 # default turns reasoning off so the answer lands in message.content. OpenRouter: {}.
 LLM_EXTRA_BODY: dict = _parse_extra_body(os.environ.get("LLM_EXTRA_BODY"))
 LLM_RATE_LIMIT_SLEEP = 12.0  # NVIDIA Build free tier is ~5 req/min
+LLM_TIMEOUT = 120.0  # s per attempt; openai default 600
+LLM_MAX_RETRIES = 1  # openai default 2
 
 # Kill switch for the auto-publish rule (process._passes_auto_publish_rule).
 AUTO_PUBLISH_RULES: bool = _parse_bool_env(os.environ.get("AUTO_PUBLISH_RULES"), True)
