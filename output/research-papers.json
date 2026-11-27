@@ -229,6 +229,15 @@
     "image": "/images/Do-Vision-Language-Action-Models-Understand-Instructions-A-Mechanistic-Interpretability-Study-on-Language-Grounding.png"
   },
   {
+    "title": "Does the Model Read the Room? Probing and Patching Partner Expertise in Collaborative LLM Dialogue",
+    "authors": "Mika Okamoto, Gabriele Sarti",
+    "venue": "SPAR Spring 2026",
+    "year": 2026,
+    "url": "https://library.sparai.org/attachments/reports/recHjmqnG7X4B29AN/does-the-model-read-the-room-probing-and-patching-partner-expertise-in-collaborative-llm-dialogue-4b29an.pdf",
+    "description": "Researchers explore whether a language model’s internal understanding of a conversation partner’s expertise genuinely shapes its responses in ongoing, collaborative dialogues. By probing how models adjust their tone, depth, and assumptions based on perceived partner knowledge, the study reveals that these internal representations do influence behavior — suggesting models don’t just mimic patterns but actively reason about social context. This insight advances our ability to build AI that communicates more naturally and effectively in real-world teamwork scenarios.",
+    "category": "uses_ndif"
+  },
+  {
     "title": "Don't Judge an LLM Only by Its Activations: Discovering Suppressed Safety Features via Counterfactual Activation Potential",
     "authors": "Swadesh Swain, Sanghamitra Dutta",
     "venue": "ArXiv 2026",
