@@ -280,6 +280,15 @@
     "image": "/images/Encoded-Early-Used-Late-Where-Transformers-Begin-to-Act-on-an-Inferred-Partners-Expertise.png"
   },
   {
+    "title": "Epistemic State Representations in Large Language Models",
+    "authors": "Jacob L. Steenwyk",
+    "venue": "Preprints.org 2026",
+    "year": 2026,
+    "url": "https://www.preprints.org/manuscript/202608.2226",
+    "description": "Researchers identified internal patterns in language models that reflect how certain or uncertain the model feels about its answers, revealing a consistent structure across different models. By manipulating these internal signals, they were able to reduce instances of confidently incorrect outputs, effectively guiding the model toward more accurate responses. This approach offers a promising way to detect and correct hallucinations by tapping into the model’s own sense of knowing, potentially improving reliability in real-world use.",
+    "category": "uses_nnsight"
+  },
+  {
     "title": "Explaining the Explainer: Understanding the Inner Workings of Transformer-based Symbolic Regression Models",
     "authors": "Arco van Breda, Erman Acar",
     "venue": "ArXiv 2026",
