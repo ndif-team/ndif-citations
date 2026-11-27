@@ -904,6 +904,16 @@
     "image": "/images/Back-Attention-Understanding-and-Enhancing-Multi-Hop-Reasoning-in-Large-Language-Models.png"
   },
   {
+    "title": "Bilinear MLPs enable weight-based mechanistic interpretability",
+    "authors": "Michael T. Pearce, Thomas Dooms, Alice Rigg, Jose M. Oramas, Lee Sharkey",
+    "venue": "ICLR 2025",
+    "year": 2025,
+    "url": "https://arxiv.org/abs/2410.08417",
+    "description": "",
+    "category": "uses_nnsight",
+    "image": "/images/Bilinear-MLPs-enable-weight-based-mechanistic-interpretability.png"
+  },
+  {
     "title": "BlueGlass: A Framework for Composite AI Safety",
     "authors": "Harshal Nandigramwar, Syed Qutub, Kay-Ulrich Scholl",
     "venue": "ICML 2025",
