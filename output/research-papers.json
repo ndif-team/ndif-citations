@@ -587,6 +587,16 @@
     "image": "/images/Patches-of-Nonlinearity-Instruction-Vectors-in-Large-Language-Models.png"
   },
   {
+    "title": "Performance within the foundation paradox: the case for small qualitative evaluations",
+    "authors": "Michael Simeone, Jacki Hyatt, E. Bienenstock, Rahul Babu, Patricia Solis",
+    "venue": "Neural Computing and Applications 2026",
+    "year": 2026,
+    "url": "https://doi.org/10.1007/s00521-026-12328-0",
+    "description": "This paper addresses a growing mismatch between how large language models are evaluated and how they are actually used in real-world settings. As LLMs are increasingly relied upon for nuanced, context-sensitive advice — such as guidance on adapting to extreme heat in vulnerable communities — traditional benchmarks fall short because they either focus on rigid, procedural tasks or highly specialized expert queries, leaving a gap for intermediate, situational uses that lack clear right-or-wrong answers. To bridge this gap, the authors introduce Small Qualitative Evaluations (SQEs), a human-in-the-loop framework inspired by qualitative research methods that emphasizes thoughtful rubric design, analytic simplicity, and structured judgment. They demonstrate SQEs through the Desert Language Model Evaluation Framework (DLEF), applying it to assess how well models like GPT-4o provide practical, place-aware, and clear advice for heat adaptation. The study finds that when human evaluators agree strongly on certain dimensions — such as feasibility or clarity — those same patterns are reflected",
+    "category": "uses_ndif",
+    "image": "/images/Performance-within-the-foundation-paradox-the-case-for-small-qualitative-evaluations.png"
+  },
+  {
     "title": "Position: If open source is to win, it must go public",
     "authors": "Joshua Tan, Nicholas De Vincentis, Katherine Elkins, Magnus Sahlgren, Joseph Low, David N. Pham, Sampo Pyysalo, Jenia Jitsev",
     "venue": "ICML 2026",
