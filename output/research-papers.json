@@ -1468,6 +1468,16 @@
     "category": "uses_nnsight"
   },
   {
+    "title": "Trilemma of Truth in Large Language Models",
+    "authors": "Germans Savcisens, Tina Eliassi-Rad",
+    "venue": "NeurIPS 2025 Mech Interp Workshop",
+    "year": 2025,
+    "url": "https://openreview.net/forum?id=z7dLG2ycRf",
+    "description": "",
+    "category": "uses_nnsight",
+    "image": "/images/Trilemma-of-Truth-in-Large-Language-Models.png"
+  },
+  {
     "title": "Understanding How CodeLLMs (Mis)Predict Types with Activation Steering",
     "authors": "Francesca Lucchetti, Arjun Guha",
     "venue": "BlackBoxNLP 2025",
