@@ -845,6 +845,16 @@
     "image": "/images/言語モデルの機械論的解釈可能性ツールの調査.png"
   },
   {
+    "title": "(How) Do Language Models Track State?",
+    "authors": "Belinda Z. Li, Zifan Carl Guo, Jacob Andreas",
+    "venue": "ICML 2025",
+    "year": 2025,
+    "url": "https://openreview.net/forum?id=8SXosAVIFH",
+    "description": "",
+    "category": "uses_nnsight",
+    "image": "/images/How-Do-Language-Models-Track-State.png"
+  },
+  {
     "title": "A survey on mechanistic interpretability for multi-modal foundation models",
     "authors": "Zihao Lin, Samyadeep Basu, Mohammad Beigi, Varun Manjunatha, Ryan A. Rossi, Zichao Wang, Yufan Zhou, Sriram Balasubramanian, Arman Zarei, Keivan Rezaei, Ying Shen, Barry Menglong Yao, Zhiyang Xu, Qin Liu, Yuxiang Zhang, Yan Sun, Shilong Liu, Li Shen, Hongxuan Li, Soheil Feizi, Lifu Huang",
     "venue": "ArXiv 2025",
