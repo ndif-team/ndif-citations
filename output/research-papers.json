@@ -240,6 +240,16 @@
     "image": "/images/DreamReader-An-Interpretability-Toolkit-for-Text-to-Image-Models.png"
   },
   {
+    "title": "Dynamics of the Transformer Residual Stream: Coupling Spectral Geometry to Network Topology",
+    "authors": "Jesseba Fernando, Grigori Guitchounts",
+    "venue": "ArXiv 2026",
+    "year": 2026,
+    "url": "https://arxiv.org/abs/2605.14258",
+    "description": "Researchers analyzed how information moves through large language models by examining the full mathematical structure of each layer's transformation. They found that during training, the model develops a consistent pattern: early layers process information in complex, rotating ways that amplify certain signals, while later layers become more stable and symmetric, gradually narrowing the flow of information into a small set of key directions. This narrowing, or bottleneck, isn't built into the model's design but emerges through learning, and it depends on specific structural properties of the network. Furthermore, the way groups of interconnected components (like those in language or knowledge graphs) are affected — whether strengthened or weakened — depends on their position in the model's internal structure and the type of computation happening locally, a relationship that only appears after training. Together, these findings reveal a learned geometric organization inside LLMs that governs how signals propagate and get compressed, linking the model's internal dynamics to its functional behavior.",
+    "category": "uses_nnsight",
+    "image": "/images/Dynamics-of-the-Transformer-Residual-Stream-Coupling-Spectral-Geometry-to-Network-Topology.png"
+  },
+  {
     "title": "Embarrassingly Simple Access Control for Large Language Models",
     "authors": "Veronica Rammouz, Đorđe Klisura, Ram Krishnan, Anthony Rios",
     "venue": "International Joint Conference on Natural Language Processing and the 5th Conference of the Asia-Pacific Chapter of the Association for Computational Linguistics 2026",
