@@ -606,6 +606,15 @@
     "category": "referencing"
   },
   {
+    "title": "Position: Interpretability Can Be Actionable",
+    "authors": "Hadas Orgad, Fazl Barez, Tal Haklay, Isabelle Lee, Marius Mosbach, Anja Reusch, Naomi Saphra, Byron Wallace, Sarah Wiegreffe, Eric Wong, Ian Tenney, Mor Geva",
+    "venue": "ICML 2026",
+    "year": 2026,
+    "url": "https://openreview.net/forum?id=SfN6Cjs515",
+    "description": "This work critically examines the growing field of interpretability in deep learning, arguing that despite significant research advances, many methods fail to deliver meaningful real-world impact. It highlights a disconnect between theoretical progress and practical utility, calling for a shift toward approaches that genuinely help users understand, trust, and improve AI systems in applied settings. The paper urges the community to prioritize relevance and usability over novelty alone.",
+    "category": "referencing"
+  },
+  {
     "title": "PyHealth 2.0: A Comprehensive Open-Source Toolkit for Accessible and Reproducible Clinical Deep Learning",
     "authors": "John Wu, Yongda Fan, Zhenbang Wu, Paul Landes, Eric Schrock, Sayeed Sajjad Razin, Arjun Chatterjee, Naveen Baskaran, Joshua Steier, Andrea Fitzpatrick, Bilal Arif, Rian Atri, Jathurshan Pradeepkumar, Siddhartha Laghuvarapu, Junyi Gao, Adam R. Cross, Jimeng Sun",
     "venue": "ICML 2026",
