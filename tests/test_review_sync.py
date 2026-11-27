@@ -232,10 +232,10 @@ def test_pacing_sleep_runs_even_when_gh_raises(monkeypatch):
     gh = Gh(runner=runner)
     gh.pace = 1.0
     for call in (lambda: gh.create("t", "b", []), lambda: gh.edit(1, "t", "b", [], []),
-                 lambda: gh.comment(1, "c"), lambda: gh.close(1), lambda: gh.add_label(1, "l")):
+                 lambda: gh.comment(1, "c"), lambda: gh.close(1), lambda: gh.add_label(1, "l"), lambda: gh.state(1)):
         with pytest.raises(RuntimeError):
             call()
-    assert slept == [1.0] * 5
+    assert slept == [1.0] * 6
 
 
 def test_attention_labels_before_commenting():
@@ -270,3 +270,15 @@ def test_close_comments_and_closes_when_open():
     calls, log = _close_calls("OPEN")
     assert calls == [["issue", "view"], ["issue", "comment"], ["issue", "close"]]
     assert not any("skip" in l for l in log)
+
+
+def test_close_state_lookup_failure_is_logged_and_nothing_closed():
+    from ndif_citations.review_sync import SyncAction
+    calls = []
+
+    def runner(args, stdin=None):
+        calls.append(args[:2])
+        raise RuntimeError("view failed")
+    log = apply_sync([SyncAction("close", 9, "k", comment="Resolved")], Gh(runner=runner))
+    assert calls == [["issue", "view"]]
+    assert log[-1].startswith("FAILED close #9")

@@ -152,8 +152,9 @@ jobs:
           echo "::error::could not refresh the issue marker after 3 attempts"
           exit 1
 
-      # Reply + close BEFORE the sync: a closed issue is out of review-sync's open list,
-      # so no "Resolved"/"can't find" noise follows the reply. Runs even if the marker
+      # Reply + close BEFORE the sync. review-sync's open-issue list is search-backed and can
+      # lag behind this close; it re-checks each issue's state before closing, so no duplicate
+      # comment. Runs even if the marker
       # refresh failed (the push already happened); explicit because success() would skip it.
       - name: Reply and close
         if: ${{ !cancelled() && inputs.kind != 'sync' && steps.install.outcome == 'success' && steps.load.outcome == 'success' && steps.apply.outcome == 'success' && steps.push.outcome != 'failure' }}
